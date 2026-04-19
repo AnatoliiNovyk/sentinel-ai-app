@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight } from 'lucide-react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Tag } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import ProjectDetail from './ProjectDetail';
+import { riskBand } from '../lib/riskScore';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -78,6 +79,7 @@ export default function Projects() {
           {projects.map((p) => {
             const meta = ENV_META[p.environment] ?? ENV_META.external;
             const Icon = meta.icon;
+            const band = riskBand(p.risk_score ?? 0);
             return (
               <button
                 key={p.id}
@@ -85,8 +87,13 @@ export default function Projects() {
                 className="group text-left rounded-xl border border-slate-800 bg-slate-900/30 p-5 hover:border-emerald-500/40 hover:bg-slate-900/60 transition"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${meta.color}`}>
-                    <Icon className="w-3 h-3" /> {meta.label}
+                  <div className="flex items-center gap-2">
+                    <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${meta.color}`}>
+                      <Icon className="w-3 h-3" /> {meta.label}
+                    </div>
+                    <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${band.color}`}>
+                      <ShieldAlert className="w-3 h-3" /> {band.label} · {p.risk_score ?? 0}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
@@ -113,6 +120,18 @@ export default function Projects() {
                 <h3 className="font-semibold text-white truncate">{p.name}</h3>
                 <p className="mt-1 text-sm text-slate-400 line-clamp-2">{p.description || 'No description'}</p>
                 <div className="mt-4 text-xs text-slate-500 font-mono truncate">{p.target}</div>
+                {p.tags && p.tags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {p.tags.slice(0, 4).map((t) => (
+                      <span key={t} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 text-slate-300 border border-slate-700">
+                        <Tag className="w-2.5 h-2.5" /> {t}
+                      </span>
+                    ))}
+                    {p.tags.length > 4 && (
+                      <span className="text-[10px] text-slate-500">+{p.tags.length - 4}</span>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}
@@ -130,18 +149,25 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [description, setDescription] = useState('');
   const [target, setTarget] = useState('');
   const [environment, setEnvironment] = useState<'external' | 'cloud' | 'internal' | 'iac'>('external');
+  const [tagsInput, setTagsInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
+    const tags = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .slice(0, 10);
     await supabase.from('projects').insert({
       user_id: user.id,
       name,
       description,
       target,
       environment,
+      tags,
     });
     setSaving(false);
     onCreated();
@@ -206,6 +232,16 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                 </button>
               ))}
             </div>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5">Tags</label>
+            <input
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              placeholder="prod, pci, eu-west"
+            />
+            <p className="mt-1 text-xs text-slate-500">Comma-separated, up to 10 tags.</p>
           </div>
           <div className="pt-2 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">

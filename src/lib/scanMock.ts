@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { recomputeProjectRiskScore } from './riskScore';
 
 type FindingTpl = {
   title: string;
@@ -149,6 +150,8 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
   if (summary.medium) parts.push(`${summary.medium} medium`);
   if (summary.low) parts.push(`${summary.low} low`);
   const bodyStr = parts.length ? `Findings: ${parts.join(', ')}.` : 'No findings detected.';
+
+  await recomputeProjectRiskScore(projectId);
 
   await supabase.from('notifications').insert({
     user_id: userId,

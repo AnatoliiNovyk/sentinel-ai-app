@@ -38,6 +38,8 @@ export type Project = {
   target: string;
   environment: 'external' | 'cloud' | 'internal' | 'iac';
   created_at: string;
+  tags: string[];
+  risk_score: number;
 };
 
 export type Scan = {

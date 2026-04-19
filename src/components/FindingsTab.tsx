@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, ShieldOff, Sparkles, Timer, X } from 'lucide-react';
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
+import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
 import { useAuth } from '../context/AuthContext';
 
 type SlaFilter = 'all' | 'overdue' | 'at_risk';
@@ -235,7 +236,10 @@ function FindingRow({
       .eq('id', vuln.id)
       .select()
       .maybeSingle();
-    if (data) onUpdated(data as Vulnerability);
+    if (data) {
+      onUpdated(data as Vulnerability);
+      recomputeRiskScoreFromScanId(vuln.scan_id).catch(() => {});
+    }
     setSaving(false);
   };
 
