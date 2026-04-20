@@ -130,7 +130,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     if (!user || generating || !scans.length) return;
     setGenerating(true);
     try {
-      const content = buildReport(project, scans[0], vulns);
+      const content = buildReport('technical', project, scans, vulns);
       await supabase.from('reports').insert({
         user_id: user.id,
         project_id: project.id,
