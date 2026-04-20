@@ -46,6 +46,52 @@ async function loadUserProjects(userId: string): Promise<Project[]> {
   return (data ?? []) as Project[];
 }
 
+export type IntentMatcher = {
+  name: ToolName | 'greeting' | 'help';
+  patterns: RegExp[];
+  extractArgs?: (text: string) => Record<string, unknown>;
+};
+
+const INTENT_MATCHERS: IntentMatcher[] = [
+  {
+    name: 'greeting',
+    patterns: [/^(hi|hello|hey|greetings|morning|evening|hola)(\b|$)/i],
+  },
+  {
+    name: 'help',
+    patterns: [/\b(help|assist|what can you do|capabilities|commands)\b/i],
+  },
+  {
+    name: 'list_projects',
+    patterns: [/(list|show|what).*(projects)/i, /^projects$/i],
+  },
+  {
+    name: 'list_scans',
+    patterns: [/(list|show|recent|view).*(scans|audits|history)/i],
+  },
+  {
+    name: 'run_scan',
+    patterns: [/\b(run|start|launch|kick off|perform|execute|scan|audit|pentest|analyze)\b/i],
+    extractArgs: (text) => ({
+      raw: text,
+      scanner: keywordScanner(text),
+    }),
+  },
+  {
+    name: 'generate_report',
+    patterns: [/\b(generate|create|produce|write|build|get).*(report|summary|write-up|writeup)\b/i, /executive summary/i, /technical report/i],
+    extractArgs: (text) => ({
+      raw: text,
+      kind: detectKind(text),
+    }),
+  },
+  {
+    name: 'summarize_findings',
+    patterns: [/\bsummarize\b/i, /summary of findings/i, /risk profile/i, /top vulnerabilities/i],
+    extractArgs: (text) => ({ raw: text }),
+  },
+];
+
 function findProject(projects: Project[], text: string): Project | null {
   if (projects.length === 0) return null;
   const t = text.toLowerCase();
@@ -56,26 +102,20 @@ function findProject(projects: Project[], text: string): Project | null {
   return projects[0];
 }
 
-function parseIntent(text: string): ToolCall | null {
-  const t = text.toLowerCase().trim();
-
-  if (/(list|show|what).*(projects)/.test(t) || t === 'projects') {
-    return { name: 'list_projects', args: {} };
-  }
-  if (/(list|show|recent).*(scans|audits)/.test(t)) {
-    return { name: 'list_scans', args: {} };
-  }
-  if (/\b(run|start|launch|kick off|perform|execute)\b.*(scan|audit|pentest|assessment)|^scan\b|audit my|attack surface/.test(t)) {
-    return { name: 'run_scan', args: { raw: text, scanner: keywordScanner(text) } };
-  }
-  if (/\b(generate|create|produce|write|build)\b.*(report|summary|write-up|writeup)|executive summary|technical report/.test(t)) {
-    return { name: 'generate_report', args: { raw: text, kind: detectKind(text) } };
-  }
-  if (/\bsummarize\b|summary of findings|risk profile/.test(t)) {
-    return { name: 'summarize_findings', args: { raw: text } };
+function parseIntent(text: string): ToolCall | { name: 'greeting' | 'help'; args?: Record<string, unknown> } | null {
+  const t = text.trim();
+  for (const matcher of INTENT_MATCHERS) {
+    if (matcher.patterns.some((p) => p.test(t))) {
+      return {
+        name: matcher.name as any,
+        args: matcher.extractArgs ? matcher.extractArgs(t) : {},
+      };
+    }
   }
   return null;
 }
+
+
 
 async function toolListProjects(userId: string): Promise<ToolResult> {
   const projects = await loadUserProjects(userId);
@@ -260,6 +300,26 @@ export async function runAgent(userId: string, userText: string): Promise<AgentT
   const intent = parseIntent(userText);
   if (!intent) return null;
 
+  if (intent.name === 'greeting') {
+    return {
+      content: "Hello! I'm Sentinel AI, your autonomous security auditor. How can I help you secure your infrastructure today?",
+      toolCalls: [],
+    };
+  }
+
+  if (intent.name === 'help') {
+    return {
+      content: `I can help you with the following tasks:
+- **Project Audit**: Ask me to "scan", "audit", or "pentest" a project.
+- **Reporting**: Ask me to "generate a report" (executive or technical).
+- **History**: Ask to "show recent scans" or "list projects".
+- **Analysis**: Ask to "summarize findings" for a quick posture snapshot.
+
+How would you like to proceed?`,
+      toolCalls: [],
+    };
+  }
+
   let result: ToolResult;
   switch (intent.name) {
     case 'list_projects':
@@ -283,6 +343,7 @@ export async function runAgent(userId: string, userText: string): Promise<AgentT
 
   return { content: result.summary, toolCalls: [result] };
 }
+
 
 export const TOOL_LABELS: Record<ToolName, string> = {
   list_projects: 'Listed projects',

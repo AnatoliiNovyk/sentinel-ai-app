@@ -104,6 +104,9 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
 };
 
 export async function runMockScan(userId: string, projectId: string, scanner: string) {
+  // 1. Fetch project context for "grounded" simulation
+  const { data: project } = await supabase.from('projects').select('*').eq('id', projectId).maybeSingle();
+  
   const { data: scan } = await supabase
     .from('scans')
     .insert({
@@ -116,14 +119,35 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
     .select()
     .maybeSingle();
 
-  if (!scan) return null;
+  if (!scan || !project) return null;
 
-  await new Promise((r) => setTimeout(r, 1500));
+  // Simulate variable execution time (1s to 4s)
+  const duration = Math.floor(Math.random() * 3000) + 1000;
+  await new Promise((r) => setTimeout(r, duration));
 
-  const findings = SCANNER_FINDINGS[scanner] ?? SCANNER_FINDINGS.nmap;
+  let findings = [...(SCANNER_FINDINGS[scanner] ?? SCANNER_FINDINGS.nmap)];
+  
+  // Intelligence: If production, add more critical findings or change asset labels
+  if (project.environment === 'production' || project.name.toLowerCase().includes('prod')) {
+    findings = findings.map(f => ({
+      ...f,
+      severity: f.severity === 'high' ? 'critical' : f.severity,
+      asset: f.asset.replace('example.com', project.target || 'prod.internal')
+    }));
+  } else {
+    findings = findings.map(f => ({
+      ...f,
+      asset: f.asset.replace('example.com', project.target || 'dev.local')
+    }));
+  }
+
+  // Randomly subset findings to avoid identical results every time
+  const subsetCount = Math.max(1, Math.floor(Math.random() * findings.length) + 1);
+  const selectedFindings = findings.sort(() => 0.5 - Math.random()).slice(0, subsetCount);
+
   const summary = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
 
-  for (const f of findings) {
+  for (const f of selectedFindings) {
     summary[f.severity]++;
     await supabase.from('vulnerabilities').insert({
       scan_id: scan.id,
@@ -142,7 +166,7 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
     .eq('id', scan.id);
 
   const topSeverity: 'critical' | 'warning' | 'success' =
-    summary.critical > 0 ? 'critical' : summary.high > 0 ? 'warning' : 'success';
+    summary.critical > 0 ? 'critical' : (summary.high > 0 ? 'warning' : 'success');
 
   const parts: string[] = [];
   if (summary.critical) parts.push(`${summary.critical} critical`);
@@ -165,6 +189,7 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
 
   return scan.id;
 }
+
 
 export const AVAILABLE_SCANNERS: { id: string; label: string; description: string }[] = [
   { id: 'nmap', label: 'Nmap', description: 'External port and service discovery' },

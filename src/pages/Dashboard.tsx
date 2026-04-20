@@ -151,61 +151,93 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <KpiCard label="Projects" value={projects.length} icon={Shield} accent="emerald" />
-        <KpiCard label="Active scans" value={activeScans} icon={Activity} accent="sky" />
-        <KpiCard label="Completed" value={completedScans} icon={CheckCircle2} accent="teal" />
-        <KpiCard label="Critical findings" value={totals.critical} icon={AlertTriangle} accent="red" />
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        <div className="lg:col-span-3 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KpiCard label="Projects" value={projects.length} icon={Shield} accent="emerald" />
+            <KpiCard label="Active scans" value={activeScans} icon={Activity} accent="sky" />
+            <KpiCard label="Critical findings" value={totals.critical} icon={AlertTriangle} accent="red" />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="font-semibold">Remediation trend</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Opened vs. closed findings over the last 14 days</p>
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="inline-flex items-center gap-1.5 text-slate-400"><span className="w-2 h-2 rounded-full bg-red-500" /> Opened</span>
-              <span className="inline-flex items-center gap-1.5 text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Closed</span>
-            </div>
-          </div>
-          <div className="flex items-end gap-1.5 h-36">
-            {trend.map((d) => (
-              <div key={d.day} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative">
-                <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-1.5 py-1 whitespace-nowrap z-10">
-                  {d.label}: +{d.opened} / -{d.closed}
-                </div>
-                <div className="w-full flex items-end gap-0.5 h-full">
-                  <div className="flex-1 bg-red-500/70 rounded-sm" style={{ height: `${(d.opened / maxTrend) * 100}%` }} />
-                  <div className="flex-1 bg-emerald-500/70 rounded-sm" style={{ height: `${(d.closed / maxTrend) * 100}%` }} />
-                </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-semibold">Remediation trend</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Opened vs. closed findings over the last 14 days</p>
               </div>
-            ))}
-          </div>
-          <div className="flex justify-between text-[10px] text-slate-600 mt-2">
-            <span>{trend[0]?.label}</span>
-            <span>{trend[trend.length - 1]?.label}</span>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="inline-flex items-center gap-1.5 text-slate-400"><span className="w-2 h-2 rounded-full bg-red-500" /> Opened</span>
+                <span className="inline-flex items-center gap-1.5 text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Closed</span>
+              </div>
+            </div>
+            <div className="flex items-end gap-1.5 h-36">
+              {trend.map((d) => (
+                <div key={d.day} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative">
+                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition bg-slate-900 border border-slate-700 text-[10px] text-slate-200 rounded px-1.5 py-1 whitespace-nowrap z-10">
+                    {d.label}: +{d.opened} / -{d.closed}
+                  </div>
+                  <div className="w-full flex items-end gap-0.5 h-full">
+                    <div className="flex-1 bg-red-500/70 rounded-sm" style={{ height: `${(d.opened / maxTrend) * 100}%` }} />
+                    <div className="flex-1 bg-emerald-500/70 rounded-sm" style={{ height: `${(d.closed / maxTrend) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="space-y-6">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">Project health radar</h2>
+              <Radar className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="flex-1 space-y-4 overflow-auto max-h-[400px] pr-1 scrollbar-thin">
+              {projects.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 text-sm">No projects to tracked</div>
+              ) : (
+                projects.sort((a,b) => (b.risk_score || 0) - (a.risk_score || 0)).map(p => (
+                  <div key={p.id} className="group cursor-default">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-sm font-medium text-slate-300 truncate pr-2 group-hover:text-white transition" title={p.name}>
+                        {p.name}
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        (p.risk_score || 0) >= 70 ? 'text-red-400 bg-red-500/10' :
+                        (p.risk_score || 0) >= 40 ? 'text-orange-400 bg-orange-500/10' :
+                        (p.risk_score || 0) >= 15 ? 'text-amber-400 bg-amber-500/10' :
+                        'text-emerald-400 bg-emerald-500/10'
+                      }`}>
+                        {p.risk_score || 0}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-700 ${
+                          (p.risk_score || 0) >= 70 ? 'bg-red-500' :
+                          (p.risk_score || 0) >= 40 ? 'bg-orange-500' :
+                          (p.risk_score || 0) >= 15 ? 'bg-amber-400' :
+                          'bg-emerald-500'
+                        }`}
+                        style={{ width: `${p.risk_score || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-1 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">SLA watch</h2>
             <div className="flex items-center gap-1.5">
               {overdueCount > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded-md border bg-red-500/10 border-red-500/30 text-red-300">
-                  {overdueCount} overdue
-                </span>
-              )}
-              {atRiskCount > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-md border bg-amber-500/10 border-amber-500/30 text-amber-300">
-                  {atRiskCount} at risk
-                </span>
-              )}
-              {overdueCount === 0 && atRiskCount === 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-md border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
-                  On track
+                  {overdueCount}
                 </span>
               )}
             </div>
@@ -213,120 +245,64 @@ export default function Dashboard() {
           {slaRows.length === 0 ? (
             <div className="text-sm text-slate-500 py-6 text-center">
               <Timer className="w-6 h-6 mx-auto mb-2 text-slate-700" />
-              No open findings under SLA tracking
+              On track
             </div>
           ) : (
-            <div className="space-y-3 max-h-64 overflow-auto pr-1">
-              {overdueRows.length > 0 && (
-                <SlaGroup label="Overdue" tone="red" rows={overdueRows.slice(0, 4)} />
-              )}
-              {atRiskRows.length > 0 && (
-                <SlaGroup label="At risk" tone="amber" rows={atRiskRows.slice(0, 4)} />
-              )}
-              {overdueRows.length === 0 && atRiskRows.length === 0 && healthyRows.length > 0 && (
-                <SlaGroup label="Healthy" tone="slate" rows={healthyRows.slice(0, 4)} />
-              )}
+            <div className="space-y-3 max-h-64 overflow-auto pr-1 scrollbar-thin">
+              {overdueRows.length > 0 && <SlaGroup label="Overdue" tone="red" rows={overdueRows.slice(0, 3)} />}
+              {atRiskRows.length > 0 && <SlaGroup label="At risk" tone="amber" rows={atRiskRows.slice(0, 3)} />}
+              {healthyRows.length > 0 && overdueRows.length === 0 && <SlaGroup label="Healthy" tone="slate" rows={healthyRows.slice(0, 3)} />}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6 overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-semibold">Recent activity</h2>
+            <button onClick={() => navigate('/scans')} className="text-sm text-emerald-400 hover:text-emerald-300">
+              View all
+            </button>
+          </div>
+          {loading ? (
+            <div className="p-12 text-center text-slate-500 text-sm">Loading...</div>
+          ) : scans.length === 0 ? (
+            <div className="p-12 text-center">
+              <Radar className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <div className="text-slate-300 font-medium">No activity yet</div>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800/50">
+              {scans.slice(0, 5).map((s) => (
+                <div key={s.id} className="py-3 flex items-center justify-between group transition">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${
+                      s.status === 'completed' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' :
+                      s.status === 'failed' ? 'text-red-400 border-red-500/20 bg-red-500/5' :
+                      'text-sky-400 border-sky-500/20 bg-sky-500/5 animate-pulse'
+                    }`}>
+                      <Activity className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-white group-hover:text-emerald-400 transition">{s.scanner} scan completed</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Project ID: <span className="font-mono text-slate-400 uppercase text-[10px]">{s.project_id.slice(0, 8)}</span> · {new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono">
+                      <span className="text-red-400">{s.severity_summary?.critical ?? 0} Critical</span>
+                      <span className="text-orange-400">{s.severity_summary?.high ?? 0} High</span>
+                    </div>
+                    <StatusBadge status={s.status} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-semibold">Findings by severity</h2>
-            <TrendingUp className="w-4 h-4 text-slate-500" />
-          </div>
-          <div className="space-y-4">
-            {[
-              { label: 'Critical', value: totals.critical, color: 'bg-red-500' },
-              { label: 'High', value: totals.high, color: 'bg-orange-500' },
-              { label: 'Medium', value: totals.medium, color: 'bg-yellow-500' },
-              { label: 'Low', value: totals.low, color: 'bg-sky-500' },
-            ].map((row) => {
-              const total = Math.max(1, totals.critical + totals.high + totals.medium + totals.low);
-              const pct = (row.value / total) * 100;
-              return (
-                <div key={row.label}>
-                  <div className="flex items-center justify-between text-sm mb-1.5">
-                    <span className="text-slate-300">{row.label}</span>
-                    <span className="text-slate-500">{row.value}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div className={`h-full ${row.color} transition-all duration-500`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
-          <h2 className="font-semibold mb-4">Compliance coverage</h2>
-          <div className="space-y-4 text-sm">
-            {[
-              { label: 'CIS Controls v8', pct: 72 },
-              { label: 'MITRE ATT&CK', pct: 58 },
-              { label: 'SOC2 Type II', pct: 81 },
-            ].map((c) => (
-              <div key={c.label}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-slate-300">{c.label}</span>
-                  <span className="text-emerald-400 text-xs font-medium">{c.pct}%</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${c.pct}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 className="font-semibold">Recent scans</h2>
-          <button onClick={() => navigate('/scans')} className="text-sm text-emerald-400 hover:text-emerald-300">
-            View all
-          </button>
-        </div>
-        {loading ? (
-          <div className="p-12 text-center text-slate-500 text-sm">Loading...</div>
-        ) : scans.length === 0 ? (
-          <div className="p-12 text-center">
-            <Radar className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-            <div className="text-slate-300 font-medium">No scans yet</div>
-            <div className="text-slate-500 text-sm mt-1">Start your first audit via the AI Assistant.</div>
-            <button
-              onClick={() => navigate('/chat')}
-              className="mt-5 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-            >
-              Launch AI audit
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-800">
-            {scans.slice(0, 6).map((s) => (
-              <div key={s.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-900/40 transition">
-                <div>
-                  <div className="text-sm font-medium text-white">{s.scanner}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {new Date(s.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-red-400">{s.severity_summary?.critical ?? 0}C</span>
-                    <span className="text-orange-400">{s.severity_summary?.high ?? 0}H</span>
-                    <span className="text-yellow-400">{s.severity_summary?.medium ?? 0}M</span>
-                  </div>
-                  <StatusBadge status={s.status} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

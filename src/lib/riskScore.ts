@@ -1,17 +1,20 @@
 import { supabase } from './supabase';
 
 const WEIGHTS = { critical: 25, high: 12, medium: 5, low: 2, info: 0 } as const;
+const ENV_MULTIPLIERS = { production: 1.5, staging: 1.0, development: 0.8, internal: 1.0, cloud: 1.2, iac: 1.0, on_prem: 1.3 } as const;
 
-export function computeScoreFromCounts(counts: Record<keyof typeof WEIGHTS, number>): number {
+export function computeScoreFromCounts(counts: Record<keyof typeof WEIGHTS, number>, environment: string = 'internal'): number {
+  const multiplier = ENV_MULTIPLIERS[environment as keyof typeof ENV_MULTIPLIERS] || 1.0;
   const raw =
-    counts.critical * WEIGHTS.critical +
+    (counts.critical * WEIGHTS.critical +
     counts.high * WEIGHTS.high +
     counts.medium * WEIGHTS.medium +
-    counts.low * WEIGHTS.low;
+    counts.low * WEIGHTS.low) * multiplier;
   return Math.max(0, Math.min(100, Math.round(raw)));
 }
 
 export async function recomputeProjectRiskScore(projectId: string): Promise<number> {
+  const { data: project } = await supabase.from('projects').select('environment').eq('id', projectId).maybeSingle();
   const { data: scans } = await supabase.from('scans').select('id').eq('project_id', projectId);
   const scanIds = (scans ?? []).map((s) => s.id);
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
@@ -25,10 +28,11 @@ export async function recomputeProjectRiskScore(projectId: string): Promise<numb
       if (v.severity in counts) counts[v.severity as keyof typeof counts] += 1;
     }
   }
-  const score = computeScoreFromCounts(counts);
+  const score = computeScoreFromCounts(counts, project?.environment);
   await supabase.from('projects').update({ risk_score: score }).eq('id', projectId);
   return score;
 }
+
 
 export async function recomputeRiskScoreFromScanId(scanId: string): Promise<void> {
   const { data: scan } = await supabase.from('scans').select('project_id').eq('id', scanId).maybeSingle();
