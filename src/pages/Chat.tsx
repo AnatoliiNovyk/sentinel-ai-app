@@ -1,15 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Wrench } from 'lucide-react';
+import { marked } from 'marked';
 import { supabase, AiConversation, AiMessage } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { callAiGateway, ChatMessage } from '../lib/aiGateway';
 import { runAgent, ToolResult, TOOL_LABELS } from '../lib/agentTools';
 
+// Configure marked for safe rendering
+marked.setOptions({ breaks: true, gfm: true });
+
 const SUGGESTIONS = [
+  'List my open findings',
+  'Check compliance status',
+  'SLA status — what is overdue?',
   'Run a scan on my first project',
-  'Generate an executive summary report',
-  'List my projects',
-  'Summarize my recent findings',
+  'Summarize my security posture',
+  'Generate an executive summary',
+];
+
+const THINKING_PHASES = [
+  'Analyzing intent',
+  'Querying database',
+  'Computing risk',
+  'Checking compliance',
+  'Generating response',
 ];
 
 export default function Chat() {
@@ -99,8 +113,15 @@ export default function Chat() {
     if (userMsg) setMessages((p) => [...p, userMsg]);
     setInput('');
 
-    setThinkingLabel('Analyzing');
+    setThinkingLabel(THINKING_PHASES[0]);
+    let phaseIdx = 0;
+    const phaseTimer = setInterval(() => {
+      phaseIdx = (phaseIdx + 1) % THINKING_PHASES.length;
+      setThinkingLabel(THINKING_PHASES[phaseIdx]);
+    }, 900);
+
     const agentTurn = await runAgent(user.id, text).catch(() => null);
+    clearInterval(phaseTimer);
 
     let aiContent: string;
     let toolResult: ToolResult | null = null;
@@ -200,9 +221,9 @@ export default function Chat() {
                     <button
                       key={s}
                       onClick={() => sendMessage(s)}
-                      className="text-left text-sm p-4 rounded-lg border border-slate-800 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900 text-slate-300 transition"
+                      className="text-left text-sm p-4 rounded-lg border border-slate-800 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900 text-slate-300 transition group"
                     >
-                      {s}
+                      <span className="text-emerald-500 mr-2 opacity-60 group-hover:opacity-100 transition">→</span>{s}
                     </button>
                   ))}
                 </div>
@@ -239,7 +260,19 @@ export default function Chat() {
                         </span>
                       </div>
                     )}
-                    <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                    {m.role === 'assistant' ? (
+                      <div
+                        className="text-sm text-slate-200 leading-relaxed prose prose-invert prose-sm max-w-none
+                          prose-headings:text-white prose-headings:font-semibold
+                          prose-strong:text-white prose-strong:font-semibold
+                          prose-code:text-emerald-300 prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded
+                          prose-a:text-emerald-400 prose-li:text-slate-200
+                          prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5"
+                        dangerouslySetInnerHTML={{ __html: marked.parse(m.content) as string }}
+                      />
+                    ) : (
+                      <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                    )}
                   </div>
                 </div>
               ))}
