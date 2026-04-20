@@ -24,6 +24,7 @@ import { buildReport } from '../lib/reportBuilder';
 import { toSarif, toJsonExport, downloadFile } from '../lib/exporters';
 import FindingsTab from '../components/FindingsTab';
 import AssetGraph from '../components/AssetGraph';
+import ReportViewer from '../components/ReportViewer';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -51,6 +52,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [launching, setLaunching] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
   const meta = ENV_META[project.environment] ?? ENV_META.external;
   const EnvIcon = meta.icon;
@@ -126,19 +128,24 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     }
   };
 
-  const quickReport = async () => {
+  const quickReport = async (kind: 'executive' | 'technical' = 'technical') => {
     if (!user || generating || !scans.length) return;
     setGenerating(true);
     try {
-      const content = buildReport('technical', project, scans, vulns);
-      await supabase.from('reports').insert({
-        user_id: user.id,
-        project_id: project.id,
-        title: `${project.name} - Technical Audit Report`,
-        kind: 'technical',
-        content,
-      });
+      const content = buildReport(kind, project, scans, vulns);
+      const { data: newReport } = await supabase
+        .from('reports')
+        .insert({
+          user_id: user.id,
+          project_id: project.id,
+          title: `${project.name} — ${kind === 'executive' ? 'Executive Summary' : 'Technical Deep Dive'}`,
+          kind,
+          content,
+        })
+        .select()
+        .maybeSingle();
       await load();
+      if (newReport) setSelectedReport(newReport as Report);
     } finally {
       setGenerating(false);
     }
@@ -197,11 +204,20 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
             <Play className="w-4 h-4" /> {launching ? 'Scanning...' : 'Run scan'}
           </button>
           <button
-            onClick={quickReport}
-            disabled={generating}
-            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 disabled:opacity-60 text-slate-200 font-medium px-3.5 py-2 rounded-md text-sm transition"
+            onClick={() => quickReport('executive')}
+            disabled={generating || !scans.length}
+            title="Generate executive summary"
+            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 font-medium px-3.5 py-2 rounded-md text-sm transition"
           >
-            <Sparkles className="w-4 h-4" /> {generating ? 'Generating...' : 'Report'}
+            <Sparkles className="w-4 h-4" /> {generating ? 'Generating...' : 'Executive'}
+          </button>
+          <button
+            onClick={() => quickReport('technical')}
+            disabled={generating || !scans.length}
+            title="Generate technical report"
+            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 font-medium px-3.5 py-2 rounded-md text-sm transition"
+          >
+            <FileJson className="w-4 h-4" /> {generating ? 'Generating...' : 'Technical'}
           </button>
         </div>
       </div>
@@ -243,8 +259,12 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
         />
       )}
       {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} />}
-      {tab === 'reports' && <ReportsTab reports={reports} />}
+      {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}
       {tab === 'activity' && <ActivityTab items={activity} />}
+
+      {selectedReport && (
+        <ReportViewer report={selectedReport} onClose={() => setSelectedReport(null)} />
+      )}
     </div>
   );
 }
@@ -417,26 +437,57 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
   );
 }
 
-function ReportsTab({ reports }: { reports: Report[] }) {
+function ReportsTab({ reports, onView }: { reports: Report[]; onView: (r: Report) => void }) {
+  const kindMeta: Record<string, { label: string; color: string }> = {
+    executive: { label: 'Executive', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
+    technical: { label: 'Technical', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  };
+
   if (reports.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
         <FileText className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-        <div className="text-sm text-slate-400">No reports generated yet.</div>
+        <div className="text-sm font-medium text-slate-300">No reports yet</div>
+        <div className="text-xs text-slate-500 mt-1">Use the buttons above to generate an Executive or Technical report.</div>
       </div>
     );
   }
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/30 divide-y divide-slate-800 overflow-hidden">
-      {reports.map((r) => (
-        <div key={r.id} className="px-6 py-4 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-white">{r.title}</div>
-            <div className="text-xs text-slate-500">{new Date(r.created_at).toLocaleString()}</div>
-          </div>
-          <button className="text-xs text-emerald-400 hover:underline">View Report</button>
-        </div>
-      ))}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {reports.map((r) => {
+        const meta = kindMeta[r.kind] ?? { label: r.kind, color: 'text-slate-400 bg-slate-800 border-slate-700' };
+        const charCount = r.content.length;
+        const lineCount = r.content.split('\n').length;
+        return (
+          <button
+            key={r.id}
+            onClick={() => onView(r)}
+            className="group text-left rounded-xl border border-slate-800 bg-slate-900/30 p-5 hover:border-slate-700 hover:bg-slate-900/60 transition-all duration-200"
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 group-hover:border-emerald-500/30 group-hover:bg-emerald-500/5 transition">
+                <FileText className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 transition" />
+              </div>
+              <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${meta.color}`}>
+                {meta.label}
+              </span>
+            </div>
+            <div className="text-sm font-semibold text-white group-hover:text-emerald-400 transition leading-tight mb-1">
+              {r.title}
+            </div>
+            <div className="text-xs text-slate-500 mb-3">
+              {new Date(r.created_at).toLocaleString()}
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-slate-600 font-mono border-t border-slate-800 pt-3">
+              <span>{charCount.toLocaleString()} chars</span>
+              <span>·</span>
+              <span>{lineCount} lines</span>
+              <span className="ml-auto text-emerald-500 opacity-0 group-hover:opacity-100 transition font-sans font-medium">Open →</span>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
