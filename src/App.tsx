@@ -12,6 +12,7 @@ import Scans from './pages/Scans';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import PublicReport from './pages/PublicReport';
+import Compliance from './pages/Compliance';
 import NotFound from './pages/NotFound';
 import { Shield } from 'lucide-react';
 
@@ -66,6 +67,7 @@ function Shell() {
         <Route path="projects" element={<Projects />} />
         <Route path="scans" element={<Scans />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="compliance" element={<Compliance />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -12,16 +12,18 @@ const PAGE_TITLES: Record<string, string> = {
   '/projects': 'Projects',
   '/scans': 'Scans',
   '/reports': 'Reports',
+  '/compliance': 'Compliance',
   '/settings': 'Settings',
 };
 
 const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { id: 'chat', label: 'AI Assistant', icon: MessageSquare, path: '/chat' },
-  { id: 'projects', label: 'Projects', icon: FolderKanban, path: '/projects' },
-  { id: 'scans', label: 'Scans', icon: Radar, path: '/scans' },
-  { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
-  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+  { id: 'dashboard',  label: 'Dashboard',   icon: LayoutDashboard, path: '/' },
+  { id: 'chat',        label: 'AI Assistant', icon: MessageSquare,   path: '/chat' },
+  { id: 'projects',    label: 'Projects',     icon: FolderKanban,    path: '/projects' },
+  { id: 'scans',       label: 'Scans',        icon: Radar,           path: '/scans' },
+  { id: 'reports',     label: 'Reports',      icon: FileText,        path: '/reports' },
+  { id: 'compliance',  label: 'Compliance',   icon: ShieldCheck,     path: '/compliance' },
+  { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },
 ];
 
 export default function AppLayout() {
