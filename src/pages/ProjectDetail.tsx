@@ -16,7 +16,6 @@ import {
   FileJson,
   ShieldCheck,
   Network,
-  Activity,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
