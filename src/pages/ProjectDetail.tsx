@@ -15,6 +15,8 @@ import {
   Download,
   FileJson,
   ShieldCheck,
+  Network,
+  Activity,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +24,7 @@ import { AVAILABLE_SCANNERS, runMockScan } from '../lib/scanMock';
 import { buildReport } from '../lib/reportBuilder';
 import { toSarif, toJsonExport, downloadFile } from '../lib/exporters';
 import FindingsTab from '../components/FindingsTab';
+import AssetGraph from '../components/AssetGraph';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -30,7 +33,7 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
   iac: { label: 'IaC', icon: FileCode, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
 };
 
-type Tab = 'overview' | 'findings' | 'scans' | 'reports' | 'activity';
+type Tab = 'overview' | 'topology' | 'findings' | 'scans' | 'reports' | 'activity';
 
 type ActivityItem = {
   at: string;
@@ -229,7 +232,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       </div>
 
       <div className="flex items-center gap-1 mb-6 border-b border-slate-800">
-        {(['overview', 'findings', 'scans', 'reports', 'activity'] as Tab[]).map((t) => (
+        {(['overview', 'topology', 'findings', 'scans', 'reports', 'activity'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -245,7 +248,12 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       </div>
 
       {tab === 'overview' && (
-        <OverviewTab scans={scans} vulns={vulns} totals={totals} />
+        <OverviewTab scans={scans} vulns={vulns} totals={totals} projectName={project.name} onGoToTopology={() => setTab('topology')} />
+      )}
+      {tab === 'topology' && (
+        <div className="animate-in fade-in zoom-in duration-500">
+           <AssetGraph projectName={project.name} vulns={vulns} />
+        </div>
       )}
       {tab === 'findings' && (
         <FindingsTab
@@ -285,10 +293,14 @@ function OverviewTab({
   scans,
   vulns,
   totals,
+  projectName,
+  onGoToTopology,
 }: {
   scans: Scan[];
   vulns: Vulnerability[];
   totals: Record<string, number>;
+  projectName: string;
+  onGoToTopology: () => void;
 }) {
   const lastScan = scans[0];
   const topFindings = [...vulns]
@@ -308,7 +320,13 @@ function OverviewTab({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-5 gap-2 mb-5">
+            <div className="grid grid-cols-6 gap-2 mb-5">
+              <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-3 text-center">
+                <div className="text-[10px] text-emerald-500 uppercase font-bold tracking-tight">SOC2 Readiness</div>
+                <div className="text-lg font-bold mt-0.5 text-white">
+                  {Math.max(0, 100 - ((totals.critical ?? 0) * 15 + (totals.high ?? 0) * 8 + (totals.medium ?? 0) * 3))}%
+                </div>
+              </div>
               {(['critical', 'high', 'medium', 'low', 'info'] as const).map((sev) => (
                 <div key={sev} className="rounded-md bg-slate-900/70 border border-slate-800 p-3 text-center">
                   <div className="text-xs text-slate-500 capitalize">{sev}</div>
@@ -341,7 +359,25 @@ function OverviewTab({
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Network className="w-4 h-4 text-sky-400" /> Topology preview
+            </h3>
+            <button 
+              onClick={onGoToTopology}
+              className="text-[10px] uppercase font-bold text-slate-500 hover:text-slate-300 transition tracking-wider"
+            >
+              Full View
+            </button>
+          </div>
+          <div className="aspect-square w-full scale-90 origin-top">
+            <AssetGraph projectName={projectName} vulns={vulns} />
+          </div>
+        </div>
+        
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
         <h3 className="font-semibold mb-4">Latest scan</h3>
         {lastScan ? (
           <div className="space-y-3">

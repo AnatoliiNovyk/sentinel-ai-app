@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check } from 'lucide-react';
+import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2 } from 'lucide-react';
 import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { AVAILABLE_SCANNERS, runMockScan } from '../lib/scanMock';
 import SchedulesPanel from '../components/SchedulesPanel';
+import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
 
 type Tab = 'runs' | 'schedules';
@@ -361,20 +362,51 @@ function ImportSarifModal({
 }
 
 function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project; onBack: () => void }) {
+  const { user } = useAuth();
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fixing, setFixing] = useState<Vulnerability | null>(null);
+
+  const fetchVulns = async () => {
+    const { data } = await supabase
+      .from('vulnerabilities')
+      .select('*')
+      .eq('scan_id', scan.id)
+      .order('severity');
+    setVulns(data ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('vulnerabilities')
-        .select('*')
-        .eq('scan_id', scan.id)
-        .order('severity');
-      setVulns(data ?? []);
-      setLoading(false);
-    })();
+    fetchVulns();
   }, [scan.id]);
+
+  const handleApplyFix = async (v: Vulnerability) => {
+    if (!user) return;
+    // The console handles the simulation. We update DB on complete.
+    const { error } = await supabase
+      .from('vulnerabilities')
+      .update({ 
+        status: 'resolved', 
+        status_updated_at: new Date().toISOString(),
+        note: `AI-Remediation applied via Sentinel AI Engine.`
+      })
+      .eq('id', v.id);
+
+    if (!error) {
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        type: 'vulnerability_resolved',
+        title: 'Vulnerability Resolved',
+        body: `AI Agent successfully patched: ${v.title}`,
+        link: 'findings',
+        severity: 'success',
+        metadata: { vulnerability_id: v.id, project_id: project?.id }
+      });
+      await fetchVulns();
+    }
+    setFixing(null);
+  };
 
   const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
   const sorted = [...vulns].sort(
@@ -425,15 +457,24 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
       ) : (
         <div className="space-y-3">
           {sorted.map((v) => (
-            <FindingCard key={v.id} v={v} />
+            <FindingCard key={v.id} v={v} onApplyFix={() => setFixing(v)} />
           ))}
         </div>
+      )}
+
+      {fixing && (
+        <ExecutionConsole
+          code={fixing.remediation_code || ''}
+          type={fixing.remediation_type || 'bash'}
+          onComplete={() => handleApplyFix(fixing)}
+          onCancel={() => setFixing(null)}
+        />
       )}
     </div>
   );
 }
 
-function FindingCard({ v }: { v: Vulnerability }) {
+function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const sevColors: Record<string, string> = {
@@ -522,10 +563,16 @@ function FindingCard({ v }: { v: Vulnerability }) {
                 <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
                   <code>{v.remediation_code}</code>
                 </pre>
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
-                   <div className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[10px] text-slate-400">
-                     Recommended {v.remediation_type} fix
-                   </div>
+                <div className="absolute top-2 right-2 flex items-center gap-2">
+                   <button
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       onApplyFix();
+                     }}
+                     className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-md text-[10px] flex items-center gap-1.5 shadow-lg animate-in zoom-in"
+                   >
+                     <Wand2 className="w-3 h-3" /> Apply Fix Now
+                   </button>
                 </div>
               </div>
             </div>
