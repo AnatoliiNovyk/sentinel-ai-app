@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson } from 'lucide-react';
+import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check } from 'lucide-react';
 import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { AVAILABLE_SCANNERS, runMockScan } from '../lib/scanMock';
@@ -435,12 +435,19 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
 
 function FindingCard({ v }: { v: Vulnerability }) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const sevColors: Record<string, string> = {
     critical: 'text-red-400 border-red-500/30 bg-red-500/10',
     high: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
     medium: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
     low: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
     info: 'text-slate-400 border-slate-700 bg-slate-800/40',
+  };
+
+  const copy = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -451,12 +458,19 @@ function FindingCard({ v }: { v: Vulnerability }) {
             {v.severity}
           </span>
           <AlertTriangle className="w-4 h-4 text-slate-500" />
-          <div>
-            <div className="text-sm font-medium text-white">{v.title}</div>
-            <div className="text-xs text-slate-500 mt-0.5 font-mono">{v.asset}</div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-white truncate">{v.title}</div>
+            <div className="text-xs text-slate-500 mt-0.5 font-mono truncate">{v.asset}</div>
           </div>
         </div>
-        <ChevronRight className={`w-4 h-4 text-slate-600 transition ${open ? 'rotate-90' : ''}`} />
+        <div className="flex items-center gap-3">
+          {v.remediation_code && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 uppercase tracking-tight">
+              Fix Ready
+            </div>
+          )}
+          <ChevronRight className={`w-4 h-4 text-slate-600 transition ${open ? 'rotate-90' : ''}`} />
+        </div>
       </button>
       {open && (
         <div className="px-5 pb-5 pt-0 border-t border-slate-800 space-y-3">
@@ -464,18 +478,18 @@ function FindingCard({ v }: { v: Vulnerability }) {
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-3">Description</div>
             <p className="mt-1 text-sm text-slate-300">{v.description}</p>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
             <div>
-              <div className="text-slate-500 uppercase tracking-wider">MITRE</div>
+              <div className="text-slate-500 uppercase tracking-wider">MITRE ATT&CK</div>
               <div className="mt-1 text-slate-300">{v.mitre_tactic || '—'}</div>
             </div>
             <div>
-              <div className="text-slate-500 uppercase tracking-wider">CIS</div>
+              <div className="text-slate-500 uppercase tracking-wider">CIS Control</div>
               <div className="mt-1 text-slate-300">{v.cis_control || '—'}</div>
             </div>
             <div>
-              <div className="text-slate-500 uppercase tracking-wider">CVE</div>
-              <div className="mt-1 text-slate-300">{v.cve_id || '—'}</div>
+              <div className="text-slate-500 uppercase tracking-wider">CVE ID</div>
+              <div className="mt-1 text-slate-300 font-mono">{v.cve_id || '—'}</div>
             </div>
           </div>
           <div>
@@ -484,6 +498,38 @@ function FindingCard({ v }: { v: Vulnerability }) {
               {v.remediation}
             </div>
           </div>
+          {v.remediation_code && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation Code</div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono uppercase">
+                    {v.remediation_type}
+                  </span>
+                </div>
+                <button
+                  onClick={() => copy(v.remediation_code)}
+                  className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition"
+                >
+                  {copied ? (
+                    <><Check className="w-3 h-3" /> Copied</>
+                  ) : (
+                    <><Copy className="w-3 h-3" /> Copy snippet</>
+                  )}
+                </button>
+              </div>
+              <div className="relative group">
+                <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                  <code>{v.remediation_code}</code>
+                </pre>
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
+                   <div className="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[10px] text-slate-400">
+                     Recommended {v.remediation_type} fix
+                   </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

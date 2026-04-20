@@ -72,6 +72,8 @@ export type Vulnerability = {
   cis_control: string;
   asset: string;
   remediation: string;
+  remediation_code: string;
+  remediation_type: string;
   created_at: string;
   status: 'open' | 'in_progress' | 'accepted' | 'resolved' | 'false_positive';
   note: string;

@@ -10,6 +10,8 @@ type FindingTpl = {
   cis_control: string;
   asset: string;
   remediation: string;
+  remediation_code?: string;
+  remediation_type?: 'terraform' | 'bash' | 'kubernetes' | 'manual' | 'aws-cli';
 };
 
 const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
@@ -23,6 +25,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS 4.5',
       asset: 'bastion.example.com:22',
       remediation: 'Disable PasswordAuthentication in sshd_config and restrict source CIDR.',
+      remediation_type: 'bash',
+      remediation_code: 'sed -i "s/^PasswordAuthentication yes/PasswordAuthentication no/" /etc/ssh/sshd_config && systemctl restart sshd'
     },
     {
       title: 'Outdated nginx version detected',
@@ -33,6 +37,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS 7.1',
       asset: 'www.example.com:443',
       remediation: 'Upgrade nginx to 1.20.1 or later.',
+      remediation_type: 'bash',
+      remediation_code: 'apt-get update && apt-get install --only-upgrade nginx'
     },
   ],
   prowler: [
@@ -45,6 +51,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS AWS 2.1.5',
       asset: 's3://app-assets',
       remediation: 'Apply BlockPublicAccess at account level and tighten bucket policy.',
+      remediation_type: 'aws-cli',
+      remediation_code: 'aws s3api put-public-access-block --bucket app-assets --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"'
     },
     {
       title: 'Root account used in last 30 days',
@@ -55,6 +63,7 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS AWS 1.7',
       asset: 'aws::iam::root',
       remediation: 'Rotate root credentials, remove access keys, enforce MFA.',
+      remediation_type: 'manual',
     },
     {
       title: 'IAM user without MFA',
@@ -65,6 +74,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS AWS 1.10',
       asset: 'aws::iam::users',
       remediation: 'Enforce MFA policy for all console users.',
+      remediation_type: 'aws-cli',
+      remediation_code: 'aws iam create-virtual-mfa-device --virtual-mfa-device-name <user_name> --outfile /tmp/qrcode.png --bootstrap-method QRCodePNG'
     },
   ],
   tfsec: [
@@ -77,6 +88,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS AWS 5.2',
       asset: 'aws_security_group.web',
       remediation: 'Restrict CIDR to known management IPs.',
+      remediation_type: 'terraform',
+      remediation_code: 'resource "aws_security_group_rule" "allow_mgmt" {\n  type              = "ingress"\n  from_port         = 0\n  to_port           = 65535\n  protocol          = "tcp"\n  cidr_blocks       = ["10.0.0.0/8"]\n  security_group_id = aws_security_group.web.id\n}'
     },
     {
       title: 'RDS instance without encryption at rest',
@@ -87,6 +100,8 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS AWS 2.3.1',
       asset: 'aws_db_instance.primary',
       remediation: 'Set storage_encrypted = true and re-provision.',
+      remediation_type: 'terraform',
+      remediation_code: 'resource "aws_db_instance" "primary" {\n  # ... existing config\n  storage_encrypted = true\n}'
     },
   ],
   amass: [
@@ -99,6 +114,7 @@ const SCANNER_FINDINGS: Record<string, FindingTpl[]> = {
       cis_control: 'CIS 13.6',
       asset: 'staging-old.example.com',
       remediation: 'Remove dangling DNS record or reclaim S3 bucket.',
+      remediation_type: 'manual',
     },
   ],
 };

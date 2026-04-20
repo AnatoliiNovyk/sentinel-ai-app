@@ -91,6 +91,7 @@ Findings were correlated with SOC2, CIS Controls v8 and MITRE ATT&CK. Detailed e
       v.description,
       ``,
       `**Remediation:** ${v.remediation}`,
+      v.remediation_code ? `\n\`\`\`${v.remediation_type === 'bash' ? 'bash' : v.remediation_type === 'terraform' ? 'hcl' : v.remediation_type === 'aws-cli' ? 'bash' : 'text'}\n${v.remediation_code}\n\`\`\`` : '',
       v.note ? `\n**Analyst note:** ${v.note}` : ''
     );
   }
