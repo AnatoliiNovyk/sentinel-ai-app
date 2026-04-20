@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, Radar, FileText, AlertTriangle, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, Notification } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import type { AppPage } from './AppLayout';
-
-type Props = {
-  onNavigate: (p: AppPage) => void;
-};
 
 const SEVERITY_STYLES: Record<Notification['severity'], string> = {
   critical: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
@@ -33,8 +29,9 @@ function timeAgo(iso: string) {
   return `${d}d ago`;
 }
 
-export default function NotificationBell({ onNavigate }: Props) {
+export default function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -102,9 +99,9 @@ export default function NotificationBell({ onNavigate }: Props) {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: now } : x)));
       await supabase.from('notifications').update({ read_at: now }).eq('id', n.id);
     }
-    const VALID: AppPage[] = ['dashboard', 'chat', 'scans', 'projects', 'reports', 'settings'];
-    if (VALID.includes(n.link as AppPage)) {
-      onNavigate(n.link as AppPage);
+    const VALID: string[] = ['dashboard', 'chat', 'scans', 'projects', 'reports', 'settings'];
+    if (VALID.includes(n.link)) {
+      navigate(n.link === 'dashboard' ? '/' : `/${n.link}`);
       setOpen(false);
     }
   };

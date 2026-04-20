@@ -1,35 +1,30 @@
 import { ReactNode } from 'react';
 import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 
 export type AppPage = 'dashboard' | 'chat' | 'scans' | 'projects' | 'reports' | 'settings';
 
-const PAGE_TITLES: Record<AppPage, string> = {
-  dashboard: 'Dashboard',
-  chat: 'AI Assistant',
-  projects: 'Projects',
-  scans: 'Scans',
-  reports: 'Reports',
-  settings: 'Settings',
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/chat': 'AI Assistant',
+  '/projects': 'Projects',
+  '/scans': 'Scans',
+  '/reports': 'Reports',
+  '/settings': 'Settings',
 };
 
-type Props = {
-  current: AppPage;
-  onNavigate: (p: AppPage) => void;
-  children: ReactNode;
-};
-
-const nav: { id: AppPage; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'chat', label: 'AI Assistant', icon: MessageSquare },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'scans', label: 'Scans', icon: Radar },
-  { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { id: 'chat', label: 'AI Assistant', icon: MessageSquare, path: '/chat' },
+  { id: 'projects', label: 'Projects', icon: FolderKanban, path: '/projects' },
+  { id: 'scans', label: 'Scans', icon: Radar, path: '/scans' },
+  { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
-export default function AppLayout({ current, onNavigate, children }: Props) {
+export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const initials =
     (profile?.full_name || profile?.email || 'U')
@@ -49,21 +44,22 @@ export default function AppLayout({ current, onNavigate, children }: Props) {
           <span className="text-sm font-semibold">Sentinel AI</span>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {nav.map(({ id, label, icon: Icon }) => {
-            const active = current === id;
+          {nav.map(({ id, label, icon: Icon, path }) => {
             return (
-              <button
+              <NavLink
                 key={id}
-                onClick={() => onNavigate(id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
-                  active
-                    ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
-                }`}
+                to={path}
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
+                    isActive
+                      ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+                  }`
+                }
               >
                 <Icon className="w-4 h-4" />
                 {label}
-              </button>
+              </NavLink>
             );
           })}
         </nav>
@@ -88,13 +84,18 @@ export default function AppLayout({ current, onNavigate, children }: Props) {
       </aside>
       <main className="flex-1 overflow-auto flex flex-col">
         <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-8">
-          <div className="text-sm font-medium text-slate-300">{PAGE_TITLES[current]}</div>
+          <div className="text-sm font-medium text-slate-300">
+            {PAGE_TITLES[window.location.pathname] || 'Sentinel AI'}
+          </div>
           <div className="flex items-center gap-2">
-            <NotificationBell onNavigate={onNavigate} />
+            <NotificationBell />
           </div>
         </header>
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
 }
+

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Shield, AlertTriangle, CheckCircle2, Activity, TrendingUp, Radar, ArrowRight, Clock, Timer } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import type { AppPage } from '../components/AppLayout';
 
-type Props = { onNavigate: (p: AppPage) => void };
-
-export default function Dashboard({ onNavigate }: Props) {
+export default function Dashboard() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [scans, setScans] = useState<Scan[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -145,7 +144,7 @@ export default function Dashboard({ onNavigate }: Props) {
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Security posture</h1>
         </div>
         <button
-          onClick={() => onNavigate('chat')}
+          onClick={() => navigate('/chat')}
           className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
         >
           Launch AI audit <ArrowRight className="w-4 h-4" />
@@ -287,7 +286,7 @@ export default function Dashboard({ onNavigate }: Props) {
       <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold">Recent scans</h2>
-          <button onClick={() => onNavigate('scans')} className="text-sm text-emerald-400 hover:text-emerald-300">
+          <button onClick={() => navigate('/scans')} className="text-sm text-emerald-400 hover:text-emerald-300">
             View all
           </button>
         </div>
@@ -299,7 +298,7 @@ export default function Dashboard({ onNavigate }: Props) {
             <div className="text-slate-300 font-medium">No scans yet</div>
             <div className="text-slate-500 text-sm mt-1">Start your first audit via the AI Assistant.</div>
             <button
-              onClick={() => onNavigate('chat')}
+              onClick={() => navigate('/chat')}
               className="mt-5 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
             >
               Launch AI audit

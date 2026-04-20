@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { dispatchDueSchedules } from './lib/scheduler';
-import AppLayout, { AppPage } from './components/AppLayout';
+import AppLayout from './components/AppLayout';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
@@ -11,32 +12,17 @@ import Scans from './pages/Scans';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import PublicReport from './pages/PublicReport';
+import NotFound from './pages/NotFound';
 import { Shield } from 'lucide-react';
 
 function useShareToken(): string | null {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return new URLSearchParams(window.location.search).get('share');
-  });
-  useEffect(() => {
-    const onPop = () => {
-      setToken(new URLSearchParams(window.location.search).get('share'));
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
-  return token;
+  return new URLSearchParams(window.location.search).get('share');
 }
 
 function Shell() {
   const { user, loading } = useAuth();
-  const [publicPage, setPublicPage] = useState<'landing' | 'signin' | 'signup'>('landing');
-  const [page, setPage] = useState<AppPage>('dashboard');
   const shareToken = useShareToken();
-
-  if (shareToken) {
-    return <PublicReport token={shareToken} />;
-  }
+  const location = useLocation();
 
   useEffect(() => {
     if (!user) return;
@@ -46,6 +32,10 @@ function Shell() {
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [user?.id]);
+
+  if (shareToken) {
+    return <PublicReport token={shareToken} />;
+  }
 
   if (loading) {
     return (
@@ -59,34 +49,37 @@ function Shell() {
   }
 
   if (!user) {
-    if (publicPage === 'landing') {
-      return <Landing onNavigate={(p) => setPublicPage(p)} />;
-    }
     return (
-      <Auth
-        mode={publicPage}
-        onBack={() => setPublicPage('landing')}
-        onSwitch={() => setPublicPage(publicPage === 'signin' ? 'signup' : 'signin')}
-      />
+      <Routes>
+        <Route path="/landing" element={<Landing onNavigate={() => {}} />} />
+        <Route path="/auth" element={<Auth mode="signin" onBack={() => {}} onSwitch={() => {}} />} />
+        <Route path="*" element={<Navigate to="/landing" replace />} />
+      </Routes>
     );
   }
 
   return (
-    <AppLayout current={page} onNavigate={setPage}>
-      {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
-      {page === 'chat' && <Chat />}
-      {page === 'projects' && <Projects />}
-      {page === 'scans' && <Scans />}
-      {page === 'reports' && <Reports />}
-      {page === 'settings' && <Settings />}
-    </AppLayout>
+    <Routes>
+      <Route path="/" element={<AppLayout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="projects" element={<Projects />} />
+        <Route path="scans" element={<Scans />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <Shell />
+      <BrowserRouter>
+        <Shell />
+      </BrowserRouter>
     </AuthProvider>
   );
 }
+

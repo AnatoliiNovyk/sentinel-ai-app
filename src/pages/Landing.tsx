@@ -1,10 +1,8 @@
 import { Shield, Terminal, Zap, Lock, Cloud, FileCheck, ArrowRight, Bot, Activity, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-type Props = {
-  onNavigate: (page: 'signin' | 'signup') => void;
-};
-
-export default function Landing({ onNavigate }: Props) {
+export default function Landing() {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800/60 backdrop-blur sticky top-0 z-50 bg-slate-950/80">
@@ -22,13 +20,13 @@ export default function Landing({ onNavigate }: Props) {
           </nav>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigate('signin')}
+              onClick={() => navigate('/auth')}
               className="text-sm text-slate-300 hover:text-white transition"
             >
               Sign in
             </button>
             <button
-              onClick={() => onNavigate('signup')}
+              onClick={() => navigate('/auth')}
               className="text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-medium px-4 py-2 rounded-md transition"
             >
               Get started
@@ -58,14 +56,14 @@ export default function Landing({ onNavigate }: Props) {
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <button
-                onClick={() => onNavigate('signup')}
+                onClick={() => navigate('/auth')}
                 className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-6 py-3 rounded-md transition group"
               >
                 Start free audit
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
               </button>
               <button
-                onClick={() => onNavigate('signin')}
+                onClick={() => navigate('/auth')}
                 className="inline-flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-200 px-6 py-3 rounded-md transition"
               >
                 <Terminal className="w-4 h-4" />
@@ -204,7 +202,7 @@ export default function Landing({ onNavigate }: Props) {
                   ))}
                 </ul>
                 <button
-                  onClick={() => onNavigate('signup')}
+                  onClick={() => navigate('/auth')}
                   className={`mt-8 w-full py-2.5 rounded-md font-medium transition ${
                     plan.highlight
                       ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
@@ -233,3 +231,4 @@ export default function Landing({ onNavigate }: Props) {
     </div>
   );
 }
+

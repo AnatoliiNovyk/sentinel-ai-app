@@ -1,15 +1,12 @@
 import { useState } from 'react';
 import { Shield, ArrowLeft, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-type Props = {
-  mode: 'signin' | 'signup';
-  onBack: () => void;
-  onSwitch: () => void;
-};
-
-export default function Auth({ mode, onBack, onSwitch }: Props) {
+export default function Auth() {
   const { signIn, signUp } = useAuth();
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -22,18 +19,19 @@ export default function Auth({ mode, onBack, onSwitch }: Props) {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = isSignup
+    const { error: authError } = isSignup
       ? await signUp(email, password, fullName)
       : await signIn(email, password);
     setLoading(false);
-    if (error) setError(error);
+    if (authError) setError(authError);
+    // On success, redirecting to home is handled by the AuthProvider's user state change in App.tsx
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <div className="px-6 py-5">
         <button
-          onClick={onBack}
+          onClick={() => navigate('/landing')}
           className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition"
         >
           <ArrowLeft className="w-4 h-4" /> Back
@@ -110,7 +108,7 @@ export default function Auth({ mode, onBack, onSwitch }: Props) {
 
           <div className="mt-6 text-sm text-slate-400 text-center">
             {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button onClick={onSwitch} className="text-emerald-400 hover:text-emerald-300 font-medium">
+            <button onClick={() => setMode(isSignup ? 'signin' : 'signup')} className="text-emerald-400 hover:text-emerald-300 font-medium">
               {isSignup ? 'Sign in' : 'Create one'}
             </button>
           </div>
@@ -119,3 +117,4 @@ export default function Auth({ mode, onBack, onSwitch }: Props) {
     </div>
   );
 }
+
