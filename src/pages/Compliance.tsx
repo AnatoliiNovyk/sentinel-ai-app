@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, AlertTriangle, CheckCircle2, Activity,
-  TrendingUp, Zap, BookOpen, AlertCircle
+  TrendingUp, Zap, BookOpen, AlertCircle, Download, FileText, Printer
 } from 'lucide-react';
 import { supabase, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { computeCompliance, CisRow, MitreRow, NistRow, Soc2Row } from '../lib/compliance';
+import { buildEvidencePackage, buildEvidenceMarkdown, printReportAsPDF } from '../lib/evidencePackage';
+import { downloadFile } from '../lib/exporters';
 
 export default function Compliance() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -55,13 +58,56 @@ export default function Compliance() {
   const circumference = 2 * Math.PI * 52;
   const dash = (result.soc2Overall / 100) * circumference;
 
+  const exportEvidence = async (format: 'json' | 'markdown' | 'pdf') => {
+    setExporting(true);
+    try {
+      const org = profile?.company || profile?.email || 'My Organization';
+      const pkg = buildEvidencePackage(vulns, org);
+      if (format === 'json') {
+        downloadFile(`sentinel-evidence-${new Date().toISOString().split('T')[0]}.json`, JSON.stringify(pkg, null, 2), 'application/json');
+      } else if (format === 'markdown') {
+        const md = buildEvidenceMarkdown(pkg);
+        downloadFile(`sentinel-evidence-${new Date().toISOString().split('T')[0]}.md`, md, 'text/markdown');
+      } else {
+        const md = buildEvidenceMarkdown(pkg);
+        printReportAsPDF(`${org} — Compliance Evidence Report`, md);
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="p-8 max-w-7xl space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Compliance</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Automated mapping of your findings to SOC 2, CIS Controls v8, MITRE ATT&CK and NIST CSF.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Compliance</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Automated mapping of your findings to SOC 2, CIS Controls v8, MITRE ATT&CK and NIST CSF.
+          </p>
+        </div>
+        {/* F-15 + F-23: Evidence export & PDF */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative group">
+            <button
+              disabled={exporting || vulns.length === 0}
+              className="inline-flex items-center gap-1.5 border border-slate-700 hover:border-slate-500 disabled:opacity-40 text-slate-300 px-3 py-2 rounded-md text-sm transition"
+            >
+              <Download className="w-3.5 h-3.5" /> Export evidence
+            </button>
+            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-10 hidden group-hover:block group-focus-within:block">
+              <button onClick={() => exportEvidence('json')} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition">
+                <FileText className="w-3.5 h-3.5 text-sky-400" /> JSON package
+              </button>
+              <button onClick={() => exportEvidence('markdown')} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition">
+                <FileText className="w-3.5 h-3.5 text-emerald-400" /> Markdown report
+              </button>
+              <button onClick={() => exportEvidence('pdf')} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 rounded-b-xl transition">
+                <Printer className="w-3.5 h-3.5 text-violet-400" /> Export PDF
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Top KPIs ─────────────────────────────────────────────────────── */}

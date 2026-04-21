@@ -207,9 +207,21 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
 }
 
 
-export const AVAILABLE_SCANNERS: { id: string; label: string; description: string }[] = [
-  { id: 'nmap', label: 'Nmap', description: 'External port and service discovery' },
-  { id: 'amass', label: 'Amass', description: 'Subdomain enumeration' },
-  { id: 'prowler', label: 'Prowler', description: 'AWS cloud security posture' },
-  { id: 'tfsec', label: 'tfsec', description: 'Terraform IaC static analysis' },
+export const AVAILABLE_SCANNERS: { id: string; label: string; description: string; category?: string; cloud?: string }[] = [
+  // Network
+  { id: 'nmap',         label: 'Nmap',            description: 'External port and service discovery',            category: 'network' },
+  { id: 'amass',        label: 'Amass',           description: 'Subdomain enumeration & DNS intelligence',       category: 'network' },
+  { id: 'nuclei',       label: 'Nuclei',          description: 'Fast web vulnerability scanner (OWASP)',         category: 'web' },
+  // IaC
+  { id: 'tfsec',        label: 'tfsec',           description: 'Terraform IaC static analysis',                  category: 'iac' },
+  { id: 'checkov',      label: 'Checkov',         description: 'Multi-cloud IaC policy scanner',                 category: 'iac' },
+  // Cloud – AWS
+  { id: 'prowler',      label: 'Prowler (AWS)',    description: 'AWS cloud security posture & CIS benchmarks',   category: 'cloud', cloud: 'aws' },
+  // Cloud – GCP
+  { id: 'gcp-scc',      label: 'GCP SCC',         description: 'GCP Security Command Center findings import',    category: 'cloud', cloud: 'gcp' },
+  // Cloud – Azure
+  { id: 'azure-defender', label: 'Azure Defender', description: 'Microsoft Defender for Cloud recommendations',  category: 'cloud', cloud: 'azure' },
+  // Containers & Kubernetes
+  { id: 'trivy',        label: 'Trivy',           description: 'Container image & filesystem vulnerability scan', category: 'container' },
+  { id: 'kube-bench',   label: 'kube-bench',      description: 'Kubernetes CIS Benchmark compliance check',      category: 'kubernetes' },
 ];

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -15,6 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/compliance': 'Compliance',
   '/scheduler':  'Scan Scheduler',
   '/attack-map': 'Attack Surface Map',
+  '/dark-web':   'Dark Web Monitor',
   '/settings':   'Settings',
 };
 
@@ -27,6 +28,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'compliance',  label: 'Compliance',   icon: ShieldCheck,     path: '/compliance' },
   { id: 'scheduler',   label: 'Scheduler',    icon: CalendarClock,   path: '/scheduler' },
   { id: 'attack-map',  label: 'Attack Map',   icon: Network,         path: '/attack-map' },
+  { id: 'dark-web',    label: 'Dark Web',      icon: Eye,             path: '/dark-web' },
   { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },
 ];
 
