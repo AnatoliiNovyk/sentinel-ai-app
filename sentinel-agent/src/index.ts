@@ -139,6 +139,78 @@ function mapTfsecSeverity(s: string): string {
   return 'low';
 }
 
+// ─── trivy scanner ────────────────────────────────────────────────────────────
+async function runTrivy(target: string): Promise<unknown[]> {
+  const { stdout } = await execFileAsync('docker', [
+    'run', '--rm',
+    'aquasec/trivy', 'image', '--format', 'json', target,
+  ], { timeout: 300_000 });
+  const parsed = JSON.parse(stdout || '{}');
+  const findings: unknown[] = [];
+  for (const res of (parsed.Results || [])) {
+    for (const v of (res.Vulnerabilities || [])) {
+      findings.push({
+        title: v.Title || v.VulnerabilityID,
+        description: v.Description || 'Trivy container vulnerability',
+        severity: mapTfsecSeverity(v.Severity),
+        cve_id: v.VulnerabilityID,
+        asset: target,
+        mitre_tactic: 'Initial Access',
+        remediation: v.FixedVersion ? \`Update to \${v.FixedVersion}\` : 'No fix available.',
+        remediation_type: 'manual',
+      });
+    }
+  }
+  return findings;
+}
+
+// ─── checkov scanner ──────────────────────────────────────────────────────────
+async function runCheckov(repoPath: string): Promise<unknown[]> {
+  const { stdout } = await execFileAsync('docker', [
+    'run', '--rm', '-v', \`\${repoPath}:/src\`,
+    'bridgecrew/checkov', '-d', '/src', '-o', 'json',
+  ], { timeout: 180_000 });
+  const parsed = JSON.parse(stdout || '{}');
+  const findings: unknown[] = [];
+  const results = parsed.results?.failed_checks || [];
+  for (const r of results) {
+    findings.push({
+      title: r.check_name,
+      description: r.check_id,
+      severity: 'high',
+      asset: \`\${r.file_path}:\${r.file_line_range?.[0] || 0}\`,
+      remediation: 'Review Checkov guidelines.',
+      remediation_type: 'terraform',
+    });
+  }
+  return findings;
+}
+
+// ─── nuclei scanner ───────────────────────────────────────────────────────────
+async function runNuclei(target: string): Promise<unknown[]> {
+  const { stdout } = await execFileAsync('docker', [
+    'run', '--rm',
+    'projectdiscovery/nuclei', '-u', target, '-jsonl', '-disable-update-check'
+  ], { timeout: 300_000 });
+  
+  const findings: unknown[] = [];
+  const lines = stdout.trim().split('\\n').filter(Boolean);
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      findings.push({
+        title: parsed.info?.name || 'Nuclei finding',
+        description: parsed.info?.description || '',
+        severity: parsed.info?.severity || 'medium',
+        asset: parsed.matched_at || target,
+        remediation: parsed.info?.remediation || 'Investigate nuclei finding.',
+        remediation_type: 'manual',
+      });
+    } catch(e) {}
+  }
+  return findings;
+}
+
 // ─── Nmap XML parser (simplified) ────────────────────────────────────────────
 function parseNmapXml(xml: string): unknown[] {
   const findings: unknown[] = [];
@@ -167,9 +239,15 @@ async function runJob(job: Record<string, string>) {
     let findings: unknown[] = [];
 
     switch (job.scanner) {
-      case 'nmap':    findings = await runNmap(job.target);  break;
-      case 'amass':   findings = await runAmass(job.target); break;
-      case 'tfsec':   findings = await runTfsec(job.target); break;
+      case 'nmap':           findings = await runNmap(job.target);  break;
+      case 'amass':          findings = await runAmass(job.target); break;
+      case 'tfsec':          findings = await runTfsec(job.target); break;
+      case 'trivy':          findings = await runTrivy(job.target); break;
+      case 'checkov':        findings = await runCheckov(job.target); break;
+      case 'nuclei':         findings = await runNuclei(job.target); break;
+      case 'kube-bench':     /* stub for kube-bench */ break;
+      case 'gcp-scc':        /* stub for gcp-scc */ break;
+      case 'azure-defender': /* stub for azure-defender */ break;
       default:
         console.warn(`Unknown scanner: ${job.scanner}, using nmap fallback`);
         findings = await runNmap(job.target);
