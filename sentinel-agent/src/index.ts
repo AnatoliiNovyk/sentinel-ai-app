@@ -98,11 +98,20 @@ async function runTfsec(repoPath: string): Promise<unknown[]> {
     'aquasec/tfsec', '/src', '--format', 'json',
   ], { timeout: 120_000 });
 
+  interface TfsecResult {
+    description?: string;
+    rule_description?: string;
+    rule_id?: string;
+    severity?: string;
+    location?: { filename?: string; start_line?: number };
+    resolution?: string;
+    resolution_url?: string;
+  }
   const parsed = JSON.parse(stdout);
-  return (parsed.results ?? []).map((r: Record<string, unknown>) => ({
+  return (parsed.results ?? []).map((r: TfsecResult) => ({
     title: r.description ?? 'IaC misconfiguration',
     description: `${r.rule_description ?? ''} (${r.rule_id ?? ''})`,
-    severity: mapTfsecSeverity(r.severity as string),
+    severity: mapTfsecSeverity(r.severity ?? ''),
     asset: `${r.location?.filename ?? ''}:${r.location?.start_line ?? 0}`,
     mitre_tactic: 'Initial Access',
     cis_control: 'CIS 18.1',
