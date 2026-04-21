@@ -31,11 +31,14 @@ export default function SupplyChain() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const parseVersion = (v: string) => v.replace(/^[\^~>=<]+/, '');
+  const parseVersion = (v: string) => {
+    const match = v.match(/(\d+\.\d+\.\d+)/);
+    return match ? match[0] : null;
+  };
 
   const handleFile = async (file: File) => {
-    if (!file.name.endsWith('package.json')) {
-      setError('Only package.json files are supported currently.');
+    if (!file.name.endsWith('package.json') && !file.name.endsWith('package-lock.json')) {
+      setError('Only package.json and package-lock.json files are supported currently.');
       return;
     }
     setError(null);
@@ -48,15 +51,29 @@ export default function SupplyChain() {
       const json = JSON.parse(text);
       
       const deps: Dependency[] = [];
-      if (json.dependencies) {
-        Object.entries(json.dependencies).forEach(([name, version]) => {
-          deps.push({ name, version: parseVersion(version as string), type: 'prod' });
+      
+      if (file.name.endsWith('package-lock.json')) {
+        Object.entries(json.packages || json.dependencies || {}).forEach(([name, pkg]: [string, any]) => {
+          if (!name) return; // skip root project
+          const cleanName = name.replace(/^.*node_modules\//, '');
+          if (pkg.version) {
+            const v = parseVersion(pkg.version);
+            if (v) deps.push({ name: cleanName, version: v, type: pkg.dev ? 'dev' : 'prod' });
+          }
         });
-      }
-      if (json.devDependencies) {
-        Object.entries(json.devDependencies).forEach(([name, version]) => {
-          deps.push({ name, version: parseVersion(version as string), type: 'dev' });
-        });
+      } else {
+        if (json.dependencies) {
+          Object.entries(json.dependencies).forEach(([name, version]) => {
+            const v = parseVersion(version as string);
+            if (v) deps.push({ name, version: v, type: 'prod' });
+          });
+        }
+        if (json.devDependencies) {
+          Object.entries(json.devDependencies).forEach(([name, version]) => {
+            const v = parseVersion(version as string);
+            if (v) deps.push({ name, version: v, type: 'dev' });
+          });
+        }
       }
 
       if (deps.length === 0) {

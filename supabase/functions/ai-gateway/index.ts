@@ -108,6 +108,12 @@ function mockResponse(prompt: string): string {
   if (lower.includes("report")) {
     return `I can generate two tiers:\n- **Executive Summary** — business risk language, KPIs\n- **Technical Deep Dive** — per-finding remediation with Terraform/Kubernetes patches\n\nWhich one should I produce first?`;
   }
+  if (lower.includes("kill_chain_mock")) {
+    return JSON.stringify([
+      { phase: 'Initial Access', tactic: 'TA0001', description: 'Attacker exploits external vuln', exploited_vuln: 'RCE', asset: 'Web Server' },
+      { phase: 'Execution', tactic: 'TA0002', description: 'Attacker drops shell', exploited_vuln: 'Weak OS config', asset: 'Internal Net' }
+    ]);
+  }
   return `I'm **Sentinel**, your AI security auditor. I can orchestrate external, cloud, IaC, and vulnerability scans, map findings to MITRE ATT&CK and CIS Controls, and generate reports with ready-to-apply remediation.\n\nTry: *"Scan my AWS account for SOC2 compliance"*.`;
 }
 
@@ -126,7 +132,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const messages: ChatMessage[] = body.messages ?? [];
+    let messages: ChatMessage[] = [];
+    
+    if (body.action === 'generate_kill_chain') {
+      const prompt = `You are an expert Red Teamer. Generate a MITRE ATT&CK Kill Chain attack path based on these vulnerabilities for project ${body.project}:\n${JSON.stringify(body.vulnerabilities, null, 2)}\nRespond ONLY with a JSON array of objects without markdown block formatting. Each object must have: phase (e.g. Reconnaissance, Initial Access, Execution, Exfiltration), tactic (e.g. TA0043), description (how attacker moves), exploited_vuln (title of the vuln used), asset (the target asset).`;
+      messages = [{ role: 'user', content: prompt }];
+    } else {
+      messages = body.messages ?? [];
+    }
+
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "messages required" }), {
         status: 400,
@@ -171,8 +185,22 @@ Deno.serve(async (req: Request) => {
 
     if (!content) {
       const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      content = mockResponse(lastUser?.content ?? "");
+      content = mockResponse((lastUser?.content ?? "") + (body.action === 'generate_kill_chain' ? ' kill_chain_mock' : ''));
       provider = "mock";
+    }
+
+    if (body.action === 'generate_kill_chain') {
+      try {
+        const cleaned = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+        const kill_chain = JSON.parse(cleaned);
+        return new Response(JSON.stringify({ kill_chain, provider }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "AI failed to return valid JSON", raw: content }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500
+        });
+      }
     }
 
     return new Response(JSON.stringify({ content, provider }), {

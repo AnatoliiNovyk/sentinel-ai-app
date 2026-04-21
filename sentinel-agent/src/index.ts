@@ -214,30 +214,83 @@ async function runNuclei(target: string): Promise<unknown[]> {
 // ─── mobsf scanner ────────────────────────────────────────────────────────────
 async function runMobsf(apkUrl: string): Promise<unknown[]> {
   console.log(`Downloading APK from ${apkUrl}...`);
-  // In a real scenario, we'd download the APK, start MobSF, and call its REST API.
-  // For now, we simulate a successful APK scan since MobSF requires a running service.
-  await new Promise(r => setTimeout(r, 5000));
-  
-  return [
-    {
-      title: 'Insecure Data Storage',
-      description: 'The mobile app stores sensitive information in SharedPreferences without encryption.',
-      severity: 'high',
-      asset: 'Android/SharedPreferences',
-      mitre_tactic: 'Credential Access',
-      remediation: 'Use EncryptedSharedPreferences for Android API >= 23.',
-      remediation_type: 'manual',
-    },
-    {
-      title: 'Missing Root Detection',
-      description: 'The app executes normally on rooted devices, exposing it to runtime manipulation.',
-      severity: 'medium',
-      asset: 'APK',
-      mitre_tactic: 'Execution',
-      remediation: 'Implement Rootbeer or SafetyNet API.',
-      remediation_type: 'manual',
+  try {
+    // 1. Download the file
+    const targetFile = `/tmp/mobsf_target_${Date.now()}.apk`;
+    await execAsync(`curl -sL -o ${targetFile} "${apkUrl}"`);
+    
+    // 2. Upload to MobSF
+    console.log('Uploading to MobSF...');
+    const uploadOut = await execAsync(`curl -s -F "file=@${targetFile}" http://localhost:8000/api/v1/upload -H "Authorization: sentinel_mobsf_key"`);
+    const uploadRes = JSON.parse(uploadOut);
+    const hash = uploadRes.hash;
+    
+    // 3. Trigger Scan
+    console.log('Scanning in MobSF (this may take a few minutes)...');
+    await execAsync(`curl -s -X POST --url http://localhost:8000/api/v1/scan --data "hash=${hash}" -H "Authorization: sentinel_mobsf_key"`);
+    
+    // 4. Get JSON Report
+    console.log('Fetching MobSF report...');
+    const reportOut = await execAsync(`curl -s -X POST --url http://localhost:8000/api/v1/report_json --data "hash=${hash}" -H "Authorization: sentinel_mobsf_key"`);
+    const report = JSON.parse(reportOut);
+    
+    // Cleanup
+    await execAsync(`rm -f ${targetFile}`);
+    
+    // Parse findings
+    const findings: unknown[] = [];
+    
+    // Map Manifest findings
+    if (report.manifest_analysis) {
+      for (const item of report.manifest_analysis.manifest_summary || []) {
+        if (item.severity === 'high' || item.severity === 'warning') {
+          findings.push({
+            title: item.title || 'Manifest Configuration Issue',
+            description: item.description || item.stat,
+            severity: item.severity === 'high' ? 'high' : 'medium',
+            asset: 'AndroidManifest.xml',
+            mitre_tactic: 'Defense Evasion',
+            remediation: 'Review and secure manifest configuration.',
+            remediation_type: 'manual',
+          });
+        }
+      }
     }
-  ];
+    
+    // Map Code analysis findings
+    if (report.code_analysis) {
+      for (const [key, issue] of Object.entries(report.code_analysis)) {
+        const i = issue as any;
+        if (i.metadata && i.metadata.severity !== 'info') {
+          findings.push({
+            title: i.metadata.masvs || key,
+            description: i.metadata.description,
+            severity: i.metadata.severity,
+            asset: 'Source Code / Smali',
+            mitre_tactic: 'Execution',
+            remediation: 'Review the flagged code segments and implement secure Android/iOS coding practices.',
+            remediation_type: 'manual',
+          });
+        }
+      }
+    }
+    
+    return findings.length > 0 ? findings : [
+      {
+        title: 'MobSF Scan Completed',
+        description: 'The scan finished, but no high/medium vulnerabilities were extracted. Check full report in MobSF UI.',
+        severity: 'info',
+        asset: 'APK',
+        mitre_tactic: 'None',
+        remediation: 'None',
+        remediation_type: 'manual',
+      }
+    ];
+
+  } catch (err) {
+    console.error('MobSF scan failed:', err);
+    return [];
+  }
 }
 
 // ─── Nmap XML parser (simplified) ────────────────────────────────────────────
