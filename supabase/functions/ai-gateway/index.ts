@@ -19,24 +19,44 @@ When a user describes a goal, you:
 4. Offer to generate executive summary or technical deep-dive reports.
 5. Provide ready-to-apply remediation as Terraform or Kubernetes patches when relevant.
 
-Keep responses clear, technical, and action-oriented. Use bullet points sparingly. Never invent data you don't have — describe what you would do.`;
+Keep responses clear, technical, and action-oriented. Use Markdown formatting (bold, bullet points, code blocks). Never invent data you don't have — describe what you would do.`;
 
 type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
-function mockResponse(prompt: string): string {
-  const lower = prompt.toLowerCase();
-  if (lower.includes("aws") || lower.includes("cloud")) {
-    return `I'll initiate a cloud security assessment. Plan:\n\n1. Reconnaissance with Prowler and CloudSploit across IAM, S3, and security groups.\n2. IaC analysis via tfsec and Checkov on your Terraform modules.\n3. Compliance mapping to CIS AWS Foundations and SOC2.\n4. Prioritization by MITRE ATT&CK cloud tactics.\n\nEstimated duration: 12-18 minutes. Shall I proceed with a read-only scan?`;
+// ─── Google Gemini ────────────────────────────────────────────────────────────
+async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<string> {
+  const userMessages = messages.filter((m) => m.role !== "system");
+
+  // Convert to Gemini format
+  const contents = userMessages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.7,
+        },
+      }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${err}`);
   }
-  if (lower.includes("scan") || lower.includes("audit") || lower.includes("pentest")) {
-    return `I'll orchestrate an external audit using Amass for subdomain enumeration, Masscan for port discovery, Nmap for service fingerprinting, and OpenVAS for CVE correlation. Findings will be normalized and mapped to MITRE ATT&CK. Would you like an executive summary for leadership?`;
-  }
-  if (lower.includes("report")) {
-    return `I can generate two tiers: Executive Summary (business risk language, KPIs) or Technical Deep Dive (per-finding remediation with Terraform/Kubernetes patches). Which one should I produce first?`;
-  }
-  return `I'm Sentinel, your AI security auditor. I can orchestrate external, cloud, IaC, and vulnerability scans, map findings to MITRE ATT&CK and CIS Controls, and generate reports with ready-to-apply remediation. Try: "Scan my AWS account for SOC2 compliance".`;
+  const json = await res.json();
+  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
+// ─── Anthropic Claude ─────────────────────────────────────────────────────────
 async function callAnthropic(apiKey: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -57,6 +77,7 @@ async function callAnthropic(apiKey: string, messages: ChatMessage[]): Promise<s
   return json.content?.[0]?.text ?? "";
 }
 
+// ─── OpenAI ───────────────────────────────────────────────────────────────────
 async function callOpenAI(apiKey: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -75,6 +96,22 @@ async function callOpenAI(apiKey: string, messages: ChatMessage[]): Promise<stri
   return json.choices?.[0]?.message?.content ?? "";
 }
 
+// ─── Mock fallback (dev only) ─────────────────────────────────────────────────
+function mockResponse(prompt: string): string {
+  const lower = prompt.toLowerCase();
+  if (lower.includes("aws") || lower.includes("cloud")) {
+    return `I'll initiate a **cloud security assessment**.\n\n**Plan:**\n1. Reconnaissance with Prowler and CloudSploit across IAM, S3, and security groups.\n2. IaC analysis via tfsec and Checkov on your Terraform modules.\n3. Compliance mapping to CIS AWS Foundations and SOC2.\n4. Prioritization by MITRE ATT&CK cloud tactics.\n\n**Estimated duration:** 12-18 minutes. Shall I proceed with a read-only scan?`;
+  }
+  if (lower.includes("scan") || lower.includes("audit") || lower.includes("pentest")) {
+    return `I'll orchestrate an external audit using Amass for subdomain enumeration, Masscan for port discovery, Nmap for service fingerprinting, and OpenVAS for CVE correlation. Findings will be normalized and mapped to MITRE ATT&CK. Would you like an **executive summary** for leadership?`;
+  }
+  if (lower.includes("report")) {
+    return `I can generate two tiers:\n- **Executive Summary** — business risk language, KPIs\n- **Technical Deep Dive** — per-finding remediation with Terraform/Kubernetes patches\n\nWhich one should I produce first?`;
+  }
+  return `I'm **Sentinel**, your AI security auditor. I can orchestrate external, cloud, IaC, and vulnerability scans, map findings to MITRE ATT&CK and CIS Controls, and generate reports with ready-to-apply remediation.\n\nTry: *"Scan my AWS account for SOC2 compliance"*.`;
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -97,18 +134,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Priority: Gemini → Anthropic → OpenAI → mock
+    const geminiKey    = Deno.env.get("GEMINI_API_KEY");
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    const openaiKey    = Deno.env.get("OPENAI_API_KEY");
 
     let content = "";
     let provider = "mock";
 
-    if (anthropicKey) {
+    if (geminiKey) {
+      try {
+        content = await callGemini(geminiKey, messages);
+        provider = "gemini-1.5-pro";
+      } catch (err) {
+        console.error("Gemini error, trying next provider:", err);
+      }
+    }
+
+    if (!content && anthropicKey) {
       try {
         content = await callAnthropic(anthropicKey, messages);
         provider = "anthropic";
       } catch (err) {
-        console.error("Anthropic fallback:", err);
+        console.error("Anthropic error, trying next provider:", err);
       }
     }
 
@@ -117,7 +165,7 @@ Deno.serve(async (req: Request) => {
         content = await callOpenAI(openaiKey, messages);
         provider = "openai";
       } catch (err) {
-        console.error("OpenAI fallback:", err);
+        console.error("OpenAI error, using mock:", err);
       }
     }
 
