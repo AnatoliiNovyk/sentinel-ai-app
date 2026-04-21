@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Download, FileText, Copy, Check, Sparkles, BookOpen } from 'lucide-react';
+import { X, Download, FileText, Copy, Check, Sparkles, BookOpen, Link, Loader2 } from 'lucide-react';
 import { marked } from 'marked';
 import { Report } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { downloadFile } from '../lib/exporters';
 
 // Configure marked for safe, clean output
@@ -14,6 +15,9 @@ interface ReportViewerProps {
 
 export default function ReportViewer({ report, onClose }: ReportViewerProps) {
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(report.share_token);
   const [renderMode, setRenderMode] = useState<'rendered' | 'raw'>('rendered');
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +37,30 @@ export default function ReportViewer({ report, onClose }: ReportViewerProps) {
     navigator.clipboard.writeText(report.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = async () => {
+    if (sharing) return;
+    if (shareToken) {
+      // Already shared — copy link
+      const url = `${window.location.origin}/?share=${shareToken}`;
+      navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+      return;
+    }
+    setSharing(true);
+    const token = crypto.randomUUID();
+    await supabase
+      .from('reports')
+      .update({ is_public: true, share_token: token })
+      .eq('id', report.id);
+    setShareToken(token);
+    const url = `${window.location.origin}/?share=${token}`;
+    navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    setSharing(false);
+    setTimeout(() => setLinkCopied(false), 2500);
   };
 
   const handleDownload = () => {
@@ -91,6 +119,22 @@ export default function ReportViewer({ report, onClose }: ReportViewerProps) {
                 Markdown
               </button>
             </div>
+            {/* Share link */}
+            <button
+              onClick={handleShare}
+              disabled={sharing}
+              title={shareToken ? 'Copy share link' : 'Generate public link'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs transition ${
+                linkCopied
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                  : shareToken
+                  ? 'border-sky-500/30 bg-sky-500/10 text-sky-300 hover:border-sky-400'
+                  : 'border-slate-800 text-slate-400 hover:text-white hover:border-slate-600'
+              }`}
+            >
+              {sharing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link className="w-3.5 h-3.5" />}
+              {linkCopied ? 'Link copied!' : shareToken ? 'Share link' : 'Share'}
+            </button>
             <button
               onClick={handleCopy}
               title="Copy Markdown"

@@ -1,40 +1,179 @@
-# Sentinel AI - Cybersecurity Audit Platform
+# 🛡️ Sentinel AI
 
-Sentinel AI is an AI-driven cybersecurity audit SaaS platform. It allows users to manage projects, run security scans (AI-orchestrated), view vulnerabilities, and generate actionable reports.
+> **Autonomous Security Auditing Platform** — AI-driven vulnerability scanning, remediation, and compliance monitoring for modern infrastructure.
 
-## Tech Stack
--   **Frontend:** React, Vite, TypeScript, Tailwind CSS, Lucide Icons.
--   **Backend:** Supabase (Auth, PostgreSQL, Row Level Security).
--   **Routing:** React Router DOM.
--   **AI:** Custom Gateway/Agent orchestrator.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 
-## Getting Started
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---|---|
+| 🤖 **AI Agent** | Natural-language commands → autonomous scans, reports, findings triage |
+| 🔍 **Multi-scanner** | nmap · amass · prowler · tfsec — simulated with realistic finding generation |
+| 🛡️ **Compliance** | Automated mapping to SOC 2, CIS Controls v8, NIST CSF, MITRE ATT&CK |
+| 📄 **Report Engine** | Executive & Technical reports with Markdown rendering + public share links |
+| ⚡ **AI Remediation** | One-click automated patch simulation with live execution console |
+| 🗺️ **Asset Topology** | SVG graph of asset relationships per project |
+| 📊 **Live Dashboard** | Sparkline KPIs, area trend charts, SLA watch with breach notifications |
+| ⏱️ **Scan Scheduler** | Recurring scan automation with cadence control |
+| 🔔 **Notifications** | Real-time SLA breach & warning alerts |
+| 🌐 **Public Reports** | Share reports via unique public URLs |
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
--   Node.js (v18+)
--   Supabase Project
+- Node.js 18+
+- A [Supabase](https://supabase.com) project
 
-### Installation
-1.  Clone the repository.
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
-3.  Copy `.env.example` to `.env` and fill in your Supabase credentials:
-    ```bash
-    cp .env.example .env
-    ```
-4.  Start the development server:
-    ```bash
-    npm run dev
-    ```
+### 1. Clone & Install
 
-## Project Structure
--   `src/components`: Reusable UI components.
--   `src/context`: Auth and application-wide state.
--   `src/lib`: Core business logic (AI Gateway, Agent Tools, Supabase Client).
--   `src/pages`: Main application views.
--   `supabase/migrations`: Database schema definitions.
+```bash
+git clone https://github.com/your-username/sentinel-ai-app.git
+cd sentinel-ai-app
+npm install
+```
 
-## Database Setup
-Run the migrations in the `supabase/migrations` folder against your Supabase instance to set up the necessary tables and RLS policies.
+### 2. Configure Environment
+
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. Set Up Database
+
+Run the SQL migrations in your Supabase SQL editor. The schema requires these tables:
+
+```
+profiles · projects · scans · vulnerabilities
+reports · ai_conversations · ai_messages
+scan_schedules · notifications
+```
+
+> See `supabase/schema.sql` for full DDL (coming soon).
+
+### 4. Start Development Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+---
+
+## 🏗️ Architecture
+
+```
+sentinel-ai-app/
+├── src/
+│   ├── pages/
+│   │   ├── Dashboard.tsx       # KPI sparklines, trend charts, SLA watch
+│   │   ├── Projects.tsx        # Project management
+│   │   ├── ProjectDetail.tsx   # Scans, findings, reports, asset graph
+│   │   ├── Scans.tsx           # All scans across projects
+│   │   ├── Reports.tsx         # Report library
+│   │   ├── Compliance.tsx      # SOC2 / CIS / NIST / MITRE dashboard
+│   │   ├── Scheduler.tsx       # Automated scan scheduling
+│   │   ├── Chat.tsx            # AI assistant interface
+│   │   └── Settings.tsx        # Profile, SLA config, plan
+│   │
+│   ├── components/
+│   │   ├── ReportViewer.tsx    # Markdown viewer with share/download
+│   │   ├── ExecutionConsole.tsx # AI remediation terminal simulation
+│   │   ├── AssetGraph.tsx      # SVG asset topology visualization
+│   │   ├── Sparkline.tsx       # Pure SVG sparkline component
+│   │   ├── FindingsTab.tsx     # Vulnerability triage interface
+│   │   └── NotificationBell.tsx # Real-time notification center
+│   │
+│   ├── lib/
+│   │   ├── agentTools.ts       # AI agent intent → tool dispatch
+│   │   ├── compliance.ts       # SOC2/CIS/NIST/MITRE mapping engine
+│   │   ├── reportBuilder.ts    # Markdown report generation
+│   │   ├── scanMock.ts         # Realistic vulnerability simulation
+│   │   ├── scheduler.ts        # Recurring scan dispatch
+│   │   ├── exporters.ts        # SARIF, JSON, file download
+│   │   └── supabase.ts         # Client + TypeScript types
+│   │
+│   └── context/
+│       └── AuthContext.tsx     # Auth state + profile
+```
+
+---
+
+## 🤖 AI Agent Commands
+
+The AI Chat understands natural language. Try these:
+
+```
+"Run a scan on my first project"
+"List my open findings"
+"Check compliance status"
+"SLA status — what is overdue?"
+"Generate an executive summary"
+"Resolve the S3 public access finding"
+"Summarize my security posture"
+```
+
+Supports English and Ukrainian 🇺🇦.
+
+---
+
+## 🛡️ Compliance Frameworks
+
+Sentinel AI automatically maps your vulnerability findings to:
+
+- **SOC 2 Trust Services Criteria** (CC1–CC7) — readiness gauge + per-criterion scores
+- **CIS Controls v8** (18 controls) — coverage table with open/critical counts
+- **NIST Cybersecurity Framework** — Identify · Protect · Detect · Respond · Recover
+- **MITRE ATT&CK** (12 tactics) — heatmap of active threat tactics
+
+---
+
+## 📄 Report Types
+
+| Type | Audience | Contents |
+|---|---|---|
+| **Executive Summary** | CISO, Board | Risk posture, top findings, business impact, strategic remediation |
+| **Technical Deep Dive** | Engineers | Full vulnerability list, CVEs, remediation code, MITRE mapping |
+
+Reports can be:
+- Viewed with full Markdown rendering
+- Downloaded as `.md` files
+- Shared via public URL (`/?share=<token>`)
+
+---
+
+## 🔧 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript |
+| Build | Vite 5 |
+| Styling | Tailwind CSS 3 + `@tailwindcss/typography` |
+| Backend | Supabase (PostgreSQL, Auth, Realtime) |
+| Markdown | `marked` |
+| Icons | Lucide React |
+| Routing | React Router v6 |
+
+---
+
+## 📝 License
+
+MIT © 2025 Sentinel AI
+
+---
+
+<div align="center">
+  <sub>Built with ⚡ and 🛡️ — securing infrastructure, one scan at a time.</sub>
+</div>

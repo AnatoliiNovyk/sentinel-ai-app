@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -13,7 +13,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/scans': 'Scans',
   '/reports': 'Reports',
   '/compliance': 'Compliance',
-  '/settings': 'Settings',
+  '/scheduler':  'Scan Scheduler',
+  '/settings':   'Settings',
 };
 
 const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: string }[] = [
@@ -23,6 +24,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'scans',       label: 'Scans',        icon: Radar,           path: '/scans' },
   { id: 'reports',     label: 'Reports',      icon: FileText,        path: '/reports' },
   { id: 'compliance',  label: 'Compliance',   icon: ShieldCheck,     path: '/compliance' },
+  { id: 'scheduler',   label: 'Scheduler',    icon: CalendarClock,   path: '/scheduler' },
   { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },
 ];
 
