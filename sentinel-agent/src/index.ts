@@ -38,22 +38,33 @@ async function fetchPendingJob() {
 }
 
 async function reportResult(jobId: string, scanId: string, userId: string, projectId: string, findings: unknown[], errorMsg?: string) {
-  await fetch(RESULT_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_ANON}`,
-      'X-Agent-Secret': AGENT_SECRET,
-    },
-    body: JSON.stringify({
-      job_id: jobId,
-      scan_id: scanId,
-      user_id: userId,
-      project_id: projectId,
-      findings,
-      error_message: errorMsg,
-    }),
-  });
+  try {
+    const resp = await fetch(RESULT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'X-Agent-Secret': AGENT_SECRET,
+      },
+      body: JSON.stringify({
+        job_id: jobId,
+        scan_id: scanId,
+        user_id: userId,
+        project_id: projectId,
+        findings,
+        error_message: errorMsg,
+      }),
+    });
+
+    if (resp.ok) {
+      console.log(`📤 scan-result OK [${resp.status}] — job ${jobId}`);
+    } else {
+      const body = await resp.text();
+      console.error(`❌ scan-result ERROR [${resp.status}] — job ${jobId}: ${body}`);
+    }
+  } catch (err) {
+    console.error(`❌ scan-result NETWORK ERROR — job ${jobId}:`, err instanceof Error ? err.message : String(err));
+  }
 }
 
 // ─── nmap scanner ─────────────────────────────────────────────────────────────
