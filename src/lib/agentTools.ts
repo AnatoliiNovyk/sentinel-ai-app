@@ -583,11 +583,17 @@ async function toolResolveFinding(userId: string, args: { raw: string }): Promis
   }).sort((a, b) => b.score - a.score);
 
   const best = scored[0];
-  if (best.score === 0) {
+  // BUG-10: require at least 2 matching words to prevent accidental resolution
+  if (best.score < 2) {
+    const topCandidates = scored
+      .filter(s => s.score >= 1)
+      .slice(0, 5)
+      .map(s => `**${s.v.title}** (${s.v.severity})`)
+      .join(', ');
     return {
       name: 'resolve_finding',
       ok: false,
-      summary: `I couldn't match a specific finding from your message. Try being more specific, e.g. "resolve the S3 public access finding".\n\nOpen findings: ${vulns.slice(0, 5).map(v => `**${v.title}**`).join(', ')}`,
+      summary: `I couldn't confidently match a specific finding. Please be more specific.\n\n${topCandidates ? `Possible matches: ${topCandidates}` : `Open findings: ${vulns.slice(0, 5).map(v => `**${v.title}**`).join(', ')}`}`,
     };
   }
 

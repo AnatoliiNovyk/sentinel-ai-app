@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2 } from 'lucide-react';
+import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2, ExternalLink, Database } from 'lucide-react';
 import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
@@ -7,6 +7,7 @@ import { dispatchScan } from '../lib/scanDispatch';
 import SchedulesPanel from '../components/SchedulesPanel';
 import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
+import { fetchCveDetail, cvssToSeverity, CveDetail } from '../lib/cveEnrichment';
 
 type Tab = 'runs' | 'schedules';
 
@@ -479,6 +480,7 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
 function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cveDetail, setCveDetail] = useState<CveDetail | null | 'loading'>(null);
   const sevColors: Record<string, string> = {
     critical: 'text-red-400 border-red-500/30 bg-red-500/10',
     high: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
@@ -486,6 +488,13 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
     low: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
     info: 'text-slate-400 border-slate-700 bg-slate-800/40',
   };
+
+  // F-02: Fetch CVE enrichment from NVD when card opens
+  useEffect(() => {
+    if (!open || !v.cve_id || cveDetail !== null) return;
+    setCveDetail('loading');
+    fetchCveDetail(v.cve_id).then(detail => setCveDetail(detail));
+  }, [open, v.cve_id]);
 
   const copy = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -535,6 +544,65 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
               <div className="mt-1 text-slate-300 font-mono">{v.cve_id || '—'}</div>
             </div>
           </div>
+
+          {/* F-02: NVD CVE Enrichment Panel */}
+          {v.cve_id && (
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Database className="w-3.5 h-3.5 text-sky-400" />
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">NVD Intelligence</span>
+                {cveDetail === 'loading' && <span className="text-[10px] text-slate-500 animate-pulse">Fetching from NVD...</span>}
+              </div>
+              {cveDetail === 'loading' && (
+                <div className="h-8 bg-slate-800 rounded animate-pulse" />
+              )}
+              {cveDetail && cveDetail !== 'loading' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    {cveDetail.cvssV3Score !== null && (
+                      <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border font-mono ${
+                        {
+                          critical: 'text-red-300 border-red-500/30 bg-red-500/10',
+                          high: 'text-orange-300 border-orange-500/30 bg-orange-500/10',
+                          medium: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10',
+                          low: 'text-sky-300 border-sky-500/30 bg-sky-500/10',
+                          info: 'text-slate-400 border-slate-700 bg-slate-800',
+                          unknown: 'text-slate-400 border-slate-700 bg-slate-800',
+                        }[cvssToSeverity(cveDetail.cvssV3Score)] ?? 'text-slate-400 border-slate-700'
+                      }`}>
+                        CVSS v3: {cveDetail.cvssV3Score} · {cveDetail.cvssV3Severity}
+                      </div>
+                    )}
+                    {cveDetail.cweIds.length > 0 && (
+                      <span className="text-xs text-slate-400 font-mono">{cveDetail.cweIds.slice(0, 2).join(', ')}</span>
+                    )}
+                  </div>
+                  {cveDetail.description && (
+                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{cveDetail.description}</p>
+                  )}
+                  {cveDetail.references.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {cveDetail.references.slice(0, 3).map((ref) => (
+                        <a
+                          key={ref}
+                          href={ref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] text-sky-400 hover:text-sky-300 transition"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          {new URL(ref).hostname}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {cveDetail === null && v.cve_id && (
+                <p className="text-xs text-slate-500">No NVD data found for {v.cve_id}</p>
+              )}
+            </div>
+          )}
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
             <div className="mt-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-100">

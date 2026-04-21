@@ -74,25 +74,46 @@ export default function Dashboard() {
   const atRiskRows   = slaRows.filter(r => !r.overdue && r.ageDays / r.budget >= 0.75);
   const healthyRows  = slaRows.filter(r => !r.overdue && r.ageDays / r.budget < 0.75);
 
-  // SLA breach notifications
+  // BUG-06: SLA breach notifications — debounced to prevent duplicate writes
+  // when WebSocket change + poll fire simultaneously, or multiple tabs are open.
   useEffect(() => {
     if (!user || vulns.length === 0) return;
     const newlyBreached = slaRows.filter(r => r.overdue && !r.v.sla_breached_at).slice(0, 10);
     const atRisk = slaRows.filter(r => !r.overdue && !r.v.sla_warned_at && r.ageDays / r.budget >= 0.75).slice(0, 10);
     if (newlyBreached.length === 0 && atRisk.length === 0) return;
-    (async () => {
+
+    // Debounce: wait 1.5s before writing, so rapid re-renders collapse into one write
+    const timer = setTimeout(async () => {
       const stamp = new Date().toISOString();
       for (const { v, budget, ageDays } of newlyBreached) {
-        const { error } = await supabase.from('vulnerabilities').update({ sla_breached_at: stamp }).eq('id', v.id).is('sla_breached_at', null);
+        // Conditional update: only succeeds if sla_breached_at is still null (row-level dedup)
+        const { error } = await supabase
+          .from('vulnerabilities').update({ sla_breached_at: stamp })
+          .eq('id', v.id).is('sla_breached_at', null);
         if (error) continue;
-        await supabase.from('notifications').insert({ user_id: user.id, type: 'sla_breach', title: `SLA breached: ${v.severity.toUpperCase()} finding overdue`, body: `${v.title} is ${Math.floor(ageDays - budget)}d past its ${budget}-day SLA.`, link: 'findings', severity: v.severity === 'critical' ? 'critical' : 'warning', metadata: { vulnerability_id: v.id } });
+        await supabase.from('notifications').insert({
+          user_id: user.id, type: 'sla_breach',
+          title: `SLA breached: ${v.severity.toUpperCase()} finding overdue`,
+          body: `${v.title} is ${Math.floor(ageDays - budget)}d past its ${budget}-day SLA.`,
+          link: 'findings', severity: v.severity === 'critical' ? 'critical' : 'warning',
+          metadata: { vulnerability_id: v.id },
+        });
       }
       for (const { v, budget, remaining } of atRisk) {
-        const { error } = await supabase.from('vulnerabilities').update({ sla_warned_at: stamp }).eq('id', v.id).is('sla_warned_at', null);
+        const { error } = await supabase
+          .from('vulnerabilities').update({ sla_warned_at: stamp })
+          .eq('id', v.id).is('sla_warned_at', null);
         if (error) continue;
-        await supabase.from('notifications').insert({ user_id: user.id, type: 'sla_warning', title: `SLA at risk: ${v.severity.toUpperCase()} finding nearing deadline`, body: `${v.title} has ${Math.max(0, Math.ceil(remaining))}d left of its ${budget}-day SLA.`, link: 'findings', severity: 'warning', metadata: { vulnerability_id: v.id } });
+        await supabase.from('notifications').insert({
+          user_id: user.id, type: 'sla_warning',
+          title: `SLA at risk: ${v.severity.toUpperCase()} finding nearing deadline`,
+          body: `${v.title} has ${Math.max(0, Math.ceil(remaining))}d left of its ${budget}-day SLA.`,
+          link: 'findings', severity: 'warning',
+          metadata: { vulnerability_id: v.id },
+        });
       }
-    })();
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [user, vulns]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const completedScans = scans.filter(s => s.status === 'completed').length;

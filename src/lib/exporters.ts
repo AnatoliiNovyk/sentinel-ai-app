@@ -81,7 +81,7 @@ export function toSarif(project: Project, scan: Scan, vulns: Vulnerability[]): s
           driver: {
             name: 'Sentinel AI',
             version: '1.0.0',
-            informationUri: 'https://sentinel.local',
+            informationUri: 'https://santinelai.online',
             rules,
           },
         },

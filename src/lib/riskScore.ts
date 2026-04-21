@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 const WEIGHTS = { critical: 25, high: 12, medium: 5, low: 2, info: 0 } as const;
-const ENV_MULTIPLIERS = { production: 1.5, staging: 1.0, development: 0.8, internal: 1.0, cloud: 1.2, iac: 1.0, on_prem: 1.3 } as const;
+const ENV_MULTIPLIERS = { production: 1.5, external: 1.3, staging: 1.1, cloud: 1.2, internal: 1.0, iac: 1.0, on_prem: 1.3 } as const;
 
 export function computeScoreFromCounts(counts: Record<keyof typeof WEIGHTS, number>, environment: string = 'internal'): number {
   const multiplier = ENV_MULTIPLIERS[environment as keyof typeof ENV_MULTIPLIERS] || 1.0;
