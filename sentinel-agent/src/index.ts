@@ -1,8 +1,9 @@
-import { execFile } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { createClient } from '@supabase/supabase-js';
 
 const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 
 const SUPABASE_URL    = process.env.SUPABASE_URL!;
 const SERVICE_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -156,7 +157,7 @@ async function runTrivy(target: string): Promise<unknown[]> {
         cve_id: v.VulnerabilityID,
         asset: target,
         mitre_tactic: 'Initial Access',
-        remediation: v.FixedVersion ? \`Update to \${v.FixedVersion}\` : 'No fix available.',
+        remediation: v.FixedVersion ? `Update to ${v.FixedVersion}` : 'No fix available.',
         remediation_type: 'manual',
       });
     }
@@ -167,7 +168,7 @@ async function runTrivy(target: string): Promise<unknown[]> {
 // ─── checkov scanner ──────────────────────────────────────────────────────────
 async function runCheckov(repoPath: string): Promise<unknown[]> {
   const { stdout } = await execFileAsync('docker', [
-    'run', '--rm', '-v', \`\${repoPath}:/src\`,
+    'run', '--rm', '-v', `${repoPath}:/src`,
     'bridgecrew/checkov', '-d', '/src', '-o', 'json',
   ], { timeout: 180_000 });
   const parsed = JSON.parse(stdout || '{}');
@@ -178,7 +179,7 @@ async function runCheckov(repoPath: string): Promise<unknown[]> {
       title: r.check_name,
       description: r.check_id,
       severity: 'high',
-      asset: \`\${r.file_path}:\${r.file_line_range?.[0] || 0}\`,
+      asset: `${r.file_path}:${r.file_line_range?.[0] || 0}`,
       remediation: 'Review Checkov guidelines.',
       remediation_type: 'terraform',
     });
@@ -221,7 +222,7 @@ async function runMobsf(apkUrl: string): Promise<unknown[]> {
     
     // 2. Upload to MobSF
     console.log('Uploading to MobSF...');
-    const uploadOut = await execAsync(`curl -s -F "file=@${targetFile}" http://localhost:8000/api/v1/upload -H "Authorization: sentinel_mobsf_key"`);
+    const { stdout: uploadOut } = await execAsync(`curl -s -F "file=@${targetFile}" http://localhost:8000/api/v1/upload -H "Authorization: sentinel_mobsf_key"`);
     const uploadRes = JSON.parse(uploadOut);
     const hash = uploadRes.hash;
     
@@ -231,7 +232,7 @@ async function runMobsf(apkUrl: string): Promise<unknown[]> {
     
     // 4. Get JSON Report
     console.log('Fetching MobSF report...');
-    const reportOut = await execAsync(`curl -s -X POST --url http://localhost:8000/api/v1/report_json --data "hash=${hash}" -H "Authorization: sentinel_mobsf_key"`);
+    const { stdout: reportOut } = await execAsync(`curl -s -X POST --url http://localhost:8000/api/v1/report_json --data "hash=${hash}" -H "Authorization: sentinel_mobsf_key"`);
     const report = JSON.parse(reportOut);
     
     // Cleanup
