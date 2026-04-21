@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, Profile } from '../lib/supabase';
 
@@ -18,18 +18,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  // BUG-02 fix: loading stays true until onAuthStateChange fires INITIAL_SESSION
   const [loading, setLoading] = useState(true);
+  const initialised = useRef(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    // BUG-02: Use onAuthStateChange as the single source of truth.
+    // INITIAL_SESSION fires synchronously on mount with the persisted session (or null),
+    // after any token refresh — eliminating the race with getSession().
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+
+      // BUG-03: Explicitly clear profile on sign-out so data never leaks between accounts
+      if (event === 'SIGNED_OUT') {
+        setProfile(null);
+      }
+
+      // Resolve loading only once on the very first auth event (INITIAL_SESSION)
+      if (!initialised.current) {
+        initialised.current = true;
+        setLoading(false);
+      }
     });
 
     return () => sub.subscription.unsubscribe();
@@ -41,13 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (error) {
+        console.error('[AuthContext] Failed to fetch profile:', error.message);
+        return;
+      }
+
       if (!data) {
-        const { data: created } = await supabase
+        const { data: created, error: createErr } = await supabase
           .from('profiles')
           .insert({
             id: user.id,
@@ -56,12 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           .select()
           .maybeSingle();
-        setProfile(created);
+        if (createErr) console.error('[AuthContext] Failed to create profile:', createErr.message);
+        setProfile(created ?? null);
       } else {
         setProfile(data);
       }
     })();
-  }, [user]);
+  }, [user?.id]); // BUG-02 fix: depend on user.id not the whole object
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -77,7 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  // BUG-03: Clear profile eagerly before signOut to prevent flash of stale data
   const signOut = async () => {
+    setProfile(null);
     await supabase.auth.signOut();
   };
 

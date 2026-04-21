@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 
@@ -29,6 +29,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
 ];
 
 export default function AppLayout() {
+  const location = useLocation();
   const { profile, signOut } = useAuth();
   const initials =
     (profile?.full_name || profile?.email || 'U')
@@ -89,7 +90,7 @@ export default function AppLayout() {
       <main className="flex-1 overflow-auto flex flex-col">
         <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-8">
           <div className="text-sm font-medium text-slate-300">
-            {PAGE_TITLES[window.location.pathname] || 'Sentinel AI'}
+            {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell />

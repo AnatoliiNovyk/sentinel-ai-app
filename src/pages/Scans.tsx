@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2 } from 'lucide-react';
 import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { AVAILABLE_SCANNERS, runMockScan } from '../lib/scanMock';
+import { AVAILABLE_SCANNERS } from '../lib/scanMock';
+import { dispatchScan } from '../lib/scanDispatch';
 import SchedulesPanel from '../components/SchedulesPanel';
 import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
@@ -146,7 +147,8 @@ export default function Scans() {
           onCreated={async (projectId, scanner) => {
             setModalOpen(false);
             if (!user) return;
-            await runMockScan(user.id, projectId, scanner);
+            const proj = projects.find((p) => p.id === projectId);
+            await dispatchScan(user.id, projectId, scanner, proj?.target ?? '');
             load();
           }}
         />

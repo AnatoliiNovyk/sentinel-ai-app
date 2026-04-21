@@ -321,5 +321,35 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_scan_schedules_due ON scan_schedules(user_id, enabled, next_run_at);
 
 -- =============================================================================
+-- 10. SCAN JOBS  (used by scan-dispatch edge function + VPS agent)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS scan_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id uuid NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  scanner text NOT NULL DEFAULT 'nmap',
+  target text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'pending',
+  error_message text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  CONSTRAINT scan_jobs_status_check CHECK (status IN ('pending','running','done','error'))
+);
+
+ALTER TABLE scan_jobs ENABLE ROW LEVEL SECURITY;
+
+-- Authenticated users can read their own jobs (for status polling)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='scan_jobs' AND policyname='Users read own jobs') THEN
+    CREATE POLICY "Users read own jobs" ON scan_jobs FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  -- Service role (used by edge functions and agent) bypasses RLS automatically
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_pending ON scan_jobs(status, created_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_scan ON scan_jobs(scan_id);
+
+-- =============================================================================
 -- DONE ✓
 -- =============================================================================

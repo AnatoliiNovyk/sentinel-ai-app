@@ -1,5 +1,6 @@
 import { supabase, Project, Scan, Vulnerability } from './supabase';
-import { runMockScan, AVAILABLE_SCANNERS } from './scanMock';
+import { AVAILABLE_SCANNERS } from './scanMock';
+import { dispatchScan } from './scanDispatch';
 import { buildReport, ReportKind } from './reportBuilder';
 import { computeCompliance } from './compliance';
 
@@ -47,7 +48,8 @@ function detectKind(text: string): ReportKind {
 }
 
 async function loadUserProjects(userId: string): Promise<Project[]> {
-  const { data } = await supabase.from('projects').select('*').eq('user_id', userId);
+  const { data, error } = await supabase.from('projects').select('*').eq('user_id', userId);
+  if (error) console.error('[agentTools] loadUserProjects error:', error.message);
   return (data ?? []) as Project[];
 }
 
@@ -248,11 +250,12 @@ async function toolRunScan(
         ? 'tfsec'
         : 'nmap');
   const meta = AVAILABLE_SCANNERS.find((s) => s.id === scanner);
-  const scanId = await runMockScan(userId, project.id, scanner);
+  const scanId = await dispatchScan(userId, project.id, scanner, project.target ?? '');
   if (!scanId) {
     return { name: 'run_scan', ok: false, summary: 'Scan could not be dispatched.' };
   }
-  const { data: scan } = await supabase.from('scans').select('*').eq('id', scanId).maybeSingle();
+  const { data: scan, error: scanErr } = await supabase.from('scans').select('*').eq('id', scanId).maybeSingle();
+  if (scanErr) console.error('[agentTools] toolRunScan fetch scan error:', scanErr.message);
   const sev = (scan as Scan | null)?.severity_summary ?? {
     critical: 0,
     high: 0,
