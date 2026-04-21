@@ -18,6 +18,8 @@ import NotFound from './pages/NotFound';
 import AttackSurfaceMap from './pages/AttackSurfaceMap';
 import DarkWebMonitor from './pages/DarkWebMonitor';
 import PassiveRecon from './pages/PassiveRecon';
+import SupplyChain from './pages/SupplyChain';
+import KillChain from './pages/KillChain';
 import Integrations from './pages/Integrations';
 import ApiDocs from './pages/ApiDocs';
 import { Shield } from 'lucide-react';
@@ -77,6 +79,8 @@ function Shell() {
         <Route path="attack-map" element={<AttackSurfaceMap />} />
         <Route path="dark-web" element={<DarkWebMonitor />} />
         <Route path="recon" element={<PassiveRecon />} />
+        <Route path="supply-chain" element={<SupplyChain />} />
+        <Route path="kill-chain" element={<KillChain />} />
         <Route path="integrations" element={<Integrations />} />
         <Route path="api" element={<ApiDocs />} />
         <Route path="settings" element={<Settings />} />

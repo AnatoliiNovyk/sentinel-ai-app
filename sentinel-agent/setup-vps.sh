@@ -33,6 +33,7 @@ docker pull projectdiscovery/nuclei &
 docker pull bridgecrew/checkov &
 docker pull aquasec/trivy &
 docker pull aquasec/kube-bench &
+docker pull opensecurity/mobile-security-framework-mobsf &
 wait
 echo "✅ Scanner images ready"
 

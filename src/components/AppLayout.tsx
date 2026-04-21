@@ -1,4 +1,4 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -16,6 +16,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/attack-map': 'Attack Surface Map',
   '/dark-web':   'Dark Web Monitor',
   '/recon':      'Passive Recon',
+  '/supply-chain':'Supply Chain Analysis',
+  '/kill-chain': 'AI Red Team',
   '/integrations':'CI/CD Integrations',
   '/api':        'REST API & CLI',
   '/settings':   'Settings',
@@ -32,6 +34,8 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'attack-map',  label: 'Attack Map',   icon: Network,         path: '/attack-map' },
   { id: 'dark-web',    label: 'Dark Web',      icon: Eye,             path: '/dark-web' },
   { id: 'recon',       label: 'Passive Recon', icon: Search,          path: '/recon' },
+  { id: 'supply-chain',label: 'Supply Chain',  icon: Box,             path: '/supply-chain' },
+  { id: 'kill-chain',  label: 'AI Red Team',   icon: Crosshair,       path: '/kill-chain' },
   { id: 'integrations',label: 'Integrations',  icon: Terminal,        path: '/integrations' },
   { id: 'api',         label: 'API & CLI',     icon: Code,            path: '/api' },
   { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },

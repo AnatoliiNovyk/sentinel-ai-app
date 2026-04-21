@@ -224,4 +224,6 @@ export const AVAILABLE_SCANNERS: { id: string; label: string; description: strin
   // Containers & Kubernetes
   { id: 'trivy',        label: 'Trivy',           description: 'Container image & filesystem vulnerability scan', category: 'container' },
   { id: 'kube-bench',   label: 'kube-bench',      description: 'Kubernetes CIS Benchmark compliance check',      category: 'kubernetes' },
+  // Mobile
+  { id: 'mobsf',        label: 'MobSF',           description: 'Mobile App Security Framework (APK/IPA)',        category: 'mobile' },
 ];
