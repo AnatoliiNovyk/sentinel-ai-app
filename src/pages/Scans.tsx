@@ -8,6 +8,7 @@ import SchedulesPanel from '../components/SchedulesPanel';
 import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
 import { fetchCveDetail, cvssToSeverity, CveDetail } from '../lib/cveEnrichment';
+import { fetchThreatIntel, ThreatIntelResult } from '../lib/threatIntel';
 import RemediationModal from '../components/RemediationModal';
 import ScanDiff from '../components/ScanDiff';
 
@@ -481,6 +482,7 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cveDetail, setCveDetail] = useState<CveDetail | null | 'loading'>(null);
+  const [threatData, setThreatData] = useState<ThreatIntelResult | null | 'loading'>(null);
   const sevColors: Record<string, string> = {
     critical: 'text-red-400 border-red-500/30 bg-red-500/10',
     high: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
@@ -489,12 +491,18 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
     info: 'text-slate-400 border-slate-700 bg-slate-800/40',
   };
 
-  // F-02: Fetch CVE enrichment from NVD when card opens
+  // F-02 & F-16: Fetch CVE and Threat Intel when card opens
   useEffect(() => {
-    if (!open || !v.cve_id || cveDetail !== null) return;
-    setCveDetail('loading');
-    fetchCveDetail(v.cve_id).then(detail => setCveDetail(detail));
-  }, [open, v.cve_id]);
+    if (!open) return;
+    if (v.cve_id && cveDetail === null) {
+      setCveDetail('loading');
+      fetchCveDetail(v.cve_id).then(detail => setCveDetail(detail));
+    }
+    if (v.asset && threatData === null) {
+      setThreatData('loading');
+      fetchThreatIntel(v.asset).then(data => setThreatData(data));
+    }
+  }, [open, v.cve_id, v.asset]);
 
   const copy = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -601,6 +609,34 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
               {cveDetail === null && v.cve_id && (
                 <p className="text-xs text-slate-500">No NVD data found for {v.cve_id}</p>
               )}
+            </div>
+          )}
+
+          {/* F-16: Threat Intelligence Panel */}
+          {threatData && threatData !== 'loading' && (
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Globe className="w-3.5 h-3.5 text-violet-400" />
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">VirusTotal Intelligence</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border font-mono ${
+                    threatData.positives > 0 ? 'text-red-300 border-red-500/30 bg-red-500/10' : 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                  }`}>
+                    {threatData.positives > 0 ? <AlertTriangle className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+                    {threatData.positives}/{threatData.total} Malicious
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">Owner: {threatData.owner} ({threatData.country})</span>
+                </div>
+                {threatData.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {threatData.tags.slice(0, 5).map(tag => (
+                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Tag } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { shodanDnsLookup } from '../lib/passiveRecon';
 import ProjectDetail from './ProjectDetail';
 import { riskBand } from '../lib/riskScore';
 
@@ -17,6 +18,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [discoverOpen, setDiscoverOpen] = useState(false);
   const [selected, setSelected] = useState<Project | null>(null);
 
   const load = async () => {
@@ -52,12 +54,20 @@ export default function Projects() {
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-        >
-          <Plus className="w-4 h-4" /> New project
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDiscoverOpen(true)}
+            className="inline-flex items-center gap-2 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 font-semibold px-4 py-2 rounded-md text-sm transition"
+          >
+            <Globe className="w-4 h-4" /> Auto-discover
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+          >
+            <Plus className="w-4 h-4" /> New project
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -139,6 +149,7 @@ export default function Projects() {
       )}
 
       {modalOpen && <ProjectModal onClose={() => setModalOpen(false)} onCreated={load} />}
+      {discoverOpen && <DiscoveryModal onClose={() => setDiscoverOpen(false)} onCreated={load} />}
     </div>
   );
 }
@@ -250,7 +261,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <button
               type="submit"
               disabled={saving}
-              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
             >
               {saving ? 'Creating...' : 'Create project'}
             </button>
@@ -260,3 +271,96 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     </div>
   );
 }
+
+function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { user } = useAuth();
+  const [rootDomain, setRootDomain] = useState('');
+  const [shodanKey, setShodanKey] = useState(import.meta.env.VITE_SHODAN_API_KEY || '');
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const discover = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !rootDomain || !shodanKey) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const data = await shodanDnsLookup(rootDomain, shodanKey);
+      if (data.hostnames.length === 0) {
+        throw new Error('No subdomains found for this root domain.');
+      }
+
+      const projectsToCreate = data.hostnames.map(hostname => ({
+        user_id: user.id,
+        name: hostname,
+        description: `Auto-discovered subdomain of ${rootDomain}`,
+        target: hostname,
+        environment: 'external',
+        tags: ['auto-discovered'],
+      }));
+
+      const { error: insErr } = await supabase.from('projects').insert(projectsToCreate);
+      if (insErr) throw insErr;
+      
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Auto-discovery failed');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+          <h2 className="font-semibold flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-400" /> Asset Auto-Discovery</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={discover} className="p-6 space-y-4">
+          <p className="text-sm text-slate-400">
+            Automatically discover subdomains and create projects for them using Shodan passive DNS intelligence.
+          </p>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5">Root Domain</label>
+            <input
+              required
+              value={rootDomain}
+              onChange={(e) => setRootDomain(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              placeholder="example.com"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5">Shodan API Key</label>
+            <input
+              type="password"
+              required
+              value={shodanKey}
+              onChange={(e) => setShodanKey(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              placeholder="Required for Shodan DNS lookup"
+            />
+          </div>
+          {error && <div className="text-red-400 text-sm p-3 bg-red-500/10 border border-red-500/20 rounded-md">{error}</div>}
+          <div className="pt-2 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={running || !rootDomain || !shodanKey}
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+            >
+              {running ? 'Discovering...' : 'Start Discovery'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

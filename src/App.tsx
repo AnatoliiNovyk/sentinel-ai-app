@@ -17,6 +17,7 @@ import Scheduler from './pages/Scheduler';
 import NotFound from './pages/NotFound';
 import AttackSurfaceMap from './pages/AttackSurfaceMap';
 import DarkWebMonitor from './pages/DarkWebMonitor';
+import PassiveRecon from './pages/PassiveRecon';
 import { Shield } from 'lucide-react';
 
 function useShareToken(): string | null {
@@ -74,6 +75,7 @@ function Shell() {
         <Route path="scheduler" element={<Scheduler />} />
         <Route path="attack-map" element={<AttackSurfaceMap />} />
         <Route path="dark-web" element={<DarkWebMonitor />} />
+        <Route path="recon" element={<PassiveRecon />} />
         <Route path="settings" element={<Settings />} />
         <Route path="auth" element={<Navigate to="/" replace />} />
         <Route path="landing" element={<Navigate to="/" replace />} />

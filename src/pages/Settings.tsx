@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
-  Shield, Rocket, Package, ArrowRight, ExternalLink, Crown
+  Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
+  Webhook, Users, Plus, Trash2
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -106,6 +107,13 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+
+  // F-11 & F-10
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [teamEmails, setTeamEmails] = useState<{email: string, role: string}[]>([
+    { email: profile?.email || '', role: 'Owner' }
+  ]);
+  const [newInvite, setNewInvite] = useState('');
 
   useEffect(() => {
     if (profile) {
@@ -311,6 +319,80 @@ export default function Settings() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Webhooks */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Webhook className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">Webhook Integrations</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">Receive real-time notifications in Slack, Microsoft Teams, or custom endpoints.</p>
+        <div>
+          <label className="block text-sm text-slate-300 mb-1.5">Notification Webhook URL</label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              placeholder="https://hooks.slack.com/services/..."
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+            <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-medium transition">
+              Test
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Team Collaboration */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Users className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">Team Members</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">Invite colleagues to access your projects and vulnerability reports.</p>
+        
+        <div className="space-y-3 mb-6">
+          {teamEmails.map((member, i) => (
+            <div key={i} className="flex items-center justify-between bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-lg">
+              <div className="text-sm text-slate-200">{member.email}</div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 px-2 py-0.5 rounded border border-slate-700">{member.role}</span>
+                {member.role !== 'Owner' && (
+                  <button onClick={() => setTeamEmails(teamEmails.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <label className="block text-sm text-slate-300 mb-1.5">Invite new member</label>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={newInvite}
+              onChange={(e) => setNewInvite(e.target.value)}
+              placeholder="colleague@company.com"
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+            <button
+              onClick={() => {
+                if (newInvite) {
+                  setTeamEmails([...teamEmails, { email: newInvite, role: 'Member' }]);
+                  setNewInvite('');
+                }
+              }}
+              disabled={!newInvite}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 disabled:opacity-50 rounded-md text-sm font-semibold transition"
+            >
+              <Plus className="w-4 h-4" /> Invite
+            </button>
+          </div>
         </div>
       </section>
 
