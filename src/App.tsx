@@ -71,6 +71,8 @@ function Shell() {
         <Route path="compliance" element={<Compliance />} />
         <Route path="scheduler" element={<Scheduler />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="auth" element={<Navigate to="/" replace />} />
+        <Route path="landing" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
