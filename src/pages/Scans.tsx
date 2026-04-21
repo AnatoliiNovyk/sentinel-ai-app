@@ -9,6 +9,7 @@ import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
 import { fetchCveDetail, cvssToSeverity, CveDetail } from '../lib/cveEnrichment';
 import { fetchThreatIntel, ThreatIntelResult } from '../lib/threatIntel';
+import { generateAiRemediation, AiRemediationResponse } from '../lib/aiCopilot';
 import RemediationModal from '../components/RemediationModal';
 import ScanDiff from '../components/ScanDiff';
 
@@ -483,6 +484,8 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
   const [copied, setCopied] = useState(false);
   const [cveDetail, setCveDetail] = useState<CveDetail | null | 'loading'>(null);
   const [threatData, setThreatData] = useState<ThreatIntelResult | null | 'loading'>(null);
+  const [aiData, setAiData] = useState<AiRemediationResponse | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const sevColors: Record<string, string> = {
     critical: 'text-red-400 border-red-500/30 bg-red-500/10',
     high: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
@@ -508,6 +511,26 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleAiGeneration = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAiLoading(true);
+    try {
+      const res = await generateAiRemediation({
+        title: v.title,
+        description: v.description,
+        severity: v.severity,
+        asset: v.asset,
+        cve_id: v.cve_id || '',
+        remediation_type: v.remediation_type || '',
+      });
+      setAiData(res);
+    } catch (err) {
+      console.error('Failed to generate AI remediation', err);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -640,22 +663,48 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
             </div>
           )}
           <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
-            <div className="mt-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-100">
-              {v.remediation}
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
+              {!aiData && (
+                <button
+                  onClick={handleAiGeneration}
+                  disabled={aiLoading}
+                  className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition border border-sky-500/30 hover:border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded disabled:opacity-50"
+                >
+                  {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  {aiLoading ? 'Generating AI Fix...' : 'Generate AI Fix'}
+                </button>
+              )}
             </div>
+            {aiData ? (
+              <div className="mt-1 rounded-md border border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-100 leading-relaxed shadow-inner">
+                <div className="flex items-center gap-2 mb-2 font-semibold text-sky-400">
+                  <Zap className="w-4 h-4" /> AI Security Copilot
+                </div>
+                {aiData.explanation}
+              </div>
+            ) : (
+              <div className="mt-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-100">
+                {v.remediation}
+              </div>
+            )}
           </div>
-          {v.remediation_code && (
+          {(aiData?.code || v.remediation_code) && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation Code</div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono uppercase">
-                    {v.remediation_type}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono uppercase border border-slate-700">
+                    {aiData?.language || v.remediation_type}
                   </span>
+                  {aiData && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold border border-sky-500/30">
+                      AI Generated
+                    </span>
+                  )}
                 </div>
                 <button
-                  onClick={() => copy(v.remediation_code)}
+                  onClick={() => copy(aiData?.code || v.remediation_code || '')}
                   className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition"
                 >
                   {copied ? (
@@ -667,7 +716,7 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
               </div>
               <div className="relative group">
                 <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-                  <code>{v.remediation_code}</code>
+                  <code>{aiData?.code || v.remediation_code}</code>
                 </pre>
                 <div className="absolute top-2 right-2 flex items-center gap-2">
                    <button

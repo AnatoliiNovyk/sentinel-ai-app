@@ -18,6 +18,8 @@ import NotFound from './pages/NotFound';
 import AttackSurfaceMap from './pages/AttackSurfaceMap';
 import DarkWebMonitor from './pages/DarkWebMonitor';
 import PassiveRecon from './pages/PassiveRecon';
+import Integrations from './pages/Integrations';
+import Landing from './pages/Landing';
 import { Shield } from 'lucide-react';
 
 function useShareToken(): string | null {
@@ -76,9 +78,10 @@ function Shell() {
         <Route path="attack-map" element={<AttackSurfaceMap />} />
         <Route path="dark-web" element={<DarkWebMonitor />} />
         <Route path="recon" element={<PassiveRecon />} />
+        <Route path="integrations" element={<Integrations />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="auth" element={<Navigate to="/" replace />} />
-        <Route path="landing" element={<Navigate to="/" replace />} />
+        <Route path="auth" element={<Navigate to="/landing" replace />} />
+        <Route path="landing" element={<Landing />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
