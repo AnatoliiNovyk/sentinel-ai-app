@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -18,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dark-web':   'Dark Web Monitor',
   '/recon':      'Passive Recon',
   '/integrations':'CI/CD Integrations',
+  '/api':        'REST API & CLI',
   '/settings':   'Settings',
 };
 
@@ -33,6 +34,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'dark-web',    label: 'Dark Web',      icon: Eye,             path: '/dark-web' },
   { id: 'recon',       label: 'Passive Recon', icon: Search,          path: '/recon' },
   { id: 'integrations',label: 'Integrations',  icon: Terminal,        path: '/integrations' },
+  { id: 'api',         label: 'API & CLI',     icon: Code,            path: '/api' },
   { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },
 ];
 

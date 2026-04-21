@@ -19,6 +19,7 @@ import AttackSurfaceMap from './pages/AttackSurfaceMap';
 import DarkWebMonitor from './pages/DarkWebMonitor';
 import PassiveRecon from './pages/PassiveRecon';
 import Integrations from './pages/Integrations';
+import ApiDocs from './pages/ApiDocs';
 import Landing from './pages/Landing';
 import { Shield } from 'lucide-react';
 
@@ -79,6 +80,7 @@ function Shell() {
         <Route path="dark-web" element={<DarkWebMonitor />} />
         <Route path="recon" element={<PassiveRecon />} />
         <Route path="integrations" element={<Integrations />} />
+        <Route path="api" element={<ApiDocs />} />
         <Route path="settings" element={<Settings />} />
         <Route path="auth" element={<Navigate to="/landing" replace />} />
         <Route path="landing" element={<Landing />} />
