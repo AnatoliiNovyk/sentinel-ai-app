@@ -193,16 +193,16 @@ export default function Settings() {
         <p className="text-sm text-slate-500 mb-5">Your account details.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Email</label>
-            <input disabled value={profile?.email ?? ''} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-slate-500 cursor-not-allowed" />
+            <label htmlFor="email" className="block text-sm text-slate-300 mb-1.5">Email</label>
+            <input id="email" disabled value={profile?.email ?? ''} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-slate-500 cursor-not-allowed" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Full name</label>
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+            <label htmlFor="fullName" className="block text-sm text-slate-300 mb-1.5">Full name</label>
+            <input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Company</label>
-            <input value={company} onChange={(e) => setCompany(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+            <label htmlFor="company" className="block text-sm text-slate-300 mb-1.5">Company</label>
+            <input id="company" value={company} onChange={(e) => setCompany(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
           </div>
         </div>
       </section>
@@ -306,9 +306,10 @@ export default function Settings() {
             { key: 'low', label: 'Low', accent: 'text-sky-400', border: 'focus:border-sky-500', ring: 'focus:ring-sky-500/20' },
           ] as const).map((f) => (
             <div key={f.key}>
-              <label className={`block text-sm font-medium ${f.accent} mb-1.5`}>{f.label}</label>
+              <label htmlFor={`sla-${f.key}`} className={`block text-sm font-medium ${f.accent} mb-1.5`}>{f.label}</label>
               <div className="relative">
                 <input
+                  id={`sla-${f.key}`}
                   type="number"
                   value={sla[f.key]}
                   onChange={(e) => setSlaField(f.key, e.target.value)}
@@ -361,7 +362,7 @@ export default function Settings() {
               <div className="flex items-center gap-3">
                 <span className="text-xs text-slate-500 px-2 py-0.5 rounded border border-slate-700">{member.role}</span>
                 {member.role !== 'Owner' && (
-                  <button onClick={() => setTeamEmails(teamEmails.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
+                  <button aria-label="Remove member" title="Remove member" onClick={() => setTeamEmails(teamEmails.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

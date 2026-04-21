@@ -20,7 +20,6 @@ import DarkWebMonitor from './pages/DarkWebMonitor';
 import PassiveRecon from './pages/PassiveRecon';
 import Integrations from './pages/Integrations';
 import ApiDocs from './pages/ApiDocs';
-import Landing from './pages/Landing';
 import { Shield } from 'lucide-react';
 
 function useShareToken(): string | null {
@@ -30,7 +29,6 @@ function useShareToken(): string | null {
 function Shell() {
   const { user, loading } = useAuth();
   const shareToken = useShareToken();
-  const location = useLocation();
 
   useEffect(() => {
     if (!user) return;
@@ -59,8 +57,8 @@ function Shell() {
   if (!user) {
     return (
       <Routes>
-        <Route path="/landing" element={<Landing onNavigate={() => {}} />} />
-        <Route path="/auth" element={<Auth mode="signin" onBack={() => {}} onSwitch={() => {}} />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="/auth" element={<Auth />} />
         <Route path="*" element={<Navigate to="/landing" replace />} />
       </Routes>
     );

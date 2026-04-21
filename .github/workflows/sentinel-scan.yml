@@ -172,6 +172,3 @@ jobs:
           except Exception as e:
               print(f"Upload failed: {e}")
           PYEOF
-        env:
-          SARIF_FILE: ${{ env.SARIF_FILE }}
-          SCAN_ID: ${{ env.SCAN_ID }}

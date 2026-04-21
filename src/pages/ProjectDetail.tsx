@@ -432,6 +432,8 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
             <div className="flex items-center gap-2">
               <button
                 onClick={() => downloadFile(`${project.name}_${s.id}.json`, toJsonExport(project, s, scanVulns), 'application/json')}
+                aria-label="Download JSON export"
+                title="Download JSON export"
                 className="p-2 text-slate-500 hover:text-white transition"
               >
                 <Download className="w-4 h-4" />

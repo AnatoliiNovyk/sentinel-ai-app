@@ -90,7 +90,7 @@ export default function RemediationModal({ vuln, onClose }: { vuln: Vulnerabilit
             <h2 className="font-semibold text-white text-base leading-snug">{vuln.title}</h2>
             <p className="mt-1 text-xs text-slate-500 font-mono">{vuln.asset}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label="Close modal" title="Close modal" className="p-1.5 text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
 
         <div className="px-6 py-3 border-b border-slate-800">

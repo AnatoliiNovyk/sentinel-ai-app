@@ -263,7 +263,7 @@ function ImportSarifModal({
       <div className="w-full max-w-xl rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold">Import SARIF</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} aria-label="Close modal" title="Close modal" className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -271,6 +271,8 @@ function ImportSarifModal({
           <div>
             <label className="block text-sm text-slate-300 mb-1.5">Target project</label>
             <select
+              aria-label="Target project"
+              title="Target project"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
@@ -318,6 +320,8 @@ function ImportSarifModal({
               type="file"
               accept=".json,.sarif,application/json"
               className="hidden"
+              aria-label="Upload SARIF file"
+              title="Upload SARIF file"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFile(f);
@@ -756,7 +760,7 @@ function NewScanModal({
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold">New scan</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} aria-label="Close modal" title="Close modal" className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -764,6 +768,8 @@ function NewScanModal({
           <div>
             <label className="block text-sm text-slate-300 mb-1.5">Project</label>
             <select
+              aria-label="Project"
+              title="Project"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"

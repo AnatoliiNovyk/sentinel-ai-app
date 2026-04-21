@@ -108,6 +108,8 @@ export default function Projects() {
                   <div className="flex items-center gap-2">
                     <span
                       role="button"
+                      aria-label="Delete project"
+                      title="Delete project"
                       tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();

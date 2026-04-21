@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Terminal, Copy, Check, Info, Code, Shield } from 'lucide-react';
+import { Terminal, Copy, Check, Info, Code } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function ApiDocs() {
-  const { profile } = useAuth();
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = (text: string, id: string) => {

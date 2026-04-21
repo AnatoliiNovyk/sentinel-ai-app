@@ -347,6 +347,8 @@ export default function Chat() {
             />
             <button
               type="submit"
+              aria-label="Send message"
+              title="Send message"
               disabled={!input.trim() || sending}
               className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold w-11 h-11 rounded-md flex items-center justify-center transition shrink-0"
             >
