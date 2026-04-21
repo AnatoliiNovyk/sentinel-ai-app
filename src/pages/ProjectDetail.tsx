@@ -19,12 +19,14 @@ import {
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { AVAILABLE_SCANNERS, runMockScan } from '../lib/scanMock';
+import { AVAILABLE_SCANNERS } from '../lib/scanMock';
+import { dispatchScan } from '../lib/scanDispatch';
 import { buildReport } from '../lib/reportBuilder';
 import { toSarif, toJsonExport, downloadFile } from '../lib/exporters';
 import FindingsTab from '../components/FindingsTab';
 import AssetGraph from '../components/AssetGraph';
 import ReportViewer from '../components/ReportViewer';
+import ScanDiff from '../components/ScanDiff';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -121,7 +123,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     if (!user || launching) return;
     setLaunching(true);
     try {
-      await runMockScan(user.id, project.id, defaultScanner);
+      await dispatchScan(user.id, project.id, defaultScanner, project.target ?? '');
       await load();
     } finally {
       setLaunching(false);
@@ -406,7 +408,12 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
   }, [vulns]);
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/30 divide-y divide-slate-800 overflow-hidden">
+    <div className="space-y-6">
+      {/* F-07: Continuous Monitoring Diff */}
+      {scans.filter(s => s.status === 'completed').length >= 2 && (
+        <ScanDiff scans={scans} vulns={vulns} />
+      )}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/30 divide-y divide-slate-800 overflow-hidden">
       {scans.map((s) => {
         const scanVulns = vulnsByScan[s.id] ?? [];
         return (
@@ -433,6 +440,7 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

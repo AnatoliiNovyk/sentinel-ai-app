@@ -1,0 +1,177 @@
+name: Sentinel AI Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run every day at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scanner:
+        description: 'Scanner to run (nmap | tfsec | prowler | trivy)'
+        required: false
+        default: 'tfsec'
+
+jobs:
+  sentinel-scan:
+    name: Sentinel AI Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ─── IaC Scan (tfsec) ────────────────────────────────────────────────────
+      - name: Run tfsec (Terraform IaC scan)
+        if: ${{ github.event.inputs.scanner == 'tfsec' || github.event.inputs.scanner == '' }}
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          soft_fail: true
+          format: sarif
+          sarif_file: sentinel-tfsec.sarif
+
+      # ─── Container Scan (Trivy) ───────────────────────────────────────────────
+      - name: Run Trivy vulnerability scanner
+        if: ${{ github.event.inputs.scanner == 'trivy' }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'sentinel-trivy.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      # ─── Upload SARIF to GitHub Code Scanning ─────────────────────────────────
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: |
+            sentinel-tfsec.sarif
+            sentinel-trivy.sarif
+          category: sentinel-ai
+        continue-on-error: true
+
+      # ─── Push findings to Sentinel AI ────────────────────────────────────────
+      - name: Upload findings to Sentinel AI
+        if: always()
+        env:
+          SENTINEL_URL: ${{ secrets.SENTINEL_SUPABASE_URL }}
+          SENTINEL_KEY: ${{ secrets.SENTINEL_ANON_KEY }}
+          SENTINEL_PROJECT_ID: ${{ secrets.SENTINEL_PROJECT_ID }}
+        run: |
+          SARIF_FILE=""
+          [ -f sentinel-tfsec.sarif ] && SARIF_FILE="sentinel-tfsec.sarif"
+          [ -f sentinel-trivy.sarif ] && SARIF_FILE="sentinel-trivy.sarif"
+
+          if [ -z "$SARIF_FILE" ] || [ -z "$SENTINEL_URL" ] || [ -z "$SENTINEL_PROJECT_ID" ]; then
+            echo "Skipping Sentinel AI upload (missing config or no SARIF output)"
+            exit 0
+          fi
+
+          # Create scan record
+          SCAN_RESPONSE=$(curl -s -X POST \
+            "${SENTINEL_URL}/rest/v1/scans" \
+            -H "apikey: ${SENTINEL_KEY}" \
+            -H "Authorization: Bearer ${SENTINEL_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{
+              \"project_id\": \"${SENTINEL_PROJECT_ID}\",
+              \"scanner\": \"${GITHUB_WORKFLOW} / ${GITHUB_SHA:0:7}\",
+              \"status\": \"completed\"
+            }")
+
+          SCAN_ID=$(echo "$SCAN_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if isinstance(d,list) else d.get('id',''))" 2>/dev/null || echo "")
+
+          if [ -z "$SCAN_ID" ]; then
+            echo "Could not create scan record. Response: $SCAN_RESPONSE"
+            exit 0
+          fi
+
+          echo "Created scan: $SCAN_ID"
+
+          # Parse SARIF and upload findings
+          python3 - <<'PYEOF'
+          import json, os, sys, urllib.request, urllib.parse
+
+          sarif_file = os.environ.get('SARIF_FILE', '')
+          scan_id    = os.environ.get('SCAN_ID', '')
+          project_id = os.environ.get('SENTINEL_PROJECT_ID', '')
+          url        = os.environ.get('SENTINEL_URL', '')
+          key        = os.environ.get('SENTINEL_KEY', '')
+
+          if not all([sarif_file, scan_id, url, key]):
+              print("Missing env vars, skipping")
+              sys.exit(0)
+
+          try:
+              with open(sarif_file) as f:
+                  doc = json.load(f)
+          except Exception as e:
+              print(f"Could not read SARIF: {e}")
+              sys.exit(0)
+
+          findings = []
+          sev_map = {'error': 'high', 'warning': 'medium', 'note': 'low', 'none': 'info'}
+          score_map = lambda s: 'critical' if s>=9 else 'high' if s>=7 else 'medium' if s>=4 else 'low' if s>=1 else 'info'
+
+          for run in doc.get('runs', []):
+              rules = {r['id']: r for r in run.get('tool', {}).get('driver', {}).get('rules', [])}
+              for res in run.get('results', []):
+                  rule = rules.get(res.get('ruleId'), {})
+                  props = {**rule.get('properties', {}), **res.get('properties', {})}
+                  sec_score = props.get('security-severity')
+                  if sec_score:
+                      sev = score_map(float(sec_score))
+                  else:
+                      sev = sev_map.get(res.get('level', 'none'), 'info')
+                      if 'severity' in props:
+                          sev = props['severity']
+
+                  loc = (res.get('locations') or [{}])[0]
+                  asset = (loc.get('physicalLocation') or {}).get('artifactLocation', {}).get('uri', '')
+
+                  findings.append({
+                      'scan_id': scan_id,
+                      'title': rule.get('shortDescription', {}).get('text') or res.get('ruleId') or 'Finding',
+                      'description': res.get('message', {}).get('text', ''),
+                      'severity': sev,
+                      'asset': asset,
+                      'cve_id': str(props.get('cve', '')),
+                      'mitre_tactic': str(props.get('mitre', '')),
+                      'cis_control': str(props.get('cis', '')),
+                      'remediation': rule.get('help', {}).get('text', ''),
+                      'status': 'open',
+                  })
+
+          if not findings:
+              print("No findings to upload")
+              sys.exit(0)
+
+          data = json.dumps(findings).encode()
+          req = urllib.request.Request(
+              f"{url}/rest/v1/vulnerabilities",
+              data=data,
+              headers={
+                  'apikey': key,
+                  'Authorization': f'Bearer {key}',
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+              },
+              method='POST'
+          )
+          try:
+              resp = urllib.request.urlopen(req)
+              print(f"Uploaded {len(findings)} findings to Sentinel AI (status {resp.status})")
+          except Exception as e:
+              print(f"Upload failed: {e}")
+          PYEOF
+        env:
+          SARIF_FILE: ${{ env.SARIF_FILE }}
+          SCAN_ID: ${{ env.SCAN_ID }}

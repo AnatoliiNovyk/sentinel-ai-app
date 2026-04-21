@@ -15,6 +15,7 @@ import PublicReport from './pages/PublicReport';
 import Compliance from './pages/Compliance';
 import Scheduler from './pages/Scheduler';
 import NotFound from './pages/NotFound';
+import AttackSurfaceMap from './pages/AttackSurfaceMap';
 import { Shield } from 'lucide-react';
 
 function useShareToken(): string | null {
@@ -70,6 +71,7 @@ function Shell() {
         <Route path="reports" element={<Reports />} />
         <Route path="compliance" element={<Compliance />} />
         <Route path="scheduler" element={<Scheduler />} />
+        <Route path="attack-map" element={<AttackSurfaceMap />} />
         <Route path="settings" element={<Settings />} />
         <Route path="auth" element={<Navigate to="/" replace />} />
         <Route path="landing" element={<Navigate to="/" replace />} />

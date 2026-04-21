@@ -8,6 +8,8 @@ import SchedulesPanel from '../components/SchedulesPanel';
 import ExecutionConsole from '../components/ExecutionConsole';
 import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
 import { fetchCveDetail, cvssToSeverity, CveDetail } from '../lib/cveEnrichment';
+import RemediationModal from '../components/RemediationModal';
+import ScanDiff from '../components/ScanDiff';
 
 type Tab = 'runs' | 'schedules';
 
@@ -466,11 +468,9 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
       )}
 
       {fixing && (
-        <ExecutionConsole
-          code={fixing.remediation_code || ''}
-          type={fixing.remediation_type || 'bash'}
-          onComplete={() => handleApplyFix(fixing)}
-          onCancel={() => setFixing(null)}
+        <RemediationModal
+          vuln={fixing}
+          onClose={() => setFixing(null)}
         />
       )}
     </div>
