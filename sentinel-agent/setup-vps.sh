@@ -29,6 +29,10 @@ echo "Pulling scanner images (this takes a few minutes)..."
 docker pull instrumentisto/nmap &
 docker pull caffix/amass &
 docker pull aquasec/tfsec &
+docker pull projectdiscovery/nuclei &
+docker pull bridgecrew/checkov &
+docker pull aquasec/trivy &
+docker pull aquasec/kube-bench &
 wait
 echo "✅ Scanner images ready"
 
