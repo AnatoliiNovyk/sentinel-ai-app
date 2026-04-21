@@ -125,7 +125,7 @@ export default function Compliance() {
             <span className="pr-2">Score</span>
           </div>
           <div className="divide-y divide-slate-800/50">
-            {result.cisRows.map(row => <CisRow key={row.id} row={row} />)}
+            {result.cisRows.map(row => <CisRowItem key={row.id} row={row} />)}
           </div>
         </div>
       </section>
@@ -234,7 +234,7 @@ function NistCard({ row }: { row: NistRow }) {
   );
 }
 
-function CisRow({ row }: { row: CisRow }) {
+function CisRowItem({ row }: { row: CisRow }) {
   const scoreColor =
     row.score >= 80 ? 'text-emerald-400' :
     row.score >= 60 ? 'text-yellow-400' :
