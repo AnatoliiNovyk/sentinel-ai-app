@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2, ExternalLink, Database } from 'lucide-react';
+import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2, ExternalLink, Database, Zap, Globe, Loader2 } from 'lucide-react';
 import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
