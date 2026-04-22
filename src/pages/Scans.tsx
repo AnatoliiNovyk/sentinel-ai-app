@@ -519,10 +519,15 @@ function FindingCard({ v, scan, project, onApplyFix }: { v: Vulnerability; scan:
   };
 
   const handleAiGeneration = async (e: React.MouseEvent) => {
+    console.log('🚀 handleAiGeneration TRIGGERED for:', v.title);
     e.stopPropagation();
-    if (aiLoading) return;
+    if (aiLoading) {
+      console.log('⚠️ Already loading, skipping...');
+      return;
+    }
     
     setAiLoading(true);
+    console.log('⌛ setAiLoading(true) called');
     try {
       // Use project?.id from props
       const res = await generateAiRemediation({
@@ -679,10 +684,7 @@ function FindingCard({ v, scan, project, onApplyFix }: { v: Vulnerability; scan:
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
               {!aiData && (
                 <button
-                  onClick={(e) => {
-                    console.log('AI Button Clicked');
-                    handleAiGeneration(e);
-                  }}
+                  onClick={handleAiGeneration}
                   disabled={aiLoading}
                   className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition border border-sky-500/30 hover:border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded disabled:opacity-50"
                 >

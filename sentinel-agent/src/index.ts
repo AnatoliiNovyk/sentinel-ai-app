@@ -434,15 +434,23 @@ async function runJob(job: Record<string, string>) {
 }
 
 // ─── Poll loop ────────────────────────────────────────────────────────────────
-let isRunning = false;
-
-setInterval(async () => {
-  if (isRunning) return; // don't overlap
-  isRunning = true;
-  try {
-    const job = await fetchPendingJob();
-    if (job) await runJob(job as Record<string, string>);
-  } finally {
-    isRunning = false;
+let pollCount = 0;
+async function start() {
+  while (true) {
+    pollCount++;
+    if (pollCount % 5 === 0) {
+      console.log(`💓 Heartbeat: Still polling (count: ${pollCount})...`);
+    }
+    try {
+      const job = await fetchPendingJob();
+      if (job) await runJob(job as Record<string, string>);
+    } catch (err) {
+      console.error('Error in job loop:', err);
+    }
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
   }
-}, POLL_INTERVAL);
+}
+
+start().catch(err => {
+  console.error('🔥 CRITICAL ERROR: Agent loop crashed!', err);
+});
