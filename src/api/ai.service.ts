@@ -26,7 +26,6 @@ export const AiService = {
       Task: Provide a JSON response with keys "explanation", "code", and "language".
     `;
 
-    // 1. Call RPC (Security Definer ensures bypass of RLS)
     const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
       p_scan_id: req.scan_id,
       p_project_id: req.project_id,
@@ -43,10 +42,8 @@ export const AiService = {
   async dispatchChatTask(projectId: string, text: string) {
     const prompt = `You are a cybersecurity expert assistant. User says: ${text}`;
     
-    // Create a scan record first (if needed) or use a system-level one.
-    // For now, we'll use the RPC which handles the job creation.
     const { data: jobId, error } = await supabase.rpc('dispatch_ai_task', {
-      p_scan_id: null, // Chat tasks might not have a specific scan_id initially
+      p_scan_id: null,
       p_project_id: projectId,
       p_target: prompt
     });
@@ -56,31 +53,45 @@ export const AiService = {
   },
 
   /**
-   * Polls for the AI response in the vulnerabilities table.
+   * Universal polling for AI results.
+   * Works for both scans and general chat.
    */
-  async pollForResult(scanId: string, startTime: number, timeout: number = 90000) {
+  async pollForResult(scanId: string | null, startTime: number, timeout: number = 90000) {
     const pollInterval = 3000;
     const endBy = startTime + timeout;
 
     while (Date.now() < endBy) {
       await new Promise(r => setTimeout(r, pollInterval));
 
-      const { data: results, error } = await supabase
+      let query = supabase
         .from('vulnerabilities')
         .select('description, created_at')
-        .eq('scan_id', scanId)
         .eq('title', 'AI Security Response')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
 
-      if (error) continue;
+      // If scanId is provided and not 'null', filter by it
+      if (scanId && scanId !== 'null') {
+        query = query.eq('scan_id', scanId);
+      } else {
+        // For chat, we look for findings where scan_id IS NULL
+        query = query.is('scan_id', null);
+      }
 
-      if (results && new Date(results.created_at).getTime() > startTime - 5000) {
+      const { data: results, error } = await query.maybeSingle();
+
+      if (error) {
+        console.warn('Polling error (retrying):', error.message);
+        continue;
+      }
+
+      // Check if the finding is fresh (created AFTER we started polling)
+      // We use a 60s buffer to account for potential clock drift between client and server.
+      if (results && new Date(results.created_at).getTime() > startTime - 60000) {
         return results.description;
       }
     }
 
-    throw new Error('AI Generation timed out.');
+    throw new Error('AI Agent did not respond within the expected time. Please check agent.log on the server.');
   }
 };
