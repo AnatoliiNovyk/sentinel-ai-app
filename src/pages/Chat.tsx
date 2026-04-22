@@ -138,10 +138,33 @@ export default function Chat() {
       provider = 'ollama'; 
     } else {
       // Dispatch AI task to local agent via scan_jobs
+      // Find a project to link this AI task to (DB constraint)
+      const projId = projects[0]?.id;
+      if (!projId) {
+        aiContent = "Error: No project found. Please create a project first.";
+        setSending(false);
+        return;
+      }
+
+      // Create a dummy scan entry for this AI task to satisfy DB constraints
+      const { data: scan } = await supabase
+        .from('scans')
+        .insert({
+          user_id: user.id,
+          project_id: projId,
+          scanner: 'ai_task',
+          status: 'running',
+          started_at: new Date().toISOString()
+        })
+        .select()
+        .maybeSingle();
+
       const { data: job, error: jobErr } = await supabase
         .from('scan_jobs')
         .insert({
           user_id: user.id,
+          scan_id: scan?.id,
+          project_id: projId,
           target: 'AI Assistant',
           scanner: 'ai_task',
           status: 'pending',
