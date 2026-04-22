@@ -1,9 +1,8 @@
+import { supabase } from './supabase';
+
 /**
- * Sprint 6: AI Security Copilot
- * Generates context-aware remediation code using an LLM API.
- * In a real production setup, this would call an Edge Function that securely holds the API key.
- * For this implementation, we use a mock AI engine to demonstrate the functionality,
- * which can be swapped out for a real OpenAI/Anthropic/Gemini call.
+ * Sprint 6: AI Security Copilot (Local CPU Edition)
+ * Redirects AI tasks to the local VPS agent running Ollama (Llama 3).
  */
 
 export type AiRemediationRequest = {
@@ -22,67 +21,88 @@ export type AiRemediationResponse = {
 };
 
 export async function generateAiRemediation(req: AiRemediationRequest): Promise<AiRemediationResponse> {
-  // Simulate network delay for AI processing
-  await new Promise(resolve => setTimeout(resolve, 2500));
+  const prompt = `
+    Context: You are a security expert.
+    Vulnerability: ${req.title}
+    Description: ${req.description}
+    Asset: ${req.asset}
+    CVE: ${req.cve_id}
+    
+    Task: Provide a short explanation and a code snippet to fix this.
+    Format your response EXACTLY as JSON:
+    {
+      "explanation": "your explanation",
+      "code": "your code snippet",
+      "language": "bash/hcl/yaml/etc"
+    }
+  `;
 
-  // Determine the fix type based on the request content
-  const title = req.title.toLowerCase();
-  
-  if (req.remediation_type === 'terraform' || title.includes('s3') || title.includes('ec2')) {
-    return {
-      explanation: `I've analyzed the vulnerability **${req.title}** on \`${req.asset}\`.\nThis typically occurs when cloud resources are provisioned without explicitly enforcing security controls. The following Terraform code will enforce the necessary policies.`,
-      code: `resource "aws_s3_bucket_public_access_block" "remediation" {
-  bucket = aws_s3_bucket.example.id
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}`,
-      language: 'hcl',
-    };
+  // 1. Create a job for the agent
+  const { data: job, error: jobErr } = await supabase
+    .from('scan_jobs')
+    .insert({
+      user_id: user.id,
+      scanner: 'ai_task',
+      target: prompt,
+      status: 'pending'
+    })
+    .select()
+    .single();
+
+  if (jobErr || !job) throw new Error('Failed to queue AI task');
+
+  // 2. Poll for the result (max 60 seconds)
+  let result: any = null;
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const { data: updatedJob } = await supabase
+      .from('scan_jobs')
+      .select('status, error_message')
+      .eq('id', job.id)
+      .single();
+
+    if (updatedJob?.status === 'completed') {
+      // Fetch the "findings" which contains the AI response
+      const { data: scanResults } = await supabase
+        .from('scans')
+        .select('id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      // Actually, we should probably have a dedicated table for AI results, 
+      // but for now the agent reports findings to 'vulnerabilities' table via scan-result function.
+      // Let's look for the vulnerability created for this jobId.
+      const { data: vuln } = await supabase
+        .from('vulnerabilities')
+        .select('description')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (vuln) {
+        try {
+          // Attempt to parse JSON from the AI response
+          const parsed = JSON.parse(vuln.description);
+          return parsed;
+        } catch (e) {
+          // If not JSON, return as plain explanation
+          return {
+            explanation: vuln.description,
+            code: '# Manual fix required',
+            language: 'text'
+          };
+        }
+      }
+    } else if (updatedJob?.status === 'failed') {
+      throw new Error(updatedJob.error_message || 'AI processing failed');
+    }
   }
 
-  if (req.remediation_type === 'kubernetes' || title.includes('pod') || title.includes('container')) {
-    return {
-      explanation: `The vulnerability **${req.title}** on \`${req.asset}\` indicates insecure pod defaults. \nI've generated a Kubernetes SecurityContext patch that you can apply to drop unnecessary capabilities and prevent privilege escalation.`,
-      code: `apiVersion: v1
-kind: Pod
-metadata:
-  name: secure-pod
-spec:
-  containers:
-  - name: app
-    securityContext:
-      allowPrivilegeEscalation: false
-      runAsNonRoot: true
-      capabilities:
-        drop:
-          - ALL`,
-      language: 'yaml',
-    };
-  }
-
-  if (title.includes('ssh') || title.includes('port 22')) {
-    return {
-      explanation: `SSH exposure on \`${req.asset}\` is highly critical. \nThe following bash script will modify your SSH daemon configuration to disable password authentication and restart the service safely.`,
-      code: `#!/bin/bash
-# AI-Generated SSH Remediation
-sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication no/g' /etc/ssh/sshd_config
-sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/g' /etc/ssh/sshd_config
-systemctl restart sshd
-echo "SSH secured."`,
-      language: 'bash',
-    };
-  }
-
-  // Generic fallback
-  return {
-    explanation: `Based on the finding **${req.title}** (${req.cve_id || 'Unknown CVE'}) for asset \`${req.asset}\`, immediate patching is required. \nPlease run the following commands to update the affected packages to their secure versions.`,
-    code: `# AI-Generated Fallback Patch
-apt-get update && apt-get upgrade -y
-# or for alpine: apk upgrade
-# Review dependencies before applying in production.`,
-    language: 'bash',
-  };
+  throw new Error('AI processing timed out');
 }

@@ -302,6 +302,25 @@ async function runMobsf(apkUrl: string): Promise<unknown[]> {
   }
 }
 
+// ─── local ollama ai ─────────────────────────────────────────────────────────
+async function runOllama(prompt: string): Promise<string> {
+  try {
+    const resp = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'llama3',
+        prompt: prompt,
+        stream: false
+      })
+    });
+    const data = await resp.json();
+    return data.response;
+  } catch (err) {
+    console.error('Ollama connection failed. Is it running?', err);
+    return 'AI Error: Local Ollama instance is unreachable.';
+  }
+}
+
 // ─── Nmap XML parser (simplified) ────────────────────────────────────────────
 function parseNmapXml(xml: string): unknown[] {
   const findings: unknown[] = [];
@@ -359,6 +378,11 @@ async function runJob(job: Record<string, string>) {
     const [scannerName, profile] = job.scanner.split(':');
 
     switch (scannerName) {
+      case 'ai_task': {
+        const response = await runOllama(job.target); // target contains the prompt for AI tasks
+        findings = [{ title: 'AI Analysis Result', description: response, severity: 'info', asset: 'AI Engine' }];
+        break;
+      }
       case 'nmap':           findings = await runNmap(job.target, profile);  break;
       case 'amass':          findings = await runAmass(job.target); break;
       case 'tfsec':          findings = await runTfsec(job.target); break;

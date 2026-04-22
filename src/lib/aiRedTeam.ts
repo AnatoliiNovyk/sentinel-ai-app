@@ -1,75 +1,70 @@
 import { supabase } from './supabase';
-import { aiMock } from './agentTools';
+
+/**
+ * AI Red Team (Kill Chain Generation) - Local CPU Edition
+ * Uses the local VPS agent (Ollama) instead of commercial APIs.
+ */
 
 export async function generateKillChain(projectName: string, vulns: any[]): Promise<any[]> {
   if (vulns.length === 0) return [];
 
-  const payload = {
-    action: 'generate_kill_chain',
-    project: projectName,
-    vulnerabilities: vulns.map(v => ({ title: v.title, severity: v.severity, asset: v.asset })),
-  };
-
-  try {
-    const { data, error } = await supabase.functions.invoke('ai-gateway', {
-      body: payload
-    });
+  const prompt = `
+    Context: You are a Red Team AI.
+    Project: ${projectName}
+    Vulnerabilities: ${JSON.stringify(vulns.map(v => ({ title: v.title, severity: v.severity, asset: v.asset })))}
     
-    if (!error && data?.kill_chain && Array.isArray(data.kill_chain)) {
-      return data.kill_chain;
+    Task: Generate a realistic attack kill chain in 4 phases (Recon, Initial Access, Execution, Exfiltration).
+    Format your response EXACTLY as a JSON array:
+    [
+      { "phase": "Recon", "tactic": "TA...", "description": "...", "exploited_vuln": "...", "asset": "..." },
+      ...
+    ]
+  `;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // 1. Create a job for the agent
+  const { data: job, error: jobErr } = await supabase
+    .from('scan_jobs')
+    .insert({
+      user_id: user.id,
+      scanner: 'ai_task',
+      target: prompt,
+      status: 'pending'
+    })
+    .select()
+    .single();
+
+  if (jobErr || !job) return [];
+
+  // 2. Poll for the result
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const { data: updatedJob } = await supabase
+      .from('scan_jobs')
+      .select('status')
+      .eq('id', job.id)
+      .single();
+
+    if (updatedJob?.status === 'completed') {
+      const { data: vuln } = await supabase
+        .from('vulnerabilities')
+        .select('description')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (vuln) {
+        try {
+          return JSON.parse(vuln.description);
+        } catch (e) {
+          console.error('Failed to parse AI kill chain JSON', e);
+        }
+      }
     }
-  } catch (err) {
-    console.error('Failed to call real AI gateway for kill chain', err);
   }
 
-  // Fallback to mock generation if real AI is unavailable
-  await new Promise(r => setTimeout(r, 2000));
-  
-  // Sort by severity to find the entry point
-  const criticals = vulns.filter(v => v.severity === 'critical');
-  const highs = vulns.filter(v => v.severity === 'high');
-  const mediums = vulns.filter(v => v.severity === 'medium');
-
-  const chain = [];
-  
-  // 1. Reconnaissance
-  const reconVuln = mediums[0] || vulns[0];
-  chain.push({
-    phase: 'Reconnaissance',
-    tactic: 'TA0043',
-    description: `Attacker discovers the asset footprint by scanning external IP ranges and identifies exposed services.`,
-    exploited_vuln: reconVuln?.title || 'Exposed service enumeration',
-    asset: reconVuln?.asset || 'External Perimeter'
-  });
-
-  // 2. Initial Access
-  const initialVuln = criticals[0] || highs[0] || vulns[0];
-  chain.push({
-    phase: 'Initial Access',
-    tactic: 'TA0001',
-    description: `Exploitation of public-facing application. Attacker uses an automated exploit against the vulnerable endpoint to gain a foothold.`,
-    exploited_vuln: initialVuln?.title || 'Remote Code Execution',
-    asset: initialVuln?.asset || 'Web Server'
-  });
-
-  // 3. Execution & Persistence
-  chain.push({
-    phase: 'Execution & Persistence',
-    tactic: 'TA0002 / TA0003',
-    description: `Once inside, the attacker drops a web shell or reverse shell payload to maintain access. They manipulate system configurations to survive reboots.`,
-    exploited_vuln: 'Weak OS configuration / Missing EDR',
-    asset: 'Internal Network'
-  });
-
-  // 4. Exfiltration
-  const dbVuln = vulns.find(v => v.title.toLowerCase().includes('sql') || v.title.toLowerCase().includes('database')) || initialVuln;
-  chain.push({
-    phase: 'Exfiltration',
-    tactic: 'TA0010',
-    description: `Attacker dumps sensitive database records and archives them before exfiltrating over an encrypted C2 channel.`,
-    exploited_vuln: dbVuln?.title || 'Data exposure',
-    asset: dbVuln?.asset || 'Database instance'
-  });
-
-  return chain;
+  return []; // Fallback empty
 }
