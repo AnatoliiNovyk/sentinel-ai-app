@@ -43,21 +43,32 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('You must be logged in to use AI Assistant');
 
-  console.log('📡 [AI] Dispatching task via Edge Function...');
+  console.log('📡 [AI] Dispatching task via RPC...');
 
-  // 1. Dispatch the job using the Edge Function (uses service_role internally)
-  const { data: dispatchRes, error: dispatchErr } = await supabase.functions.invoke('scan-dispatch', {
-    body: {
-      project_id: req.project_id,
-      scan_id: req.scan_id,
-      scanner: 'ai_task',
-      target: prompt
-    }
+  // 1. Try calling the RPC function (most reliable)
+  const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
+    p_scan_id: req.scan_id,
+    p_project_id: req.project_id,
+    p_target: prompt
   });
 
-  if (dispatchErr) {
-    console.error('❌ [AI] Dispatch failed:', dispatchErr);
-    throw new Error('System could not queue your AI request. Please try again later.');
+  if (rpcErr) {
+    console.warn('⚠️ [AI] RPC failed, falling back to Edge Function:', rpcErr.message);
+    
+    // 2. Fallback to Edge Function
+    const { data: dispatchRes, error: dispatchErr } = await supabase.functions.invoke('scan-dispatch', {
+      body: {
+        project_id: req.project_id,
+        scan_id: req.scan_id,
+        scanner: 'ai_task',
+        target: prompt
+      }
+    });
+
+    if (dispatchErr) {
+      console.error('❌ [AI] Both RPC and Edge Function failed:', dispatchErr);
+      throw new Error('System could not queue your AI request. Please check if the database RPC is installed.');
+    }
   }
 
   console.log('✅ [AI] Task queued successfully. Starting result poll...');
