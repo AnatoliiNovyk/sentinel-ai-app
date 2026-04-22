@@ -141,8 +141,9 @@ export default function Chat() {
       const { data: job, error: jobErr } = await supabase
         .from('scan_jobs')
         .insert({
+          user_id: user.id,
           target: 'AI Assistant',
-          type: 'ai_task',
+          scanner: 'ai_task',
           status: 'pending',
           options: { 
             prompt: `You are a cybersecurity expert assistant. User says: ${text}`,
@@ -166,6 +167,7 @@ export default function Chat() {
             .from('vulnerabilities')
             .select('description')
             .eq('title', 'AI Security Response')
+            .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
