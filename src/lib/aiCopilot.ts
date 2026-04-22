@@ -17,69 +17,62 @@ export type AiRemediationResponse = {
   language: string;
 };
 
+/**
+ * Dispatches an AI task and polls for the result.
+ * This uses the scan-dispatch Edge Function to bypass RLS restrictions.
+ */
 export async function generateAiRemediation(req: AiRemediationRequest): Promise<AiRemediationResponse> {
   const prompt = `
-    Context: You are a security expert.
+    Context: You are a cybersecurity expert. 
+    Task: Analyze the following vulnerability and provide a concise remediation explanation and a code snippet to fix it.
+    
     Vulnerability: ${req.title}
     Description: ${req.description}
     Severity: ${req.severity}
     Asset: ${req.asset}
-    CVE: ${req.cve_id}
-    
-    Task: Provide a short explanation and a code snippet to fix this.
-    Format your response EXACTLY as JSON:
+    CVE ID: ${req.cve_id}
+
+    IMPORTANT: Your response MUST be valid JSON in this format:
     {
-      "explanation": "your explanation",
-      "code": "your code snippet",
-      "language": "bash/hcl/yaml/etc"
+      "explanation": "Brief clear explanation of why this is a risk and how to fix it",
+      "code": "The exact code/command to fix it",
+      "language": "bash/hcl/json/etc"
     }
   `;
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  if (!user) throw new Error('You must be logged in to use AI Assistant');
 
-  console.log('📡 Dispatching AI task via Edge Function...');
+  console.log('📡 [AI] Dispatching task via Edge Function...');
 
-  // 1. Use the scan-dispatch Edge Function instead of direct DB insert to bypass RLS issues
+  // 1. Dispatch the job using the Edge Function (uses service_role internally)
   const { data: dispatchRes, error: dispatchErr } = await supabase.functions.invoke('scan-dispatch', {
     body: {
       project_id: req.project_id,
       scan_id: req.scan_id,
       scanner: 'ai_task',
-      target: prompt,
-      options: {
-        is_ai: true,
-        original_prompt: prompt
-      }
+      target: prompt
     }
   });
 
   if (dispatchErr) {
-    console.error('❌ Edge Function Dispatch Error:', dispatchErr);
-    // Fallback to direct insert if function fails, but with better logging
-    console.log('Attempting fallback direct insert...');
-    const { error: fallbackErr } = await supabase.from('scan_jobs').insert({
-      user_id: user.id,
-      project_id: req.project_id,
-      scan_id: req.scan_id,
-      scanner: 'ai_task',
-      target: prompt,
-      status: 'pending'
-    });
-    if (fallbackErr) throw new Error(`Dispatch failed: ${fallbackErr.message}`);
+    console.error('❌ [AI] Dispatch failed:', dispatchErr);
+    throw new Error('System could not queue your AI request. Please try again later.');
   }
 
-  console.log('✅ AI Task dispatched. Waiting for agent...');
+  console.log('✅ [AI] Task queued successfully. Starting result poll...');
 
-  // 2. Poll for the result (Agent reports to vulnerabilities table)
+  // 2. Poll for the result in 'vulnerabilities' table
+  // The agent will report the result as a new vulnerability entry with a specific title
   const startTime = Date.now();
-  const timeout = 60000; 
+  const timeout = 90000; // 90 seconds (AI on CPU can be slow)
+  const pollInterval = 3000;
 
   while (Date.now() - startTime < timeout) {
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, pollInterval));
     
-    console.log('🔍 Polling for AI result...');
-    const { data: vResponse, error: vErr } = await supabase
+    console.log('🔍 [AI] Checking for results...');
+    const { data: results, error: vErr } = await supabase
       .from('vulnerabilities')
       .select('description, created_at')
       .eq('scan_id', req.scan_id)
@@ -88,22 +81,29 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
       .limit(1)
       .maybeSingle();
 
-    if (vErr) continue;
+    if (vErr) {
+      console.warn('⚠️ [AI] Polling error (skipping):', vErr.message);
+      continue;
+    }
 
-    if (vResponse && new Date(vResponse.created_at).getTime() > startTime - 5000) {
-      console.log('🎯 AI Response received!');
+    // Verify if this is a NEW result created after we started polling
+    if (results && new Date(results.created_at).getTime() > startTime - 5000) {
+      console.log('🎯 [AI] Result found!');
       try {
-        const jsonMatch = vResponse.description.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : vResponse.description;
+        // Find JSON block in the description
+        const jsonMatch = results.description.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : results.description;
         const parsed = JSON.parse(jsonStr);
+        
         return {
-          explanation: parsed.explanation || 'No explanation provided.',
-          code: parsed.code || '',
+          explanation: parsed.explanation || 'See description below.',
+          code: parsed.code || '# Check explanation for details',
           language: parsed.language || 'text'
         };
       } catch (e) {
+        // Fallback if not valid JSON
         return {
-          explanation: vResponse.description,
+          explanation: results.description,
           code: '# Manual review required',
           language: 'text'
         };
@@ -111,5 +111,5 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
     }
   }
 
-  throw new Error('AI processing timed out. Verify if the Sentinel Agent is polling.');
+  throw new Error('AI processing timed out. The agent is taking too long to respond.');
 }
