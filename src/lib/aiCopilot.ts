@@ -1,10 +1,5 @@
 import { supabase } from './supabase';
 
-/**
- * Sprint 6: AI Security Copilot (Local CPU Edition)
- * Redirects AI tasks to the local VPS agent running Ollama (Llama 3).
- */
-
 export type AiRemediationRequest = {
   title: string;
   description: string;
@@ -27,6 +22,7 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
     Context: You are a security expert.
     Vulnerability: ${req.title}
     Description: ${req.description}
+    Severity: ${req.severity}
     Asset: ${req.asset}
     CVE: ${req.cve_id}
     
@@ -42,8 +38,10 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  // 1. Create a job for the agent
-  const { data: job, error: jobErr } = await supabase
+  console.log('📡 Dispatching AI task to scan_jobs...');
+
+  // 1. Create a job for the agent (WITHOUT .select() to avoid 403)
+  const { error: jobErr } = await supabase
     .from('scan_jobs')
     .insert({
       user_id: user.id,
@@ -52,68 +50,58 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
       scanner: 'ai_task',
       target: prompt,
       status: 'pending'
-    })
-    .select()
-    .single();
+    });
 
-  if (jobErr || !job) throw new Error('Failed to queue AI task');
+  if (jobErr) {
+    console.error('❌ Supabase RLS/Insert Error:', jobErr);
+    throw new Error(`Permission denied: ${jobErr.message}`);
+  }
 
-  // 2. Poll for the result (max 60 seconds)
-  let result: any = null;
-  for (let i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 2000));
-    const { data: updatedJob } = await supabase
-      .from('scan_jobs')
-      .select('status, error_message')
-      .eq('id', job.id)
-      .single();
+  console.log('✅ Job queued. Waiting for agent result...');
 
-    if (updatedJob?.status === 'completed') {
-      // Fetch the "findings" which contains the AI response
-      const { data: scanResults } = await supabase
-        .from('scans')
-        .select('id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      // Actually, we should probably have a dedicated table for AI results, 
-      // but for now the agent reports findings to 'vulnerabilities' table via scan-result function.
-      // Let's look for the vulnerability created for this jobId.
-      const { data: vuln } = await supabase
-        .from('vulnerabilities')
-        .select('description')
-        .eq('title', 'AI Security Response')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (vuln) {
-        try {
-          // Robust JSON extraction from markdown or plain text
-          const jsonMatch = vuln.description.match(/\{[\s\S]*\}/);
-          const jsonStr = jsonMatch ? jsonMatch[0] : vuln.description;
-          const parsed = JSON.parse(jsonStr);
-          return {
-            explanation: parsed.explanation || 'No explanation provided.',
-            code: parsed.code || '',
-            language: parsed.language || 'text'
-          };
-        } catch (e) {
-          // Fallback if not valid JSON
-          return {
-            explanation: vuln.description,
-            code: '# Manual review required',
-            language: 'text'
-          };
-        }
+  // 2. Poll for the result in 'vulnerabilities' table (the agent will create a new entry with the response)
+  const startTime = Date.now();
+  const timeout = 60000; 
+
+  while (Date.now() - startTime < timeout) {
+    await new Promise(r => setTimeout(r, 3000));
+    
+    console.log('🔍 Checking for AI response in vulnerabilities...');
+    const { data: vResponse, error: vErr } = await supabase
+      .from('vulnerabilities')
+      .select('description, created_at')
+      .eq('scan_id', req.scan_id)
+      .eq('title', 'AI Security Response')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (vErr) {
+      console.warn('⚠️ Error polling vulnerabilities:', vErr.message);
+      continue;
+    }
+
+    // Check if we found a response and it's fresh
+    if (vResponse && new Date(vResponse.created_at).getTime() > startTime - 2000) {
+      console.log('🎯 Found AI response!');
+      try {
+        const jsonMatch = vResponse.description.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : vResponse.description;
+        const parsed = JSON.parse(jsonStr);
+        return {
+          explanation: parsed.explanation || 'No explanation provided.',
+          code: parsed.code || '',
+          language: parsed.language || 'text'
+        };
+      } catch (e) {
+        return {
+          explanation: vResponse.description,
+          code: '# Manual review required',
+          language: 'text'
+        };
       }
-    } else if (updatedJob?.status === 'failed') {
-      throw new Error(updatedJob.error_message || 'AI processing failed');
     }
   }
 
-  throw new Error('AI processing timed out');
+  throw new Error('AI processing timed out. Please check if the Sentinel Agent is running.');
 }
