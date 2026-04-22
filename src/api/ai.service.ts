@@ -38,6 +38,24 @@ export const AiService = {
   },
 
   /**
+   * Dispatches a general chat task to the local agent.
+   */
+  async dispatchChatTask(projectId: string, text: string) {
+    const prompt = `You are a cybersecurity expert assistant. User says: ${text}`;
+    
+    // Create a scan record first (if needed) or use a system-level one.
+    // For now, we'll use the RPC which handles the job creation.
+    const { data: jobId, error } = await supabase.rpc('dispatch_ai_task', {
+      p_scan_id: null, // Chat tasks might not have a specific scan_id initially
+      p_project_id: projectId,
+      p_target: prompt
+    });
+
+    if (error) throw error;
+    return jobId;
+  },
+
+  /**
    * Polls for the AI response in the vulnerabilities table.
    */
   async pollForResult(scanId: string, startTime: number, timeout: number = 90000) {

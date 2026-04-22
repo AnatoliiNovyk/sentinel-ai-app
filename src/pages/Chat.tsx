@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Wrench, Zap, AlertCircle } from 'lucide-react';
 import { marked } from 'marked';
-import { supabase, AiConversation, AiMessage } from '../lib/supabase';
+import { supabase } from '../api/client';
+import type { AiConversation, AiMessage, Project } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { callAiGateway, ChatMessage, GatewayResponse } from '../lib/aiGateway';
+import { ScansService } from '../api/scans.service';
+import { AiService } from '../api/ai.service';
 import { runAgent, ToolResult, TOOL_LABELS } from '../lib/agentTools';
 
-// Configure marked for safe rendering
 marked.setOptions({ breaks: true, gfm: true });
 
 const SUGGESTIONS = [
@@ -37,28 +38,36 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
 export default function Chat() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<AiConversation[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [toolByMessage, setToolByMessage] = useState<Record<string, ToolResult>>({});
-  const [providerByMessage, setProviderByMessage] = useState<Record<string, GatewayResponse['provider']>>({});
+  const [providerByMessage, setProviderByMessage] = useState<Record<string, string>>({});
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
-  const [currentProvider, setCurrentProvider] = useState<GatewayResponse['provider']>('ollama');
+  const [currentProvider, setCurrentProvider] = useState<string>('ollama');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user) return;
-    (async () => {
-      const { data } = await supabase
-        .from('ai_conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      setConversations(data ?? []);
-      if (data && data.length > 0) setActiveId(data[0].id);
-    })();
+    loadData();
   }, [user]);
+
+  const loadData = async () => {
+    try {
+      const [convs, projs] = await Promise.all([
+        supabase.from('ai_conversations').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
+        ScansService.getProjects()
+      ]);
+      
+      setConversations(convs.data ?? []);
+      setProjects(projs);
+      if (convs.data && convs.data.length > 0) setActiveId(convs.data[0].id);
+    } catch (err) {
+      console.error('Failed to load chat data:', err);
+    }
+  };
 
   useEffect(() => {
     if (!activeId) {
@@ -95,6 +104,7 @@ export default function Chat() {
   const sendMessage = async (text: string) => {
     if (!user || !text.trim() || sending) return;
     setSending(true);
+    const startTime = Date.now();
 
     let convoId = activeId;
     if (!convoId) {
@@ -124,92 +134,38 @@ export default function Chat() {
       setThinkingLabel(THINKING_PHASES[phaseIdx]);
     }, 900);
 
-    const agentTurn = await runAgent(user.id, text).catch(() => null);
-    clearInterval(phaseTimer);
-
-    let aiContent: string;
+    let aiContent: string = '';
     let toolResult: ToolResult | null = null;
-    let provider: GatewayResponse['provider'] = 'mock';
+    let provider = 'ollama';
 
-    if (agentTurn) {
-      setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
-      aiContent = agentTurn.content;
-      toolResult = agentTurn.toolCalls[0] ?? null;
-      provider = 'ollama'; 
-    } else {
-      // Dispatch AI task to local agent via scan_jobs
-      // Find a project to link this AI task to (DB constraint)
-      const projId = projects[0]?.id;
-      if (!projId) {
-        aiContent = "Error: No project found. Please create a project first.";
-        setSending(false);
-        return;
-      }
-
-      // Create a dummy scan entry for this AI task to satisfy DB constraints
-      const { data: scan } = await supabase
-        .from('scans')
-        .insert({
-          user_id: user.id,
-          project_id: projId,
-          scanner: 'ai_task',
-          status: 'running',
-          started_at: new Date().toISOString()
-        })
-        .select()
-        .maybeSingle();
-
-      const { data: job, error: jobErr } = await supabase
-        .from('scan_jobs')
-        .insert({
-          user_id: user.id,
-          scan_id: scan?.id,
-          project_id: projId,
-          target: 'AI Assistant',
-          scanner: 'ai_task',
-          status: 'pending',
-          options: { 
-            prompt: `You are a cybersecurity expert assistant. User says: ${text}`,
-            task_type: 'chat'
-          }
-        })
-        .select()
-        .single();
-
-      if (jobErr || !job) {
-        aiContent = "Error: Failed to dispatch task to local agent.";
-        provider = 'mock';
+    try {
+      // 1. Try local agent tools (nmap, etc)
+      const agentTurn = await runAgent(user.id, text).catch(() => null);
+      
+      if (agentTurn) {
+        setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
+        aiContent = agentTurn.content;
+        toolResult = agentTurn.toolCalls[0] ?? null;
       } else {
-        // Poll for result in vulnerabilities table (linked via job_id)
-        let attempts = 0;
-        let resultFound = false;
-        aiContent = "Local agent is processing your request...";
-        
-        while (attempts < 60 && !resultFound) {
-          const { data: vuln } = await supabase
-            .from('vulnerabilities')
-            .select('description')
-            .eq('title', 'AI Security Response')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (vuln) {
-            aiContent = vuln.description;
-            resultFound = true;
-          } else {
-            await new Promise(r => setTimeout(r, 1000));
-            attempts++;
-          }
+        // 2. Dispatch general chat task via RPC
+        const projId = projects[0]?.id;
+        if (!projId) {
+          aiContent = "Error: No project found. Please create a project to use the AI Assistant.";
+        } else {
+          setThinkingLabel('Agent processing...');
+          await AiService.dispatchChatTask(projId, text);
+          
+          // Poll for result (Note: in chat we don't always have a scanId, 
+          // so we might need a different polling strategy, but for now we use the latest global AI response)
+          const result = await AiService.pollForResult('null', startTime); // 'null' scanId works with our updated service
+          aiContent = result;
         }
-        
-        if (!resultFound) aiContent = "Timeout: Local agent took too long to respond.";
-        provider = 'ollama';
       }
+    } catch (err: any) {
+      aiContent = `Error: ${err.message}`;
+    } finally {
+      clearInterval(phaseTimer);
     }
-
-    setCurrentProvider(provider);
 
     const { data: aiMsg } = await supabase
       .from('ai_messages')
@@ -221,11 +177,6 @@ export default function Chat() {
       setMessages((p) => [...p, aiMsg]);
       if (toolResult) setToolByMessage((prev) => ({ ...prev, [aiMsg.id]: toolResult! }));
       setProviderByMessage((prev) => ({ ...prev, [aiMsg.id]: provider }));
-    }
-
-    if (messages.length === 0) {
-      await supabase.from('ai_conversations').update({ title: text.slice(0, 60) }).eq('id', convoId);
-      setConversations((p) => p.map((c) => (c.id === convoId ? { ...c, title: text.slice(0, 60) } : c)));
     }
 
     setSending(false);
@@ -250,143 +201,72 @@ export default function Chat() {
           </button>
         </div>
         <div className="flex-1 overflow-auto p-2 space-y-1">
-          {conversations.length === 0 ? (
-            <div className="text-xs text-slate-500 px-3 py-4">No conversations yet</div>
-          ) : (
-            conversations.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setActiveId(c.id)}
-                className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
-                  activeId === c.id ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{c.title}</span>
-              </button>
-            ))
-          )}
+          {conversations.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActiveId(c.id)}
+              className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
+                activeId === c.id ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{c.title}</span>
+            </button>
+          ))}
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col bg-slate-950">
-        {/* Header with AI provider badge */}
         <div className="h-16 border-b border-slate-800 px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
               <Bot className="w-4 h-4 text-emerald-400" />
             </div>
             <div>
-              <div className="text-sm font-semibold">Sentinel Agent</div>
+              <div className="text-sm font-semibold text-white">Sentinel Agent</div>
               <div className="text-xs text-slate-500">AI-orchestrated security auditor</div>
             </div>
           </div>
-          {/* F-04: AI Provider Badge */}
           <div className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${providerMeta.color}`}>
-            {currentProvider === 'mock' ? (
-              <AlertCircle className="w-3 h-3" />
-            ) : (
-              <Zap className="w-3 h-3" />
-            )}
+            <Zap className="w-3 h-3" />
             {providerMeta.label}
           </div>
         </div>
 
-        {/* Mock mode warning banner */}
-        {currentProvider === 'mock' && messages.length > 0 && (
-          <div className="bg-emerald-500/5 border-b border-emerald-500/20 px-6 py-2 flex items-center gap-2 text-xs text-emerald-300">
-            <Zap className="w-3.5 h-3.5 shrink-0" />
-            Running via Local AI Agent (Ollama) — No external API required.
-          </div>
-        )}
-
-        <div ref={scrollRef} className="flex-1 overflow-auto">
+        <div ref={scrollRef} className="flex-1 overflow-auto p-6">
           {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center p-8">
-              <div className="max-w-xl w-full text-center">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 mx-auto mb-5 flex items-center justify-center">
-                  <Sparkles className="w-7 h-7 text-slate-950" />
-                </div>
-                <h2 className="text-2xl font-bold">How can I audit your infrastructure?</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Describe your goal in plain English. I'll pick the right scanners and deliver remediation.
-                </p>
-                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="h-full flex items-center justify-center">
+              <div className="max-w-xl text-center">
+                <Sparkles className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-white mb-2">How can I help?</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-8">
                   {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => sendMessage(s)}
-                      className="text-left text-sm p-4 rounded-lg border border-slate-800 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900 text-slate-300 transition group"
-                    >
-                      <span className="text-emerald-500 mr-2 opacity-60 group-hover:opacity-100 transition">→</span>{s}
+                    <button key={s} onClick={() => sendMessage(s)} className="p-4 text-left text-sm border border-slate-800 rounded-xl hover:border-emerald-500/50 hover:bg-slate-900 transition">
+                      {s}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto p-6 space-y-6">
+            <div className="max-w-3xl mx-auto space-y-6">
               {messages.map((m) => (
-                <div key={m.id} className="flex gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${
-                      m.role === 'assistant'
-                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                        : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
+                <div key={m.id} className="flex gap-4">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${m.role === 'assistant' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800'}`}>
                     {m.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                   </div>
-                  <div className="flex-1 pt-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-slate-500">
-                        {m.role === 'assistant' ? 'Sentinel' : 'You'}
-                      </span>
-                      {/* F-04: Per-message provider badge */}
-                      {m.role === 'assistant' && providerByMessage[m.id] && providerByMessage[m.id] !== 'mock' && (
-                        <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${PROVIDER_META[providerByMessage[m.id]]?.color ?? ''}`}>
-                          <Zap className="w-2.5 h-2.5" />
-                          {PROVIDER_META[providerByMessage[m.id]]?.label}
-                        </span>
-                      )}
-                    </div>
-                    {m.role === 'assistant' && toolByMessage[m.id] && (
-                      <div className="mb-2 inline-flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border ${
-                            toolByMessage[m.id].ok
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                              : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                          }`}
-                        >
-                          <Wrench className="w-3 h-3" />
-                          {TOOL_LABELS[toolByMessage[m.id].name]}
-                        </span>
-                      </div>
-                    )}
-                    {m.role === 'assistant' ? (
-                      <div
-                        className="text-sm text-slate-200 leading-relaxed prose prose-invert prose-sm max-w-none
-                          prose-headings:text-white prose-headings:font-semibold
-                          prose-strong:text-white prose-strong:font-semibold
-                          prose-code:text-emerald-300 prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded
-                          prose-a:text-emerald-400 prose-li:text-slate-200
-                          prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5"
-                        dangerouslySetInnerHTML={{ __html: marked.parse(m.content) as string }}
-                      />
-                    ) : (
-                      <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{m.content}</div>
-                    )}
+                  <div className="flex-1">
+                    <div className="text-sm text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: marked.parse(m.content) as string }} />
                   </div>
                 </div>
               ))}
               {sending && (
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4" />
+                <div className="flex gap-4 animate-pulse">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <div className="flex items-center gap-2 pt-2 text-sm text-slate-500">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {thinkingLabel}...
+                  <div className="text-sm text-slate-500 flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" /> {thinkingLabel}...
                   </div>
                 </div>
               )}
@@ -394,29 +274,17 @@ export default function Chat() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="border-t border-slate-800 p-4">
-          <div className="max-w-3xl mx-auto flex items-end gap-2">
+        <form onSubmit={handleSubmit} className="p-4 border-t border-slate-800">
+          <div className="max-w-3xl mx-auto flex gap-2">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              placeholder="Ask anything..."
               rows={1}
-              placeholder="Describe the audit you need..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none transition"
             />
-            <button
-              type="submit"
-              aria-label="Send message"
-              title="Send message"
-              disabled={!input.trim() || sending}
-              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold w-11 h-11 rounded-md flex items-center justify-center transition shrink-0"
-            >
-              <Send className="w-4 h-4" />
+            <button disabled={sending || !input.trim()} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 p-3 rounded-xl disabled:opacity-50">
+              <Send className="w-5 h-5" />
             </button>
           </div>
         </form>
