@@ -1,890 +1,270 @@
-import { useEffect, useRef, useState } from 'react';
-import { Radar, Plus, X, ChevronRight, ArrowLeft, AlertTriangle, Shield, Upload, FileJson, Copy, Check, Sparkles, Wand2, ExternalLink, Database, Zap, Globe, Loader2 } from 'lucide-react';
-import { supabase, Scan, Project, Vulnerability } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
-import { AVAILABLE_SCANNERS } from '../lib/scanMock';
-import { dispatchScan } from '../lib/scanDispatch';
-import SchedulesPanel from '../components/SchedulesPanel';
-import ExecutionConsole from '../components/ExecutionConsole';
-import { fromSarif, summarize, ParsedSarif } from '../lib/exporters';
-import { fetchCveDetail, cvssToSeverity, CveDetail } from '../lib/cveEnrichment';
-import { fetchThreatIntel, ThreatIntelResult } from '../lib/threatIntel';
-import { generateAiRemediation, AiRemediationResponse } from '../lib/aiCopilot';
-import RemediationModal from '../components/RemediationModal';
-import ScanDiff from '../components/ScanDiff';
+import React, { useState, useEffect } from 'react';
+import { Shield, Search, AlertCircle, CheckCircle2, ChevronRight, Filter, Play, Plus, Layout, Trash2, Cpu, ExternalLink, X, FileText, Lock, MessageSquare } from 'lucide-react';
+import type { Scan, Vulnerability, Project } from '../lib/supabase';
+import { ScansService } from '../api/scans.service';
+import { AiService } from '../api/ai.service';
+import { ScanHeader } from '../components/scans/ScanHeader';
+import { ScanStats } from '../components/scans/ScanStats';
+import { VulnerabilityList } from '../components/scans/VulnerabilityList';
 
-type Tab = 'runs' | 'schedules';
-
-export default function Scans() {
-  console.log('🛡️ Scans Page Loaded v1.0.1');
-  const { user } = useAuth();
-  const [scans, setScans] = useState<Scan[]>([]);
+const Scans = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [selectedScan, setSelectedScan] = useState<Scan | null>(null);
-  const [tab, setTab] = useState<Tab>('runs');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [scans, setScans] = useState<Scan[]>([]);
+  const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
+  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
 
-  const load = async () => {
-    if (!user) return;
-    const [sRes, pRes] = await Promise.all([
-      supabase.from('scans').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('projects').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-    ]);
-    setScans(sRes.data ?? []);
-    setProjects(pRes.data ?? []);
-    setLoading(false);
-  };
-
+  // Load initial data
   useEffect(() => {
-    load();
-    if (!user) return;
-    const channel = supabase
-      .channel('scans-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'scans', filter: `user_id=eq.${user.id}` },
-        () => load()
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
+    loadProjects();
+  }, []);
 
-  if (selectedScan) {
-    return <ScanDetails scan={selectedScan} project={projects.find((p) => p.id === selectedScan.project_id)} onBack={() => setSelectedScan(null)} />;
-  }
+  // Load scans when project changes
+  useEffect(() => {
+    if (selectedProjectId) {
+      loadScans(selectedProjectId);
+    } else {
+      setScans([]);
+      setSelectedScanId(null);
+    }
+  }, [selectedProjectId]);
 
-  return (
-    <div className="p-8 max-w-7xl">
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Scans</h1>
-          <p className="mt-1 text-sm text-slate-500">Audit runs and recurring schedules.</p>
-        </div>
-        {tab === 'runs' && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setImportOpen(true)}
-              disabled={projects.length === 0}
-              className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 font-medium px-3.5 py-2 rounded-md text-sm transition"
-            >
-              <Upload className="w-4 h-4" /> Import SARIF
-            </button>
-            <button
-              onClick={() => setModalOpen(true)}
-              disabled={projects.length === 0}
-              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-            >
-              <Plus className="w-4 h-4" /> New scan
-            </button>
-          </div>
-        )}
-      </div>
+  // Load vulnerabilities when scan changes
+  useEffect(() => {
+    if (selectedScanId) {
+      loadVulnerabilities(selectedScanId);
+    } else {
+      setVulnerabilities([]);
+    }
+  }, [selectedScanId]);
 
-      <div className="flex items-center gap-1 mb-6 border-b border-slate-800">
-        {(['runs', 'schedules'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize -mb-px border-b-2 transition ${
-              tab === t
-                ? 'border-emerald-500 text-white'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'schedules' ? (
-        <SchedulesPanel projects={projects} />
-      ) : loading ? (
-        <div className="text-slate-500 text-sm">Loading...</div>
-      ) : scans.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
-          <Radar className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <div className="text-slate-300 font-medium">No scans yet</div>
-          <div className="text-slate-500 text-sm mt-1">
-            {projects.length === 0 ? 'Create a project first.' : 'Launch your first scan to see findings here.'}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
-          <div className="divide-y divide-slate-800">
-            {scans.map((s) => {
-              const project = projects.find((p) => p.id === s.project_id);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedScan(s)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-900/60 transition text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-9 h-9 rounded-md bg-slate-800 flex items-center justify-center">
-                      <Radar className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-white">
-                        {s.scanner} <span className="text-slate-500 font-normal">on {project?.name ?? 'project'}</span>
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">{new Date(s.created_at).toLocaleString()}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <SeverityPills summary={s.severity_summary} />
-                    <StatusBadge status={s.status} />
-                    <ChevronRight className="w-4 h-4 text-slate-600" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {modalOpen && (
-        <NewScanModal
-          projects={projects}
-          onClose={() => setModalOpen(false)}
-          onCreated={async (projectId, scanner) => {
-            setModalOpen(false);
-            if (!user) return;
-            const proj = projects.find((p) => p.id === projectId);
-            await dispatchScan(user.id, projectId, scanner, proj?.target ?? '');
-            load();
-          }}
-        />
-      )}
-
-      {importOpen && (
-        <ImportSarifModal
-          projects={projects}
-          onClose={() => setImportOpen(false)}
-          onImported={() => {
-            setImportOpen(false);
-            load();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function ImportSarifModal({
-  projects,
-  onClose,
-  onImported,
-}: {
-  projects: Project[];
-  onClose: () => void;
-  onImported: () => void;
-}) {
-  const { user } = useAuth();
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
-  const [parsed, setParsed] = useState<ParsedSarif | null>(null);
-  const [fileName, setFileName] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = async (file: File) => {
-    setError('');
-    setFileName(file.name);
+  const loadProjects = async () => {
     try {
-      const text = await file.text();
-      const result = fromSarif(text);
-      if (result.findings.length === 0) {
-        setError('SARIF parsed but no results were found.');
+      const data = await ScansService.getProjects();
+      setProjects(data);
+      if (data.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(data[0].id);
       }
-      setParsed(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to parse SARIF');
-      setParsed(null);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const save = async () => {
-    if (!user || !parsed || !projectId) return;
-    setSaving(true);
-    const summary = summarize(parsed.findings);
-    const now = new Date().toISOString();
-    const { data: scan } = await supabase
-      .from('scans')
-      .insert({
-        user_id: user.id,
-        project_id: projectId,
-        scanner: parsed.scanner,
-        status: 'completed',
-        severity_summary: summary,
-        started_at: now,
-        completed_at: now,
-      })
-      .select()
-      .maybeSingle();
-
-    if (scan) {
-      const rows = parsed.findings.map((f) => ({
-        scan_id: scan.id,
-        user_id: user.id,
-        title: f.title,
-        description: f.description,
-        severity: f.severity,
-        cve_id: f.cve_id,
-        mitre_tactic: f.mitre_tactic,
-        cis_control: f.cis_control,
-        asset: f.asset,
-        remediation: f.remediation,
-      }));
-      if (rows.length) await supabase.from('vulnerabilities').insert(rows);
-
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'scan_imported',
-        title: 'SARIF import complete',
-        body: `${parsed.findings.length} findings imported from ${fileName}`,
-        link: 'scans',
-        severity: summary.critical > 0 ? 'critical' : summary.high > 0 ? 'warning' : 'success',
-        metadata: { scan_id: scan.id, project_id: projectId },
-      });
-    }
-
-    setSaving(false);
-    onImported();
-  };
-
-  const summary = parsed ? summarize(parsed.findings) : null;
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-xl rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 className="font-semibold">Import SARIF</h2>
-          <button onClick={onClose} aria-label="Close modal" title="Close modal" className="text-slate-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Target project</label>
-            <select
-              aria-label="Target project"
-              title="Target project"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f) handleFile(f);
-            }}
-            onClick={() => fileRef.current?.click()}
-            className={`rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition ${
-              dragging
-                ? 'border-emerald-500/60 bg-emerald-500/5'
-                : 'border-slate-800 hover:border-slate-700 bg-slate-900/40'
-            }`}
-          >
-            <Upload className="w-6 h-6 text-slate-500 mx-auto mb-2" />
-            <div className="text-sm text-slate-300">
-              {fileName ? (
-                <span className="inline-flex items-center gap-2">
-                  <FileJson className="w-4 h-4 text-emerald-400" /> {fileName}
-                </span>
-              ) : (
-                'Drop a .sarif or .sarif.json file, or click to browse'
-              )}
-            </div>
-            <div className="text-xs text-slate-500 mt-1">SARIF 2.1.0 supported</div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".json,.sarif,application/json"
-              className="hidden"
-              aria-label="Upload SARIF file"
-              title="Upload SARIF file"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-              {error}
-            </div>
-          )}
-
-          {parsed && summary && (
-            <div className="rounded-md border border-slate-800 bg-slate-900/40 p-4">
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
-                Preview · scanner: <span className="text-slate-300 normal-case">{parsed.scanner}</span>
-              </div>
-              <div className="grid grid-cols-5 gap-2">
-                {(['critical', 'high', 'medium', 'low', 'info'] as const).map((sev) => (
-                  <div key={sev} className="rounded-md bg-slate-900 border border-slate-800 p-2 text-center">
-                    <div className="text-[10px] text-slate-500 capitalize">{sev}</div>
-                    <div className="text-base font-bold mt-0.5 text-white">{summary[sev]}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 text-xs text-slate-400">
-                {parsed.findings.length} findings ready to import
-              </div>
-            </div>
-          )}
-
-          <div className="pt-2 flex justify-end gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
-              Cancel
-            </button>
-            <button
-              onClick={save}
-              disabled={!parsed || !projectId || saving}
-              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-            >
-              {saving ? 'Importing...' : 'Import findings'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project; onBack: () => void }) {
-  const { user } = useAuth();
-  const [vulns, setVulns] = useState<Vulnerability[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fixing, setFixing] = useState<Vulnerability | null>(null);
-
-  const fetchVulns = async () => {
-    const { data } = await supabase
-      .from('vulnerabilities')
-      .select('*')
-      .eq('scan_id', scan.id)
-      .order('severity');
-    setVulns(data ?? []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchVulns();
-  }, [scan.id]);
-
-  const handleApplyFix = async (v: Vulnerability) => {
-    if (!user) return;
-    // The console handles the simulation. We update DB on complete.
-    const { error } = await supabase
-      .from('vulnerabilities')
-      .update({ 
-        status: 'resolved', 
-        status_updated_at: new Date().toISOString(),
-        note: `AI-Remediation applied via Sentinel AI Engine.`
-      })
-      .eq('id', v.id);
-
-    if (!error) {
-      await supabase.from('notifications').insert({
-        user_id: user.id,
-        type: 'vulnerability_resolved',
-        title: 'Vulnerability Resolved',
-        body: `AI Agent successfully patched: ${v.title}`,
-        link: 'findings',
-        severity: 'success',
-        metadata: { vulnerability_id: v.id, project_id: project?.id }
-      });
-      await fetchVulns();
-    }
-    setFixing(null);
-  };
-
-  const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
-  const sorted = [...vulns].sort(
-    (a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity)
-  );
-
-  return (
-    <div className="p-8 max-w-5xl">
-      <button onClick={onBack} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> Back to scans
-      </button>
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{scan.scanner} scan</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {project?.name} · {new Date(scan.created_at).toLocaleString()}
-          </p>
-        </div>
-        <StatusBadge status={scan.status} />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
-        {(['critical', 'high', 'medium', 'low', 'info'] as const).map((sev) => {
-          const colors: Record<string, string> = {
-            critical: 'text-red-400 border-red-500/20 bg-red-500/10',
-            high: 'text-orange-400 border-orange-500/20 bg-orange-500/10',
-            medium: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10',
-            low: 'text-sky-400 border-sky-500/20 bg-sky-500/10',
-            info: 'text-slate-400 border-slate-700 bg-slate-800/30',
-          };
-          return (
-            <div key={sev} className={`rounded-lg border p-3 ${colors[sev]}`}>
-              <div className="text-xs capitalize opacity-80">{sev}</div>
-              <div className="text-2xl font-bold mt-1">{scan.severity_summary?.[sev] ?? 0}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      <h2 className="font-semibold mb-3">Findings</h2>
-      {loading ? (
-        <div className="text-slate-500 text-sm">Loading...</div>
-      ) : sorted.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-8 text-center">
-          <Shield className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-          <div className="text-sm text-slate-300">No findings detected.</div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {sorted.map((v) => (
-            <FindingCard key={v.id} v={v} scan={scan} project={project} onApplyFix={() => setFixing(v)} />
-          ))}
-        </div>
-      )}
-
-      {fixing && (
-        <RemediationModal
-          vuln={fixing}
-          onClose={() => setFixing(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-function FindingCard({ v, scan, project, onApplyFix }: { v: Vulnerability; scan: Scan; project?: Project; onApplyFix: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [cveDetail, setCveDetail] = useState<CveDetail | null | 'loading'>(null);
-  const [threatData, setThreatData] = useState<ThreatIntelResult | null | 'loading'>(null);
-  const [aiData, setAiData] = useState<AiRemediationResponse | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const sevColors: Record<string, string> = {
-    critical: 'text-red-400 border-red-500/30 bg-red-500/10',
-    high: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
-    medium: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
-    low: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
-    info: 'text-slate-400 border-slate-700 bg-slate-800/40',
-  };
-
-  // F-02 & F-16: Fetch CVE and Threat Intel when card opens
-  useEffect(() => {
-    if (!open) return;
-    if (v.cve_id && cveDetail === null) {
-      setCveDetail('loading');
-      fetchCveDetail(v.cve_id).then(detail => setCveDetail(detail));
-    }
-    if (v.asset && threatData === null) {
-      setThreatData('loading');
-      fetchThreatIntel(v.asset).then(data => setThreatData(data));
-    }
-  }, [open, v.cve_id, v.asset]);
-
-  const copy = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleAiGeneration = async (e: React.MouseEvent) => {
-    console.log('🚀 handleAiGeneration TRIGGERED for:', v.title);
-    e.stopPropagation();
-    if (aiLoading) {
-      console.log('⚠️ Already loading, skipping...');
-      return;
-    }
-    
-    setAiLoading(true);
-    console.log('⌛ setAiLoading(true) called');
+  const loadScans = async (projectId: string) => {
     try {
-      // Use project?.id from props
-      const res = await generateAiRemediation({
+      const data = await ScansService.getProjectScans(projectId);
+      setScans(data);
+      if (data.length > 0 && !selectedScanId) {
+        setSelectedScanId(data[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load scans:', err);
+    }
+  };
+
+  const loadVulnerabilities = async (scanId: string) => {
+    try {
+      const data = await ScansService.getScanVulnerabilities(scanId);
+      setVulnerabilities(data);
+    } catch (err) {
+      console.error('Failed to load vulnerabilities:', err);
+    }
+  };
+
+  const handleAiGeneration = async (v: Vulnerability) => {
+    setIsGeneratingAi(true);
+    const startTime = Date.now();
+    
+    try {
+      console.log('📡 [AI] Starting generation via service...');
+      await AiService.generateFix({
         title: v.title,
         description: v.description,
         severity: v.severity,
         asset: v.asset,
-        cve_id: v.cve_id || '',
-        remediation_type: v.remediation_type || '',
-        project_id: project?.id || '',
-        scan_id: scan?.id || '',
+        cve_id: v.cve_id,
+        project_id: v.project_id,
+        scan_id: v.scan_id
       });
-      if (res) {
-        setAiData(res);
-      }
-    } catch (err) {
-      console.error('❌ AI Generation Dispatch Error:', err);
+
+      const aiResponse = await AiService.pollForResult(v.scan_id, startTime);
+      console.log('✅ [AI] Generation complete');
+      
+      // Refresh to show the new "AI Security Response" finding
+      await loadVulnerabilities(v.scan_id);
+      
+      // Auto-open the result
+      const { data: newVulns } = await ScansService.getScanVulnerabilities(v.scan_id);
+      const newAiFinding = newVulns.find(nv => nv.title === 'AI Security Response' && new Date(nv.created_at).getTime() > startTime);
+      if (newAiFinding) setSelectedVuln(newAiFinding);
+
+    } catch (err: any) {
+      console.error('❌ [AI] Error:', err.message);
+      alert('AI Generation failed: ' + err.message);
     } finally {
-      setAiLoading(false);
+      setIsGeneratingAi(false);
     }
   };
 
+  const getStats = () => {
+    const stats = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    vulnerabilities.forEach(v => {
+      if (v.severity in stats) {
+        stats[v.severity as keyof typeof stats]++;
+      }
+    });
+    return stats;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
-      <button onClick={() => setOpen(!open)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-900/60 transition text-left">
-        <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded border capitalize ${sevColors[v.severity]}`}>
-            {v.severity}
-          </span>
-          <AlertTriangle className="w-4 h-4 text-slate-500" />
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-white truncate">{v.title}</div>
-            <div className="text-xs text-slate-500 mt-0.5 font-mono truncate">{v.asset}</div>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <ScanHeader 
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
+        onNewScan={() => alert('New scan feature coming soon!')}
+      />
+
+      <ScanStats 
+        stats={getStats()}
+        totalVulnerabilities={vulnerabilities.length}
+      />
+
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Scans Sidebar */}
+        <div className="lg:w-64 flex-shrink-0">
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Recent Scans</h2>
+          <div className="space-y-2">
+            {scans.map(scan => (
+              <button
+                key={scan.id}
+                onClick={() => setSelectedScanId(scan.id)}
+                className={`w-full text-left p-3 rounded-xl border transition-all ${
+                  selectedScanId === scan.id
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20'
+                    : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium text-sm capitalize">{scan.scanner}</span>
+                  <span className="text-[10px] opacity-60">{new Date(scan.created_at).toLocaleDateString()}</span>
+                </div>
+                <div className="text-[10px] uppercase font-bold opacity-80">{scan.status}</div>
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {v.remediation_code && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 uppercase tracking-tight">
-              Fix Ready
-            </div>
-          )}
-          <ChevronRight className={`w-4 h-4 text-slate-600 transition ${open ? 'rotate-90' : ''}`} />
+
+        {/* Main Content */}
+        <div className="flex-1 min-w-0">
+          <VulnerabilityList 
+            vulnerabilities={vulnerabilities}
+            onViewDetails={setSelectedVuln}
+            onGenerateAiFix={handleAiGeneration}
+            isGenerating={isGeneratingAi}
+          />
         </div>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 pt-0 border-t border-slate-800 space-y-3">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-3">Description</div>
-            <p className="mt-1 text-sm text-slate-300">{v.description}</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-            <div>
-              <div className="text-slate-500 uppercase tracking-wider">MITRE ATT&CK</div>
-              <div className="mt-1 text-slate-300">{v.mitre_tactic || '—'}</div>
-            </div>
-            <div>
-              <div className="text-slate-500 uppercase tracking-wider">CIS Control</div>
-              <div className="mt-1 text-slate-300">{v.cis_control || '—'}</div>
-            </div>
-            <div>
-              <div className="text-slate-500 uppercase tracking-wider">CVE ID</div>
-              <div className="mt-1 text-slate-300 font-mono">{v.cve_id || '—'}</div>
-            </div>
-          </div>
+      </div>
 
-          {/* F-02: NVD CVE Enrichment Panel */}
-          {v.cve_id && (
-            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Database className="w-3.5 h-3.5 text-sky-400" />
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">NVD Intelligence</span>
-                {cveDetail === 'loading' && <span className="text-[10px] text-slate-500 animate-pulse">Fetching from NVD...</span>}
+      {/* Detail Modal */}
+      {selectedVuln && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl">
+            <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex items-center justify-between z-10">
+              <div className="flex items-center gap-3">
+                <Shield className="w-6 h-6 text-blue-500" />
+                <h2 className="text-xl font-bold text-white">{selectedVuln.title}</h2>
               </div>
-              {cveDetail === 'loading' && (
-                <div className="h-8 bg-slate-800 rounded animate-pulse" />
-              )}
-              {cveDetail && cveDetail !== 'loading' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    {cveDetail.cvssV3Score !== null && (
-                      <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border font-mono ${
-                        {
-                          critical: 'text-red-300 border-red-500/30 bg-red-500/10',
-                          high: 'text-orange-300 border-orange-500/30 bg-orange-500/10',
-                          medium: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10',
-                          low: 'text-sky-300 border-sky-500/30 bg-sky-500/10',
-                          info: 'text-slate-400 border-slate-700 bg-slate-800',
-                          unknown: 'text-slate-400 border-slate-700 bg-slate-800',
-                        }[cvssToSeverity(cveDetail.cvssV3Score)] ?? 'text-slate-400 border-slate-700'
-                      }`}>
-                        CVSS v3: {cveDetail.cvssV3Score} · {cveDetail.cvssV3Severity}
-                      </div>
-                    )}
-                    {cveDetail.cweIds.length > 0 && (
-                      <span className="text-xs text-slate-400 font-mono">{cveDetail.cweIds.slice(0, 2).join(', ')}</span>
-                    )}
-                  </div>
-                  {cveDetail.description && (
-                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{cveDetail.description}</p>
-                  )}
-                  {cveDetail.references.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {cveDetail.references.slice(0, 3).map((ref) => (
-                        <a
-                          key={ref}
-                          href={ref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] text-sky-400 hover:text-sky-300 transition"
-                        >
-                          <ExternalLink className="w-2.5 h-2.5" />
-                          {new URL(ref).hostname}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {cveDetail === null && v.cve_id && (
-                <p className="text-xs text-slate-500">No NVD data found for {v.cve_id}</p>
-              )}
+              <button 
+                onClick={() => setSelectedVuln(null)}
+                className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
-          )}
-
-          {/* F-16: Threat Intelligence Panel */}
-          {threatData && threatData !== 'loading' && (
-            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Globe className="w-3.5 h-3.5 text-violet-400" />
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">VirusTotal Intelligence</span>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border font-mono ${
-                    threatData.positives > 0 ? 'text-red-300 border-red-500/30 bg-red-500/10' : 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                  }`}>
-                    {threatData.positives > 0 ? <AlertTriangle className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
-                    {threatData.positives}/{threatData.total} Malicious
-                  </div>
-                  <span className="text-xs text-slate-400 font-mono">Owner: {threatData.owner} ({threatData.country})</span>
-                </div>
-                {threatData.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {threatData.tags.slice(0, 5).map(tag => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">{tag}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
-              {!aiData && (
-                <button
-                  onClick={handleAiGeneration}
-                  disabled={aiLoading}
-                  className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition border border-sky-500/30 hover:border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded disabled:opacity-50"
-                >
-                  {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                  {aiLoading ? 'Working...' : 'Generate AI Fix'}
-                </button>
-              )}
-            </div>
-            {aiData ? (
-              <div className="mt-1 rounded-md border border-sky-500/30 bg-sky-500/5 p-4 text-sm text-sky-100 leading-relaxed shadow-inner">
-                <div className="flex items-center gap-2 mb-2 font-semibold text-sky-400">
-                  <Zap className="w-4 h-4" /> AI Security Copilot
-                </div>
-                {aiData.explanation}
-              </div>
-            ) : (
-              <div className="mt-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-100">
-                {v.remediation}
-              </div>
-            )}
-          </div>
-          {(aiData?.code || v.remediation_code) && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation Code</div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono uppercase border border-slate-700">
-                    {aiData?.language || v.remediation_type}
-                  </span>
-                  {aiData && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold border border-sky-500/30">
-                      AI Generated
+            
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1">Severity</label>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      selectedVuln.severity === 'critical' ? 'bg-red-500/20 text-red-500' :
+                      selectedVuln.severity === 'high' ? 'bg-orange-500/20 text-orange-500' :
+                      selectedVuln.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-500' :
+                      'bg-blue-500/20 text-blue-500'
+                    }`}>
+                      {selectedVuln.severity.toUpperCase()}
                     </span>
-                  )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1">Status</label>
+                    <span className="text-white capitalize">{selectedVuln.status.replace('_', ' ')}</span>
+                  </div>
                 </div>
-                <button
-                  onClick={() => copy(aiData?.code || v.remediation_code || '')}
-                  className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition"
-                >
-                  {copied ? (
-                    <><Check className="w-3 h-3" /> Copied</>
-                  ) : (
-                    <><Copy className="w-3 h-3" /> Copy snippet</>
-                  )}
-                </button>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1">Asset</label>
+                    <span className="text-white font-mono text-sm">{selectedVuln.asset}</span>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1">CVE ID</label>
+                    <span className="text-white font-mono text-sm">{selectedVuln.cve_id || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-1">Detection Date</label>
+                    <span className="text-white">{new Date(selectedVuln.created_at).toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
-              <div className="relative group">
-                <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-                  <code>{aiData?.code || v.remediation_code}</code>
-                </pre>
-                <div className="absolute top-2 right-2 flex items-center gap-2">
-                   <button
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       onApplyFix();
-                     }}
-                     className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-md text-[10px] flex items-center gap-1.5 shadow-lg animate-in zoom-in"
-                   >
-                     <Wand2 className="w-3 h-3" /> Apply Fix Now
-                   </button>
-                </div>
+
+              <div className="space-y-8">
+                <section>
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-400" />
+                    Description
+                  </h3>
+                  <div className="bg-slate-800/50 rounded-2xl p-6 text-slate-300 leading-relaxed border border-slate-700/50">
+                    {selectedVuln.description}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-green-400" />
+                    Remediation Plan
+                  </h3>
+                  <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-2xl p-6">
+                    <p className="text-emerald-400 font-medium mb-4">{selectedVuln.remediation || 'No remediation plan available yet.'}</p>
+                    {selectedVuln.remediation_code && (
+                      <pre className="bg-slate-950 p-4 rounded-xl text-emerald-400 font-mono text-sm overflow-x-auto border border-emerald-500/10">
+                        <code>{selectedVuln.remediation_code}</code>
+                      </pre>
+                    )}
+                  </div>
+                </section>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
   );
-}
+};
 
-function NewScanModal({
-  projects,
-  onClose,
-  onCreated,
-}: {
-  projects: Project[];
-  onClose: () => void;
-  onCreated: (projectId: string, scanner: string) => void;
-}) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
-  const [scanner, setScanner] = useState(AVAILABLE_SCANNERS[0].id);
-  const [profile, setProfile] = useState('default');
-  const [launching, setLaunching] = useState(false);
-
-  const NMAP_PROFILES = [
-    { id: 'stealth', label: 'Stealth', desc: 'Slow, evasive scan' },
-    { id: 'default', label: 'Default', desc: 'Service discovery + scripts' },
-    { id: 'intense', label: 'Intense', desc: 'Full port scan + OS detection' },
-    { id: 'vuln',    label: 'Vulnerability', desc: 'Deep NSE vuln scripts' },
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 className="font-semibold">New scan</h2>
-          <button onClick={onClose} aria-label="Close modal" title="Close modal" className="text-slate-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Project</label>
-            <select
-              aria-label="Project"
-              title="Project"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Scanner</label>
-            <div className="space-y-2">
-              {AVAILABLE_SCANNERS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setScanner(s.id)}
-                  className={`w-full text-left px-4 py-3 rounded-md border transition ${
-                    scanner === s.id
-                      ? 'border-emerald-500/50 bg-emerald-500/10'
-                      : 'border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="text-sm font-medium text-white">{s.label}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{s.description}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-          {scanner === 'nmap' && (
-            <div>
-              <label className="block text-sm text-slate-300 mb-1.5">Nmap Profile</label>
-              <div className="grid grid-cols-2 gap-2">
-                {NMAP_PROFILES.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setProfile(p.id)}
-                    className={`text-left px-3 py-2 rounded border transition ${
-                      profile === p.id
-                        ? 'border-sky-500/50 bg-sky-500/10 text-sky-100'
-                        : 'border-slate-800 hover:border-slate-700 text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs font-bold">{p.label}</div>
-                    <div className="text-[10px] opacity-60 leading-tight">{p.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="pt-2 flex justify-end gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                setLaunching(true);
-                const finalScanner = scanner === 'nmap' ? `nmap:${profile}` : scanner;
-                onCreated(projectId, finalScanner);
-              }}
-              disabled={!projectId || launching}
-              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-            >
-              {launching ? 'Launching...' : 'Launch scan'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SeverityPills({ summary }: { summary: Scan['severity_summary'] }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      {summary.critical > 0 && <span className="text-red-400">{summary.critical}C</span>}
-      {summary.high > 0 && <span className="text-orange-400">{summary.high}H</span>}
-      {summary.medium > 0 && <span className="text-yellow-400">{summary.medium}M</span>}
-      {summary.low > 0 && <span className="text-sky-400">{summary.low}L</span>}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    queued: 'bg-slate-700/50 text-slate-300',
-    running: 'bg-sky-500/10 text-sky-300 border border-sky-500/20',
-    completed: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20',
-    failed: 'bg-red-500/10 text-red-300 border border-red-500/20',
-  };
-  return (
-    <span className={`inline-flex items-center text-xs px-2 py-1 rounded-md ${map[status] ?? map.queued}`}>
-      {status}
-    </span>
-  );
-}
+export default Scans;

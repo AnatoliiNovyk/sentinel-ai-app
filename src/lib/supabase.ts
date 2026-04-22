@@ -1,22 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials missing. Please check your .env file.');
-}
-
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder',
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }
-);
+// This file now contains ONLY type definitions for the database entities.
+// The actual supabase client is located in src/api/client.ts.
 
 export type SlaConfig = {
   critical: number;
@@ -71,6 +54,7 @@ export type Scan = {
 export type Vulnerability = {
   id: string;
   scan_id: string;
+  project_id: string; // Added to match service usage
   user_id: string;
   title: string;
   description: string;
@@ -89,14 +73,6 @@ export type Vulnerability = {
   sla_breached_at: string | null;
   sla_warned_at: string | null;
 };
-
-export const VULN_STATUSES: Vulnerability['status'][] = [
-  'open',
-  'in_progress',
-  'accepted',
-  'resolved',
-  'false_positive',
-];
 
 export type AiConversation = {
   id: string;
