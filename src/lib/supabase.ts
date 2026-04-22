@@ -54,7 +54,6 @@ export type Scan = {
 export type Vulnerability = {
   id: string;
   scan_id: string;
-  project_id: string; // Added to match service usage
   user_id: string;
   title: string;
   description: string;

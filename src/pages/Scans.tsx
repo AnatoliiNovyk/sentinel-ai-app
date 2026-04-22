@@ -77,6 +77,11 @@ const Scans = () => {
   };
 
   const handleAiGeneration = async (v: Vulnerability) => {
+    if (!selectedProjectId) {
+      alert('Error: No project selected.');
+      return;
+    }
+    
     setIsGeneratingAi(true);
     const startTime = Date.now();
     
@@ -88,7 +93,7 @@ const Scans = () => {
         severity: v.severity,
         asset: v.asset,
         cve_id: v.cve_id,
-        project_id: v.project_id,
+        project_id: selectedProjectId, // Use the state variable here
         scan_id: v.scan_id
       });
 
