@@ -140,7 +140,8 @@ export default function Chat() {
 
     try {
       // 1. Try local agent tools (nmap, etc)
-      const agentTurn = await runAgent(user.id, text).catch(() => null);
+      // Pass the first organization's ID to the agent tools
+      const agentTurn = await runAgent(user.id, text, organizations[0]?.id).catch(() => null);
       
       if (agentTurn) {
         setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
