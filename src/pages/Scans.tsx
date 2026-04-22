@@ -468,7 +468,7 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
       ) : (
         <div className="space-y-3">
           {sorted.map((v) => (
-            <FindingCard key={v.id} v={v} onApplyFix={() => setFixing(v)} />
+            <FindingCard key={v.id} v={v} scan={scan} project={project} onApplyFix={() => setFixing(v)} />
           ))}
         </div>
       )}
@@ -483,7 +483,7 @@ function ScanDetails({ scan, project, onBack }: { scan: Scan; project?: Project;
   );
 }
 
-function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => void }) {
+function FindingCard({ v, scan, project, onApplyFix }: { v: Vulnerability; scan: Scan; project?: Project; onApplyFix: () => void }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cveDetail, setCveDetail] = useState<CveDetail | null | 'loading'>(null);
@@ -523,6 +523,7 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
     
     setAiLoading(true);
     try {
+      // Use project?.id from props
       const res = await generateAiRemediation({
         title: v.title,
         description: v.description,
@@ -538,7 +539,6 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
       }
     } catch (err) {
       console.error('Failed to generate AI remediation', err);
-      alert('AI Generation failed. Check console for details.');
     } finally {
       setAiLoading(false);
     }
