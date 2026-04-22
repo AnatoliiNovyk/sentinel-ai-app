@@ -66,33 +66,14 @@ async function reportResult(jobId: string, scanId: string, userId: string, proje
 }
 
 async function fetchPendingJob() {
-  const { data, error } = await supabase
-    .from('scan_jobs')
-    .select('*')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('claim_next_job');
 
   if (error) {
-    console.error('❌ DB Fetch Error:', error.message);
-    return null;
-  }
-  if (!data) return null;
-
-  console.log(`🔍 Claiming job ${data.id} (${data.scanner})...`);
-  const { error: claimErr } = await supabase
-    .from('scan_jobs')
-    .update({ status: 'running', started_at: new Date().toISOString(), agent_id: 'vps-agent-main' })
-    .eq('id', data.id)
-    .eq('status', 'pending');
-
-  if (claimErr) {
-    console.error(`❌ Claim failed for ${data.id}:`, claimErr.message);
+    console.error('❌ Error claiming job:', error.message);
     return null;
   }
 
-  return data;
+  return data && data.length > 0 ? data[0] : null;
 }
 
 async function runJob(job: any) {

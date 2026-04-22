@@ -32,14 +32,6 @@ function Shell() {
   const { user, loading } = useAuth();
   const shareToken = useShareToken();
 
-  useEffect(() => {
-    if (!user) return;
-    dispatchDueSchedules(user.id).catch(() => {});
-    const interval = setInterval(() => {
-      dispatchDueSchedules(user.id).catch(() => {});
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user?.id]);
 
   if (shareToken) {
     return <PublicReport token={shareToken} />;

@@ -155,9 +155,8 @@ export default function Chat() {
           setThinkingLabel('Agent processing...');
           await AiService.dispatchChatTask(projId, text);
           
-          // Poll for result (Note: in chat we don't always have a scanId, 
-          // so we might need a different polling strategy, but for now we use the latest global AI response)
-          const result = await AiService.pollForResult('null', startTime); // 'null' scanId works with our updated service
+          // Use real null for chat-based polling
+          const result = await AiService.pollForResult(null, startTime); 
           aiContent = result;
         }
       }
