@@ -14,16 +14,28 @@ export type Profile = {
   id: string;
   email: string;
   full_name: string;
-  company: string;
-  role: string;
-  plan: string;
+  avatar_url: string | null;
   created_at: string;
-  sla_config: SlaConfig;
+};
+
+export type Organization = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export type TeamMember = {
+  id: string;
+  org_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  created_at: string;
 };
 
 export type Project = {
   id: string;
   user_id: string;
+  org_id: string; // Added for RBAC
   name: string;
   description: string;
   target: string;

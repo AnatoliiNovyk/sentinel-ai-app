@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase, Profile } from '../lib/supabase';
+import { supabase, Profile, Organization } from '../lib/supabase';
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  organizations: Organization[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
@@ -18,24 +19,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  // BUG-02 fix: loading stays true until onAuthStateChange fires INITIAL_SESSION
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const initialised = useRef(false);
 
   useEffect(() => {
-    // BUG-02: Use onAuthStateChange as the single source of truth.
-    // INITIAL_SESSION fires synchronously on mount with the persisted session (or null),
-    // after any token refresh — eliminating the race with getSession().
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
-      // BUG-03: Explicitly clear profile on sign-out so data never leaks between accounts
       if (event === 'SIGNED_OUT') {
         setProfile(null);
+        setOrganizations([]);
       }
 
-      // Resolve loading only once on the very first auth event (INITIAL_SESSION)
       if (!initialised.current) {
         initialised.current = true;
         setLoading(false);
@@ -48,22 +45,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setProfile(null);
+      setOrganizations([]);
       return;
     }
+    
     (async () => {
-      const { data, error } = await supabase
+      // 1. Fetch Profile
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('[AuthContext] Failed to fetch profile:', error.message);
-        return;
-      }
-
-      if (!data) {
-        const { data: created, error: createErr } = await supabase
+      if (!profileData) {
+        const { data: created } = await supabase
           .from('profiles')
           .insert({
             id: user.id,
@@ -72,13 +67,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           .select()
           .maybeSingle();
-        if (createErr) console.error('[AuthContext] Failed to create profile:', createErr.message);
         setProfile(created ?? null);
       } else {
-        setProfile(data);
+        setProfile(profileData);
       }
+
+      // 2. Fetch Organizations
+      const { data: orgs } = await supabase
+        .from('organizations')
+        .select(`
+          id,
+          name,
+          created_at,
+          team_members!inner(user_id)
+        `)
+        .eq('team_members.user_id', user.id);
+      
+      setOrganizations(orgs ?? []);
     })();
-  }, [user?.id]); // BUG-02 fix: depend on user.id not the whole object
+  }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -94,14 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  // BUG-03: Clear profile eagerly before signOut to prevent flash of stale data
   const signOut = async () => {
     setProfile(null);
+    setOrganizations([]);
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, organizations, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

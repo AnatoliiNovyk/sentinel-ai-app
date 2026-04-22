@@ -14,7 +14,7 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
 };
 
 export default function Projects() {
-  const { user } = useAuth();
+  const { user, organizations } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,10 +23,11 @@ export default function Projects() {
 
   const load = async () => {
     if (!user) return;
+    // RLS handles organization-level filtering automatically.
+    // No need to filter by user_id anymore.
     const { data } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     setProjects(data ?? []);
     setLoading(false);
@@ -51,7 +52,7 @@ export default function Projects() {
     <div className="p-8 max-w-7xl">
       <div className="flex items-end justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Projects</h1>
           <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -71,12 +72,12 @@ export default function Projects() {
       </div>
 
       {loading ? (
-        <div className="text-slate-500 text-sm">Loading...</div>
+        <div className="text-slate-500 text-sm">Loading projects...</div>
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
           <FolderKanban className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <div className="text-slate-300 font-medium">No projects yet</div>
-          <div className="text-slate-500 text-sm mt-1">Create your first project to start auditing.</div>
+          <div className="text-slate-300 font-medium">No projects found</div>
+          <div className="text-slate-500 text-sm mt-1">Create your first project or join an organization to start auditing.</div>
           <button
             onClick={() => setModalOpen(true)}
             className="mt-5 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
@@ -115,13 +116,6 @@ export default function Projects() {
                         e.stopPropagation();
                         remove(p.id);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          remove(p.id);
-                        }
-                      }}
                       className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -139,9 +133,6 @@ export default function Projects() {
                         <Tag className="w-2.5 h-2.5" /> {t}
                       </span>
                     ))}
-                    {p.tags.length > 4 && (
-                      <span className="text-[10px] text-slate-500">+{p.tags.length - 4}</span>
-                    )}
                   </div>
                 )}
               </button>
@@ -157,7 +148,7 @@ export default function Projects() {
 }
 
 function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const { user } = useAuth();
+  const { user, organizations } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [target, setTarget] = useState('');
@@ -167,64 +158,71 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || organizations.length === 0) {
+      alert('You must be a member of an organization to create a project.');
+      return;
+    }
     setSaving(true);
+    
     const tags = tagsInput
       .split(',')
       .map((t) => t.trim())
       .filter((t) => t.length > 0)
       .slice(0, 10);
-    await supabase.from('projects').insert({
+
+    const { error } = await supabase.from('projects').insert({
       user_id: user.id,
+      org_id: organizations[0].id, // Default to the first organization
       name,
       description,
       target,
       environment,
       tags,
     });
+
+    if (error) {
+      alert(`Error creating project: ${error.message}`);
+    } else {
+      onCreated();
+      onClose();
+    }
     setSaving(false);
-    onCreated();
-    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 className="font-semibold">New project</h2>
+          <h2 className="font-semibold text-white">New project</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
+            <label className="block text-sm text-slate-300 mb-1.5">Organization</label>
+            <div className="text-xs text-emerald-400 bg-emerald-400/5 border border-emerald-400/10 px-3 py-2 rounded-md">
+              {organizations[0]?.name || 'Loading organization...'}
+            </div>
+          </div>
+          <div>
             <label className="block text-sm text-slate-300 mb-1.5">Name</label>
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
               placeholder="Production AWS"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-              placeholder="Primary production cloud environment"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Target</label>
+            <label className="block text-sm text-slate-300 mb-1.5">Target (Domain or IP)</label>
             <input
               required
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white font-mono focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              placeholder="example.com or arn:aws:iam::..."
+              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white font-mono focus:border-emerald-500 focus:outline-none"
+              placeholder="example.com"
             />
           </div>
           <div>
@@ -246,16 +244,6 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               ))}
             </div>
           </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Tags</label>
-            <input
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              placeholder="prod, pci, eu-west"
-            />
-            <p className="mt-1 text-xs text-slate-500">Comma-separated, up to 10 tags.</p>
-          </div>
           <div className="pt-2 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
               Cancel
@@ -263,7 +251,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
             >
               {saving ? 'Creating...' : 'Create project'}
             </button>
@@ -275,7 +263,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 }
 
 function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const { user } = useAuth();
+  const { user, organizations } = useAuth();
   const [rootDomain, setRootDomain] = useState('');
   const [shodanKey, setShodanKey] = useState(import.meta.env.VITE_SHODAN_API_KEY || '');
   const [running, setRunning] = useState(false);
@@ -283,17 +271,14 @@ function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
   const discover = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !rootDomain || !shodanKey) return;
+    if (!user || organizations.length === 0) return;
     setRunning(true);
     setError(null);
     try {
       const data = await shodanDnsLookup(rootDomain, shodanKey);
-      if (data.hostnames.length === 0) {
-        throw new Error('No subdomains found for this root domain.');
-      }
-
       const projectsToCreate = data.hostnames.map(hostname => ({
         user_id: user.id,
+        org_id: organizations[0].id,
         name: hostname,
         description: `Auto-discovered subdomain of ${rootDomain}`,
         target: hostname,
@@ -301,9 +286,7 @@ function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated
         tags: ['auto-discovered'],
       }));
 
-      const { error: insErr } = await supabase.from('projects').insert(projectsToCreate);
-      if (insErr) throw insErr;
-      
+      await supabase.from('projects').insert(projectsToCreate);
       onCreated();
       onClose();
     } catch (err: any) {
@@ -317,15 +300,12 @@ function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 className="font-semibold flex items-center gap-2"><Globe className="w-4 h-4 text-emerald-400" /> Asset Auto-Discovery</h2>
+          <h2 className="font-semibold flex items-center gap-2 text-white"><Globe className="w-4 h-4 text-emerald-400" /> Asset Auto-Discovery</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
         <form onSubmit={discover} className="p-6 space-y-4">
-          <p className="text-sm text-slate-400">
-            Automatically discover subdomains and create projects for them using Shodan passive DNS intelligence.
-          </p>
           <div>
             <label className="block text-sm text-slate-300 mb-1.5">Root Domain</label>
             <input
@@ -336,27 +316,12 @@ function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated
               placeholder="example.com"
             />
           </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1.5">Shodan API Key</label>
-            <input
-              type="password"
-              required
-              value={shodanKey}
-              onChange={(e) => setShodanKey(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-              placeholder="Required for Shodan DNS lookup"
-            />
-          </div>
-          {error && <div className="text-red-400 text-sm p-3 bg-red-500/10 border border-red-500/20 rounded-md">{error}</div>}
+          {error && <div className="text-red-400 text-sm">{error}</div>}
           <div className="pt-2 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={running || !rootDomain || !shodanKey}
-              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-            >
+            <button type="submit" disabled={running} className="bg-emerald-500 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition">
               {running ? 'Discovering...' : 'Start Discovery'}
             </button>
           </div>
@@ -365,4 +330,3 @@ function DiscoveryModal({ onClose, onCreated }: { onClose: () => void; onCreated
     </div>
   );
 }
-

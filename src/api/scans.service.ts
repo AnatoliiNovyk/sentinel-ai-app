@@ -1,18 +1,17 @@
 import { supabase } from './client';
-import type { Scan, Vulnerability, Project } from '../lib/supabase';
 
 export const ScansService = {
   /**
-   * Fetches all projects for the current user.
+   * Fetches all projects the user has access to via RLS.
    */
   async getProjects() {
     const { data, error } = await supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
-    return data as Project[];
+    return data || [];
   },
 
   /**
@@ -24,9 +23,9 @@ export const ScansService = {
       .select('*')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
-    return data as Scan[];
+    return data || [];
   },
 
   /**
@@ -38,36 +37,42 @@ export const ScansService = {
       .select('*')
       .eq('scan_id', scanId)
       .order('severity', { ascending: false });
-    
+
     if (error) throw error;
-    return data as Vulnerability[];
+    return data || [];
   },
 
   /**
-   * Updates the status of a vulnerability.
+   * Dispatches a new scan task.
    */
-  async updateVulnerabilityStatus(id: string, status: Vulnerability['status'], note: string = '') {
-    const { error } = await supabase
-      .from('vulnerabilities')
-      .update({ 
-        status, 
-        note,
-        status_updated_at: new Date().toISOString() 
+  async dispatchScan(projectId: string, scanner: string, target: string, orgId: string) {
+    // 1. Create a scan record with org_id for RBAC visibility
+    const { data: scan, error: scanErr } = await supabase
+      .from('scans')
+      .insert({
+        project_id: projectId,
+        org_id: orgId,
+        scanner,
+        status: 'running',
+        started_at: new Date().toISOString()
       })
-      .eq('id', id);
-    
-    if (error) throw error;
-  },
+      .select()
+      .single();
 
-  /**
-   * Triggers a new scan using the Edge Function.
-   */
-  async startScan(projectId: string, scanner: string, target: string) {
+    if (scanErr) throw scanErr;
+
+    // 2. Dispatch job via Edge Function
     const { data, error } = await supabase.functions.invoke('scan-dispatch', {
-      body: { project_id: projectId, scanner, target }
+      body: { 
+        scan_id: scan.id,
+        project_id: projectId,
+        org_id: orgId,
+        scanner,
+        target 
+      }
     });
-    
+
     if (error) throw error;
-    return data;
+    return { scan, dispatchResult: data };
   }
 };
