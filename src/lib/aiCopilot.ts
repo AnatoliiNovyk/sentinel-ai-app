@@ -87,14 +87,20 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
       
       if (vuln) {
         try {
-          // Attempt to parse JSON from the AI response
-          const parsed = JSON.parse(vuln.description);
-          return parsed;
+          // Robust JSON extraction from markdown or plain text
+          const jsonMatch = vuln.description.match(/\{[\s\S]*\}/);
+          const jsonStr = jsonMatch ? jsonMatch[0] : vuln.description;
+          const parsed = JSON.parse(jsonStr);
+          return {
+            explanation: parsed.explanation || 'No explanation provided.',
+            code: parsed.code || '',
+            language: parsed.language || 'text'
+          };
         } catch (e) {
-          // If not JSON, return as plain explanation
+          // Fallback if not valid JSON
           return {
             explanation: vuln.description,
-            code: '# Manual fix required',
+            code: '# Manual review required',
             language: 'text'
           };
         }

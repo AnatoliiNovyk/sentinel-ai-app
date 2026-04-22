@@ -304,6 +304,7 @@ async function runMobsf(apkUrl: string): Promise<unknown[]> {
 
 // ─── local ollama ai ─────────────────────────────────────────────────────────
 async function runOllama(prompt: string): Promise<string> {
+  console.log('🤖 Calling local Ollama (llama3)...');
   try {
     const resp = await fetch('http://localhost:11434/api/generate', {
       method: 'POST',
@@ -313,11 +314,13 @@ async function runOllama(prompt: string): Promise<string> {
         stream: false
       })
     });
+    if (!resp.ok) throw new Error(`Ollama HTTP Error: ${resp.status}`);
     const data = await resp.json();
+    console.log('✅ Ollama responded successfully.');
     return data.response;
   } catch (err) {
-    console.error('Ollama connection failed. Is it running?', err);
-    return 'AI Error: Local Ollama instance is unreachable.';
+    console.error('❌ Ollama connection failed. Is it running?', err instanceof Error ? err.message : String(err));
+    return 'AI Error: Local Ollama instance is unreachable or failed to respond.';
   }
 }
 
@@ -379,8 +382,14 @@ async function runJob(job: Record<string, string>) {
 
     switch (scannerName) {
       case 'ai_task': {
-        const response = await runOllama(job.target); // target contains the prompt for AI tasks
-        findings = [{ title: 'AI Analysis Result', description: response, severity: 'info', asset: 'AI Engine' }];
+        const response = await runOllama(job.target);
+        findings = [{ 
+          title: 'AI Analysis Result', 
+          description: response, 
+          severity: 'info', 
+          asset: 'AI Engine',
+          mitre_tactic: 'Analysis' 
+        }];
         break;
       }
       case 'nmap':           findings = await runNmap(job.target, profile);  break;

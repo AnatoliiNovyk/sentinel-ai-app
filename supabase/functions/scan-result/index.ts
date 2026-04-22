@@ -26,8 +26,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { job_id, scan_id, user_id, project_id, findings, error_message } = body;
 
-    if (!job_id || !scan_id) {
-      return new Response(JSON.stringify({ error: "job_id and scan_id required" }), {
+    if (!job_id) {
+      return new Response(JSON.stringify({ error: "job_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
