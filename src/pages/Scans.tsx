@@ -519,6 +519,8 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
 
   const handleAiGeneration = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (aiLoading) return;
+    
     setAiLoading(true);
     try {
       const res = await generateAiRemediation({
@@ -529,11 +531,14 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
         cve_id: v.cve_id || '',
         remediation_type: v.remediation_type || '',
         project_id: project?.id || '',
-        scan_id: scan.id,
+        scan_id: scan?.id || '',
       });
-      setAiData(res);
+      if (res) {
+        setAiData(res);
+      }
     } catch (err) {
       console.error('Failed to generate AI remediation', err);
+      alert('AI Generation failed. Check console for details.');
     } finally {
       setAiLoading(false);
     }
@@ -673,12 +678,15 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remediation</div>
               {!aiData && (
                 <button
-                  onClick={handleAiGeneration}
+                  onClick={(e) => {
+                    console.log('AI Button Clicked');
+                    handleAiGeneration(e);
+                  }}
                   disabled={aiLoading}
                   className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition border border-sky-500/30 hover:border-sky-500/60 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded disabled:opacity-50"
                 >
                   {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                  {aiLoading ? 'Generating AI Fix...' : 'Generate AI Fix'}
+                  {aiLoading ? 'Working...' : 'Generate AI Fix'}
                 </button>
               )}
             </div>
