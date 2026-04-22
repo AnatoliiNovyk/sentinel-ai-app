@@ -528,6 +528,8 @@ function FindingCard({ v, onApplyFix }: { v: Vulnerability; onApplyFix: () => vo
         asset: v.asset,
         cve_id: v.cve_id || '',
         remediation_type: v.remediation_type || '',
+        project_id: project?.id || '',
+        scan_id: scan.id,
       });
       setAiData(res);
     } catch (err) {

@@ -12,6 +12,8 @@ export type AiRemediationRequest = {
   asset: string;
   cve_id: string;
   remediation_type: string;
+  project_id: string;
+  scan_id: string;
 };
 
 export type AiRemediationResponse = {
@@ -45,6 +47,8 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
     .from('scan_jobs')
     .insert({
       user_id: user.id,
+      project_id: req.project_id,
+      scan_id: req.scan_id,
       scanner: 'ai_task',
       target: prompt,
       status: 'pending'
