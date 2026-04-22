@@ -753,7 +753,15 @@ function NewScanModal({
 }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [scanner, setScanner] = useState(AVAILABLE_SCANNERS[0].id);
+  const [profile, setProfile] = useState('default');
   const [launching, setLaunching] = useState(false);
+
+  const NMAP_PROFILES = [
+    { id: 'stealth', label: 'Stealth', desc: 'Slow, evasive scan' },
+    { id: 'default', label: 'Default', desc: 'Service discovery + scripts' },
+    { id: 'intense', label: 'Intense', desc: 'Full port scan + OS detection' },
+    { id: 'vuln',    label: 'Vulnerability', desc: 'Deep NSE vuln scripts' },
+  ];
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -800,6 +808,27 @@ function NewScanModal({
               ))}
             </div>
           </div>
+          {scanner === 'nmap' && (
+            <div>
+              <label className="block text-sm text-slate-300 mb-1.5">Nmap Profile</label>
+              <div className="grid grid-cols-2 gap-2">
+                {NMAP_PROFILES.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setProfile(p.id)}
+                    className={`text-left px-3 py-2 rounded border transition ${
+                      profile === p.id
+                        ? 'border-sky-500/50 bg-sky-500/10 text-sky-100'
+                        : 'border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{p.label}</div>
+                    <div className="text-[10px] opacity-60 leading-tight">{p.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="pt-2 flex justify-end gap-2">
             <button onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
               Cancel
@@ -807,7 +836,8 @@ function NewScanModal({
             <button
               onClick={() => {
                 setLaunching(true);
-                onCreated(projectId, scanner);
+                const finalScanner = scanner === 'nmap' ? `nmap:${profile}` : scanner;
+                onCreated(projectId, finalScanner);
               }}
               disabled={!projectId || launching}
               className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"

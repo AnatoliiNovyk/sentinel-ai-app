@@ -68,15 +68,23 @@ async function reportResult(jobId: string, scanId: string, userId: string, proje
   }
 }
 
+const NMAP_PROFILES: Record<string, string[]> = {
+  stealth: ['-sS', '-T2', '-f'],
+  default: ['-sV', '-sC', '-T4'],
+  intense: ['-p-', '-sV', '-O', '-A', '-T4'],
+  vuln:    ['-sV', '--script', 'vuln,exploit,auth', '-T4']
+};
+
 // ─── nmap scanner ─────────────────────────────────────────────────────────────
-async function runNmap(target: string): Promise<unknown[]> {
+async function runNmap(target: string, profile: string = 'default'): Promise<unknown[]> {
+  const args = NMAP_PROFILES[profile] || NMAP_PROFILES.default;
   const { stdout } = await execFileAsync('docker', [
     'run', '--rm', '--network', 'host',
     'instrumentisto/nmap',
-    '-sV', '-sC', '-T4', '--open',
+    ...args, '--open',
     '-oX', '-',
     target,
-  ], { timeout: 300_000 }); // 5 min timeout
+  ], { timeout: 600_000 }); // 10 min timeout for deep scans
 
   // Parse nmap XML output
   return parseNmapXml(stdout);
@@ -297,6 +305,8 @@ async function runMobsf(apkUrl: string): Promise<unknown[]> {
 // ─── Nmap XML parser (simplified) ────────────────────────────────────────────
 function parseNmapXml(xml: string): unknown[] {
   const findings: unknown[] = [];
+  
+  // 1. Parse Open Ports and Services
   const portMatches = xml.matchAll(/<port protocol="(\w+)" portid="(\d+)"[\s\S]*?<state state="open"[\s\S]*?<service name="([^"]*)"[^>]*version="([^"]*)"/gm);
   for (const match of portMatches) {
     const [, proto, port, service, version] = match;
@@ -312,6 +322,31 @@ function parseNmapXml(xml: string): unknown[] {
       remediation_code: `ufw deny ${port}`,
     });
   }
+
+  // 2. Parse NSE Script Results (Vulnerabilities)
+  const scriptMatches = xml.matchAll(/<script id="([^"]+)" output="([\s\S]+?)"/gm);
+  for (const match of scriptMatches) {
+    const [, id, output] = match;
+    // Basic logic to determine severity based on keywords in script output
+    let severity = 'info';
+    if (output.toLowerCase().includes('vulnerable') || output.toLowerCase().includes('exploit')) {
+      severity = 'critical';
+    } else if (output.toLowerCase().includes('warning') || output.toLowerCase().includes('vulnerability')) {
+      severity = 'high';
+    }
+
+    findings.push({
+      title: `NSE Script: ${id}`,
+      description: output.trim(),
+      severity: severity,
+      asset: 'Network Service',
+      mitre_tactic: 'Exploitation',
+      cis_control: 'CIS 7.1',
+      remediation: 'Review NSE script output and apply recommended security patches.',
+      remediation_type: 'manual',
+    });
+  }
+
   return findings;
 }
 
@@ -321,8 +356,10 @@ async function runJob(job: Record<string, string>) {
   try {
     let findings: unknown[] = [];
 
-    switch (job.scanner) {
-      case 'nmap':           findings = await runNmap(job.target);  break;
+    const [scannerName, profile] = job.scanner.split(':');
+
+    switch (scannerName) {
+      case 'nmap':           findings = await runNmap(job.target, profile);  break;
       case 'amass':          findings = await runAmass(job.target); break;
       case 'tfsec':          findings = await runTfsec(job.target); break;
       case 'trivy':          findings = await runTrivy(job.target); break;
