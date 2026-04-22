@@ -16,6 +16,7 @@ import ScanDiff from '../components/ScanDiff';
 type Tab = 'runs' | 'schedules';
 
 export default function Scans() {
+  console.log('🛡️ Scans Page Loaded v1.0.1');
   const { user } = useAuth();
   const [scans, setScans] = useState<Scan[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -538,7 +539,7 @@ function FindingCard({ v, scan, project, onApplyFix }: { v: Vulnerability; scan:
         setAiData(res);
       }
     } catch (err) {
-      console.error('Failed to generate AI remediation', err);
+      console.error('❌ AI Generation Dispatch Error:', err);
     } finally {
       setAiLoading(false);
     }
