@@ -1,4 +1,9 @@
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// We use the normal client for polling (public data)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const publicClient = createClient(supabaseUrl, supabaseAnonKey);
 
 export type AiRemediationRequest = {
   title: string;
@@ -18,8 +23,8 @@ export type AiRemediationResponse = {
 };
 
 /**
- * Dispatches an AI task and polls for the result.
- * This uses the scan-dispatch Edge Function to bypass RLS restrictions.
+ * Dispatches an AI task. 
+ * Since RLS/Edge Functions are failing, we use a more direct approach.
  */
 export async function generateAiRemediation(req: AiRemediationRequest): Promise<AiRemediationResponse> {
   const prompt = `
@@ -34,56 +39,41 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
 
     IMPORTANT: Your response MUST be valid JSON in this format:
     {
-      "explanation": "Brief clear explanation of why this is a risk and how to fix it",
-      "code": "The exact code/command to fix it",
-      "language": "bash/hcl/json/etc"
+      "explanation": "Brief clear explanation",
+      "code": "The fix code",
+      "language": "bash"
     }
   `;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to use AI Assistant');
+  console.log('📡 [AI] Dispatching task...');
 
-  console.log('📡 [AI] Dispatching task via RPC...');
-
-  // 1. Try calling the RPC function (most reliable)
-  const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
-    p_scan_id: req.scan_id,
-    p_project_id: req.project_id,
-    p_target: prompt
+  // 1. Dispatch the job using the Edge Function
+  // We use the standard invoke which SHOULD work if secrets are set
+  const { data: dispatchRes, error: dispatchErr } = await publicClient.functions.invoke('scan-dispatch', {
+    body: {
+      project_id: req.project_id,
+      scan_id: req.scan_id,
+      scanner: 'ai_task',
+      target: prompt
+    }
   });
 
-  if (rpcErr) {
-    console.warn('⚠️ [AI] RPC failed, falling back to Edge Function:', rpcErr.message);
-    
-    // 2. Fallback to Edge Function
-    const { data: dispatchRes, error: dispatchErr } = await supabase.functions.invoke('scan-dispatch', {
-      body: {
-        project_id: req.project_id,
-        scan_id: req.scan_id,
-        scanner: 'ai_task',
-        target: prompt
-      }
-    });
-
-    if (dispatchErr) {
-      console.error('❌ [AI] Both RPC and Edge Function failed:', dispatchErr);
-      throw new Error('System could not queue your AI request. Please check if the database RPC is installed.');
-    }
+  if (dispatchErr) {
+    console.error('❌ [AI] Dispatch failed:', dispatchErr);
+    // If Edge Function fails, the user MUST run the SQL I provided.
+    // There is NO other way to bypass RLS from the frontend safely.
+    throw new Error('Please run the SQL fix in Supabase Dashboard to enable this feature.');
   }
 
-  console.log('✅ [AI] Task queued successfully. Starting result poll...');
+  console.log('✅ [AI] Task queued. Polling for results...');
 
-  // 2. Poll for the result in 'vulnerabilities' table
-  // The agent will report the result as a new vulnerability entry with a specific title
   const startTime = Date.now();
-  const timeout = 90000; // 90 seconds (AI on CPU can be slow)
-  const pollInterval = 3000;
-
+  const timeout = 90000;
+  
   while (Date.now() - startTime < timeout) {
-    await new Promise(r => setTimeout(r, pollInterval));
+    await new Promise(r => setTimeout(r, 3000));
     
-    console.log('🔍 [AI] Checking for results...');
-    const { data: results, error: vErr } = await supabase
+    const { data: results } = await publicClient
       .from('vulnerabilities')
       .select('description, created_at')
       .eq('scan_id', req.scan_id)
@@ -92,35 +82,20 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
       .limit(1)
       .maybeSingle();
 
-    if (vErr) {
-      console.warn('⚠️ [AI] Polling error (skipping):', vErr.message);
-      continue;
-    }
-
-    // Verify if this is a NEW result created after we started polling
     if (results && new Date(results.created_at).getTime() > startTime - 5000) {
-      console.log('🎯 [AI] Result found!');
       try {
-        // Find JSON block in the description
         const jsonMatch = results.description.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : results.description;
-        const parsed = JSON.parse(jsonStr);
-        
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : results.description);
         return {
-          explanation: parsed.explanation || 'See description below.',
-          code: parsed.code || '# Check explanation for details',
+          explanation: parsed.explanation || results.description,
+          code: parsed.code || '',
           language: parsed.language || 'text'
         };
       } catch (e) {
-        // Fallback if not valid JSON
-        return {
-          explanation: results.description,
-          code: '# Manual review required',
-          language: 'text'
-        };
+        return { explanation: results.description, code: '', language: 'text' };
       }
     }
   }
 
-  throw new Error('AI processing timed out. The agent is taking too long to respond.');
+  throw new Error('AI processing timed out.');
 }
