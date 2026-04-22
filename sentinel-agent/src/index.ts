@@ -315,7 +315,7 @@ async function runOllama(prompt: string): Promise<string> {
       })
     });
     if (!resp.ok) throw new Error(`Ollama HTTP Error: ${resp.status}`);
-    const data = await resp.json();
+    const data = await resp.json() as any;
     console.log('✅ Ollama responded successfully.');
     return data.response;
   } catch (err) {
