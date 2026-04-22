@@ -30,7 +30,8 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
   'gemini-1.5-pro': { label: 'Gemini 1.5 Pro', color: 'text-blue-300 border-blue-500/30 bg-blue-500/10' },
   anthropic:        { label: 'Claude',          color: 'text-violet-300 border-violet-500/30 bg-violet-500/10' },
   openai:           { label: 'GPT-4o',          color: 'text-green-300 border-green-500/30 bg-green-500/10' },
-  mock:             { label: 'Demo mode',        color: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
+  ollama:           { label: 'Llama 3 (Local)', color: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
+  mock:             { label: 'Local AI',        color: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
 };
 
 export default function Chat() {
@@ -43,7 +44,7 @@ export default function Chat() {
   const [toolByMessage, setToolByMessage] = useState<Record<string, ToolResult>>({});
   const [providerByMessage, setProviderByMessage] = useState<Record<string, GatewayResponse['provider']>>({});
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
-  const [currentProvider, setCurrentProvider] = useState<GatewayResponse['provider']>('mock');
+  const [currentProvider, setCurrentProvider] = useState<GatewayResponse['provider']>('ollama');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -134,15 +135,53 @@ export default function Chat() {
       setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
       aiContent = agentTurn.content;
       toolResult = agentTurn.toolCalls[0] ?? null;
-      provider = 'mock'; // agent tools don't go through LLM
+      provider = 'ollama'; 
     } else {
-      const history: ChatMessage[] = [
-        ...messages.map((m) => ({ role: m.role as ChatMessage['role'], content: m.content })),
-        { role: 'user', content: text },
-      ];
-      const gatewayRes = await callAiGateway(history);
-      aiContent = gatewayRes.content;
-      provider = gatewayRes.provider;
+      // Dispatch AI task to local agent via scan_jobs
+      const { data: job, error: jobErr } = await supabase
+        .from('scan_jobs')
+        .insert({
+          target: 'AI Assistant',
+          type: 'ai_task',
+          status: 'pending',
+          options: { 
+            prompt: `You are a cybersecurity expert assistant. User says: ${text}`,
+            task_type: 'chat'
+          }
+        })
+        .select()
+        .single();
+
+      if (jobErr || !job) {
+        aiContent = "Error: Failed to dispatch task to local agent.";
+        provider = 'mock';
+      } else {
+        // Poll for result in vulnerabilities table (linked via job_id)
+        let attempts = 0;
+        let resultFound = false;
+        aiContent = "Local agent is processing your request...";
+        
+        while (attempts < 60 && !resultFound) {
+          const { data: vuln } = await supabase
+            .from('vulnerabilities')
+            .select('description')
+            .eq('title', 'AI Task Result')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (vuln) {
+            aiContent = vuln.description;
+            resultFound = true;
+          } else {
+            await new Promise(r => setTimeout(r, 1000));
+            attempts++;
+          }
+        }
+        
+        if (!resultFound) aiContent = "Timeout: Local agent took too long to respond.";
+        provider = 'ollama';
+      }
     }
 
     setCurrentProvider(provider);
@@ -230,9 +269,9 @@ export default function Chat() {
 
         {/* Mock mode warning banner */}
         {currentProvider === 'mock' && messages.length > 0 && (
-          <div className="bg-amber-500/5 border-b border-amber-500/20 px-6 py-2 flex items-center gap-2 text-xs text-amber-300">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            Running in demo mode — add an AI API key in Supabase Edge Function secrets to enable real AI responses.
+          <div className="bg-emerald-500/5 border-b border-emerald-500/20 px-6 py-2 flex items-center gap-2 text-xs text-emerald-300">
+            <Zap className="w-3.5 h-3.5 shrink-0" />
+            Running via Local AI Agent (Ollama) — No external API required.
           </div>
         )}
 
