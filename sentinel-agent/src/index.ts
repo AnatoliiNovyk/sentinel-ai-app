@@ -12,7 +12,7 @@ const SERVICE_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const SUPABASE_ANON   = process.env.SUPABASE_ANON_KEY!;
 const AGENT_SECRET    = process.env.AGENT_SECRET!;
 const RESULT_ENDPOINT = `${SUPABASE_URL}/functions/v1/scan-result`;
-const POLL_INTERVAL   = 10_000; // 10 seconds
+const POLL_INTERVAL   = 2_000; // 2 seconds (faster for debugging)
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -27,16 +27,30 @@ async function fetchPendingJob() {
     .limit(1)
     .single();
 
-  if (error || !data) return null;
+  if (error) {
+    if (error.code !== 'PGRST116') { // PGRST116 is just "no rows found", which is normal
+      console.error('❌ Error fetching jobs from Supabase:', error.message);
+    }
+    return null;
+  }
 
-  // Claim the job atomically
-  const { error: claimErr } = await supabase
-    .from('scan_jobs')
-    .update({ status: 'running', started_at: new Date().toISOString(), agent_id: 'agent-1' })
-    .eq('id', data.id)
-    .eq('status', 'pending'); // optimistic lock
+  if (data) {
+    console.log(`🔍 Found pending job ${data.id}. Attempting to claim...`);
+    
+    // Claim the job atomically
+    const { error: claimErr } = await supabase
+      .from('scan_jobs')
+      .update({ status: 'running', started_at: new Date().toISOString(), agent_id: 'agent-1' })
+      .eq('id', data.id)
+      .eq('status', 'pending'); // optimistic lock
 
-  if (claimErr) return null;
+    if (claimErr) {
+      console.error(`❌ Failed to claim job ${data.id}:`, claimErr.message);
+      return null;
+    }
+    console.log(`✅ Successfully claimed job ${data.id}`);
+  }
+  
   return data;
 }
 
