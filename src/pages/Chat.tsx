@@ -165,7 +165,7 @@ export default function Chat() {
           const { data: vuln } = await supabase
             .from('vulnerabilities')
             .select('description')
-            .eq('title', 'AI Task Result')
+            .eq('title', 'AI Security Response')
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();

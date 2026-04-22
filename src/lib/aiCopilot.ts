@@ -80,10 +80,11 @@ export async function generateAiRemediation(req: AiRemediationRequest): Promise<
       const { data: vuln } = await supabase
         .from('vulnerabilities')
         .select('description')
+        .eq('title', 'AI Security Response')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
       if (vuln) {
         try {

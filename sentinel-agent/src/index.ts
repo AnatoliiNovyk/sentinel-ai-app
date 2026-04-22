@@ -384,9 +384,10 @@ async function runJob(job: Record<string, string>) {
 
     switch (scannerName) {
       case 'ai_task': {
-        const response = await runOllama(job.target);
+        const prompt = job.target || (job.options as any)?.prompt || 'No prompt provided';
+        const response = await runOllama(prompt);
         findings = [{ 
-          title: 'AI Analysis Result', 
+          title: 'AI Security Response', 
           description: response, 
           severity: 'info', 
           asset: 'AI Engine',
