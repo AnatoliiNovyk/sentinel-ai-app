@@ -8,6 +8,7 @@ export interface AiTaskRequest {
   cve_id?: string;
   project_id: string;
   scan_id: string;
+  user_id: string; // Added user_id
 }
 
 export const AiService = {
@@ -25,11 +26,11 @@ export const AiService = {
       Format the response as JSON: { "explanation": "...", "remediation": "...", "code": "..." }
     `;
 
-    // Now using a single JSONB parameter 'params' for maximum reliability
     const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
       params: {
         scan_id: req.scan_id,
         project_id: req.project_id,
+        user_id: req.user_id, // Pass user_id explicitly
         target: prompt,
         metadata: { type: 'fix_generation', scan_id: req.scan_id }
       }
@@ -39,12 +40,12 @@ export const AiService = {
     return jobId;
   },
 
-  async dispatchChatTask(projectId: string, conversationId: string, content: string) {
-    // Now using a single JSONB parameter 'params' for maximum reliability
+  async dispatchChatTask(projectId: string, conversationId: string, userId: string, content: string) {
     const { data, error } = await supabase.rpc('dispatch_ai_task', {
       params: {
         project_id: projectId,
         scan_id: null,
+        user_id: userId, // Pass user_id explicitly
         target: content,
         metadata: { type: 'chat_response', conversation_id: conversationId }
       }

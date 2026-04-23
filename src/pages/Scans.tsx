@@ -6,8 +6,10 @@ import { AiService } from '../api/ai.service';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
+import { useAuth } from '../context/AuthContext';
 
 const Scans = () => {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [scans, setScans] = useState<Scan[]>([]);
@@ -123,7 +125,8 @@ const Scans = () => {
         asset: v.asset,
         cve_id: v.cve_id,
         project_id: selectedProjectId,
-        scan_id: v.scan_id
+        scan_id: v.scan_id,
+        user_id: user?.id || ''
       });
 
       await AiService.pollForResult(v.scan_id, startTime);

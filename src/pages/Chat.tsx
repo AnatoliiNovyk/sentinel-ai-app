@@ -148,17 +148,15 @@ export default function Chat() {
         aiContent = agentTurn.content;
         toolResult = agentTurn.toolCalls[0] ?? null;
       } else {
-        // 2. Dispatch general chat task via RPC
         const projId = projects[0]?.id;
         if (!projId) {
           aiContent = "Error: No project found. Please create a project to use the AI Assistant.";
+        } else if (!activeId) {
+          aiContent = "Error: Please select or create a conversation.";
         } else {
           setThinkingLabel('Agent processing...');
-          await AiService.dispatchChatTask(projId, text);
-          
-          // Use real null for chat-based polling
-          const result = await AiService.pollForResult(null, startTime); 
-          aiContent = result;
+          await AiService.dispatchChatTask(projId, activeId, user.id, text);
+          aiContent = "(AI is responding...)";
         }
       }
     } catch (err: any) {
