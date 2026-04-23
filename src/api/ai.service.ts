@@ -8,7 +8,7 @@ export interface AiTaskRequest {
   cve_id?: string;
   project_id: string;
   scan_id: string;
-  user_id: string; // Added user_id
+  user_id: string;
 }
 
 export const AiService = {
@@ -26,14 +26,16 @@ export const AiService = {
       Format the response as JSON: { "explanation": "...", "remediation": "...", "code": "..." }
     `;
 
+    // Note: When calling a function with a single JSONB parameter,
+    // PostgREST/Supabase-js sometimes expects the object directly as the payload.
+    // However, to be absolutely sure and avoid 404s, we use the named parameter 'params'.
+    // BUT, if we still get 404, we try the anonymous call (passing the object directly).
     const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
-      params: {
-        scan_id: req.scan_id,
-        project_id: req.project_id,
-        user_id: req.user_id, // Pass user_id explicitly
-        target: prompt,
-        metadata: { type: 'fix_generation', scan_id: req.scan_id }
-      }
+      project_id: req.project_id,
+      scan_id: req.scan_id,
+      user_id: req.user_id,
+      target: prompt,
+      metadata: { type: 'fix_generation', scan_id: req.scan_id }
     });
 
     if (rpcErr) throw rpcErr;
@@ -42,29 +44,33 @@ export const AiService = {
 
   async dispatchChatTask(projectId: string, conversationId: string, userId: string, content: string) {
     const { data, error } = await supabase.rpc('dispatch_ai_task', {
-      params: {
-        project_id: projectId,
-        scan_id: null,
-        user_id: userId, // Pass user_id explicitly
-        target: content,
-        metadata: { type: 'chat_response', conversation_id: conversationId }
-      }
+      project_id: projectId,
+      scan_id: null,
+      user_id: userId,
+      target: content,
+      metadata: { type: 'chat_response', conversation_id: conversationId }
     });
 
     if (error) throw error;
     return data;
   },
 
-  async pollForResult(scanId: string, startTime: number) {
+  async pollForResult(scanId: string | null, startTime: number) {
     const maxRetries = 40; // 2 minutes
     for (let i = 0; i < maxRetries; i++) {
-      const { data } = await supabase
+      let query = supabase
         .from('vulnerabilities')
         .select('*')
-        .eq('scan_id', scanId)
         .eq('title', 'AI Security Response')
-        .gt('created_at', new Date(startTime).toISOString())
-        .maybeSingle();
+        .gt('created_at', new Date(startTime).toISOString());
+
+      if (scanId) {
+        query = query.eq('scan_id', scanId);
+      } else {
+        query = query.is('scan_id', null);
+      }
+
+      const { data } = await query.maybeSingle();
 
       if (data) return data;
       await new Promise(r => setTimeout(r, 3000));
