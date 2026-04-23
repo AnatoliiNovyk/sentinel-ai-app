@@ -10,7 +10,6 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
   try {
-    // Auth check
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -18,33 +17,36 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Get user from JWT
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) {
+      console.error("Auth error:", authErr);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const body = await req.json();
-    const { scan_id, project_id, scanner, target } = body;
+    const { scan_id, project_id, scanner, target, org_id } = body;
 
     if (!scan_id || !project_id || !scanner || !target) {
-      return new Response(JSON.stringify({ error: "scan_id, project_id, scanner, target are required" }), {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Use service client to insert job (bypasses RLS for the insert)
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Insert job with org_id for RBAC visibility
     const { data: job, error: jobErr } = await serviceClient
       .from("scan_jobs")
       .insert({
         scan_id,
         user_id: user.id,
+        org_id: org_id, // Important for team visibility
         project_id,
         scanner,
         target,
@@ -55,10 +57,14 @@ Deno.serve(async (req: Request) => {
 
     if (jobErr) throw jobErr;
 
-    // Update scan status to 'running' (queued)
+    // Ensure the scan record also has the correct status and org_id
     await serviceClient
       .from("scans")
-      .update({ status: "running", started_at: new Date().toISOString() })
+      .update({ 
+        status: "running", 
+        org_id: org_id, 
+        started_at: new Date().toISOString() 
+      })
       .eq("id", scan_id);
 
     return new Response(JSON.stringify({ job_id: job.id, status: "queued" }), {
