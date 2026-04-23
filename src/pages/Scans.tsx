@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, AlertCircle, CheckCircle2, ChevronRight, Filter, Play, Plus, Layout, Trash2, Cpu, ExternalLink, X, FileText, Lock, MessageSquare } from 'lucide-react';
+import { Shield, Search, AlertCircle, CheckCircle2, ChevronRight, Filter, Play, Plus, Layout, Trash2, Cpu, ExternalLink, X, FileText, Lock, MessageSquare, Loader2 } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
@@ -14,8 +14,16 @@ const Scans = () => {
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [generatingId, setGeneratingId] = useState<string | null>(null); // Track specific vuln ID
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
+  
+  // New Scan Modal state
+  const [showNewScanModal, setShowNewScanModal] = useState(false);
+  const [isDispatching, setIsDispatching] = useState(false);
+  const [newScanConfig, setNewScanConfig] = useState({
+    scanner: 'Nmap:Intense',
+    target: ''
+  });
 
   // Load initial data
   useEffect(() => {
@@ -76,17 +84,38 @@ const Scans = () => {
     }
   };
 
+  const handleStartScan = async () => {
+    const project = projects.find(p => p.id === selectedProjectId);
+    if (!project) return;
+
+    setIsDispatching(true);
+    try {
+      await ScansService.dispatchScan(
+        project.id,
+        newScanConfig.scanner,
+        newScanConfig.target || project.target,
+        project.org_id
+      );
+      setShowNewScanModal(false);
+      // Reload scans for the project
+      await loadScans(project.id);
+    } catch (err: any) {
+      alert('Failed to start scan: ' + err.message);
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
   const handleAiGeneration = async (v: Vulnerability) => {
     if (!selectedProjectId) {
       alert('Error: No project selected.');
       return;
     }
     
-    setGeneratingId(v.id); // Track this specific vulnerability
+    setGeneratingId(v.id);
     const startTime = Date.now();
     
     try {
-      console.log('📡 [AI] Starting generation via service...');
       await AiService.generateFix({
         title: v.title,
         description: v.description,
@@ -98,19 +127,11 @@ const Scans = () => {
       });
 
       await AiService.pollForResult(v.scan_id, startTime);
-      console.log('✅ [AI] Generation complete');
-      
       await loadVulnerabilities(v.scan_id);
-      
-      const { data: newVulns } = await ScansService.getScanVulnerabilities(v.scan_id);
-      const newAiFinding = newVulns.find(nv => nv.title === 'AI Security Response' && new Date(nv.created_at).getTime() > startTime);
-      if (newAiFinding) setSelectedVuln(newAiFinding);
-
     } catch (err: any) {
-      console.error('❌ [AI] Error:', err.message);
       alert('AI Generation failed: ' + err.message);
     } finally {
-      setGeneratingId(null); // Reset
+      setGeneratingId(null);
     }
   };
 
@@ -138,7 +159,7 @@ const Scans = () => {
         projects={projects}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
-        onNewScan={() => alert('New scan feature coming soon!')}
+        onNewScan={() => setShowNewScanModal(true)}
       />
 
       <ScanStats 
@@ -177,10 +198,57 @@ const Scans = () => {
             vulnerabilities={vulnerabilities}
             onViewDetails={setSelectedVuln}
             onGenerateAiFix={handleAiGeneration}
-            generatingId={generatingId} // Pass ID instead of boolean
+            generatingId={generatingId}
           />
         </div>
       </div>
+
+      {/* New Scan Modal */}
+      {showNewScanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Start New Scan</h2>
+              <button onClick={() => setShowNewScanModal(false)} className="p-1 hover:bg-slate-800 rounded-lg text-slate-500 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Scanner Type</label>
+                <select 
+                  value={newScanConfig.scanner}
+                  onChange={(e) => setNewScanConfig({...newScanConfig, scanner: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="Nmap:Intense">Nmap (Intense Scan)</option>
+                  <option value="Nmap:Vuln">Nmap (Vulnerability Audit)</option>
+                  <option value="Tfsec">Tfsec (IaC Audit)</option>
+                  <option value="Amass">Amass (Subdomain Recon)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Address</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. 192.168.1.1 or scanme.nmap.org"
+                  value={newScanConfig.target}
+                  onChange={(e) => setNewScanConfig({...newScanConfig, target: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+              <button
+                onClick={handleStartScan}
+                disabled={isDispatching}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                {isDispatching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+                {isDispatching ? 'Dispatching...' : 'Launch Scan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detail Modal */}
       {selectedVuln && (
