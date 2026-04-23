@@ -25,12 +25,14 @@ export const AiService = {
       Format the response as JSON: { "explanation": "...", "remediation": "...", "code": "..." }
     `;
 
-    // Updated parameter names to match the new RPC signature
+    // Now using a single JSONB parameter 'params' for maximum reliability
     const { data: jobId, error: rpcErr } = await supabase.rpc('dispatch_ai_task', {
-      scan_id: req.scan_id,
-      project_id: req.project_id,
-      target: prompt,
-      metadata: { type: 'fix_generation', scan_id: req.scan_id }
+      params: {
+        scan_id: req.scan_id,
+        project_id: req.project_id,
+        target: prompt,
+        metadata: { type: 'fix_generation', scan_id: req.scan_id }
+      }
     });
 
     if (rpcErr) throw rpcErr;
@@ -38,12 +40,14 @@ export const AiService = {
   },
 
   async dispatchChatTask(projectId: string, conversationId: string, content: string) {
-    // Updated parameter names to match the new RPC signature
+    // Now using a single JSONB parameter 'params' for maximum reliability
     const { data, error } = await supabase.rpc('dispatch_ai_task', {
-      project_id: projectId,
-      scan_id: null,
-      target: content,
-      metadata: { type: 'chat_response', conversation_id: conversationId }
+      params: {
+        project_id: projectId,
+        scan_id: null,
+        target: content,
+        metadata: { type: 'chat_response', conversation_id: conversationId }
+      }
     });
 
     if (error) throw error;
