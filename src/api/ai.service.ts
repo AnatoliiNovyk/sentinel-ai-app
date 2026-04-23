@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { ErrorCode, failure, Result, success } from '../lib/errors';
 
 export interface AiTaskRequest {
   title: string;
@@ -12,7 +13,7 @@ export interface AiTaskRequest {
 }
 
 export const AiService = {
-  async generateFix(req: AiTaskRequest) {
+  async generateFix(req: AiTaskRequest): Promise<Result<string>> {
     const prompt = `
       As a security engineer, analyze this vulnerability and provide a remediation plan.
       
@@ -38,11 +39,21 @@ export const AiService = {
       metadata: { type: 'fix_generation', scan_id: req.scan_id }
     });
 
-    if (rpcErr) throw rpcErr;
-    return jobId;
+    if (rpcErr || !jobId) {
+      return failure(ErrorCode.AI_RPC_FAILED, 'Failed to dispatch AI fix generation.', rpcErr, {
+        projectId: req.project_id,
+        scanId: req.scan_id,
+      });
+    }
+    return success(jobId);
   },
 
-  async dispatchChatTask(projectId: string, conversationId: string, userId: string, content: string) {
+  async dispatchChatTask(
+    projectId: string,
+    conversationId: string,
+    userId: string,
+    content: string,
+  ): Promise<Result<string>> {
     const { data, error } = await supabase.rpc('dispatch_ai_task', {
       project_id: projectId,
       scan_id: null,
@@ -51,11 +62,16 @@ export const AiService = {
       metadata: { type: 'chat_response', conversation_id: conversationId }
     });
 
-    if (error) throw error;
-    return data;
+    if (error || !data) {
+      return failure(ErrorCode.AI_RPC_FAILED, 'Failed to dispatch AI chat task.', error, {
+        projectId,
+        conversationId,
+      });
+    }
+    return success(data);
   },
 
-  async pollForResult(scanId: string | null, startTime: number) {
+  async pollForResult(scanId: string | null, startTime: number): Promise<Result<any>> {
     const maxRetries = 40; // 2 minutes
     for (let i = 0; i < maxRetries; i++) {
       let query = supabase
@@ -72,9 +88,14 @@ export const AiService = {
 
       const { data } = await query.maybeSingle();
 
-      if (data) return data;
+      if (data) return success(data);
       await new Promise(r => setTimeout(r, 3000));
     }
-    throw new Error('AI processing timed out. Please check again in a moment.');
+    return failure(
+      ErrorCode.AI_PROCESSING_TIMEOUT,
+      'AI processing timed out. Please check again in a moment.',
+      undefined,
+      { scanId },
+    );
   }
 };

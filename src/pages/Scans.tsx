@@ -3,6 +3,7 @@ import { Shield, Search, AlertCircle, CheckCircle2, ChevronRight, Filter, Play, 
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
+import { errorToUserMessage } from '../lib/errors';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
@@ -26,6 +27,14 @@ const Scans = () => {
     scanner: 'Nmap:Intense',
     target: ''
   });
+
+  const currentScanMode = (() => {
+    const scan = scans.find((s) => s.id === selectedScanId) ?? scans[0];
+    if (!scan) return 'UNKNOWN';
+    if (scan.detected_mode) return scan.detected_mode;
+    if (scan.is_mock) return 'MOCK';
+    return 'REAL';
+  })();
 
   // Load initial data
   useEffect(() => {
@@ -118,7 +127,7 @@ const Scans = () => {
     const startTime = Date.now();
     
     try {
-      await AiService.generateFix({
+      const dispatchResult = await AiService.generateFix({
         title: v.title,
         description: v.description,
         severity: v.severity,
@@ -129,7 +138,14 @@ const Scans = () => {
         user_id: user?.id || ''
       });
 
-      await AiService.pollForResult(v.scan_id, startTime);
+      if (!dispatchResult.ok) {
+        throw new Error(errorToUserMessage(dispatchResult.error));
+      }
+
+      const pollResult = await AiService.pollForResult(v.scan_id, startTime);
+      if (!pollResult.ok) {
+        throw new Error(errorToUserMessage(pollResult.error));
+      }
       await loadVulnerabilities(v.scan_id);
     } catch (err: any) {
       alert('AI Generation failed: ' + err.message);
@@ -161,6 +177,7 @@ const Scans = () => {
       <ScanHeader 
         projects={projects}
         selectedProjectId={selectedProjectId}
+        currentMode={currentScanMode}
         onSelectProject={setSelectedProjectId}
         onNewScan={() => setShowNewScanModal(true)}
       />
@@ -212,7 +229,12 @@ const Scans = () => {
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-slate-800 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Start New Scan</h2>
-              <button onClick={() => setShowNewScanModal(false)} className="p-1 hover:bg-slate-800 rounded-lg text-slate-500 transition-colors">
+              <button
+                onClick={() => setShowNewScanModal(false)}
+                aria-label="Close new scan modal"
+                title="Close"
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -220,6 +242,8 @@ const Scans = () => {
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Scanner Type</label>
                 <select 
+                  aria-label="Select scanner type"
+                  title="Select scanner type"
                   value={newScanConfig.scanner}
                   onChange={(e) => setNewScanConfig({...newScanConfig, scanner: e.target.value})}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -243,6 +267,8 @@ const Scans = () => {
               <button
                 onClick={handleStartScan}
                 disabled={isDispatching}
+                aria-label="Launch scan"
+                title="Launch scan"
                 className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 {isDispatching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
@@ -264,6 +290,8 @@ const Scans = () => {
               </div>
               <button 
                 onClick={() => setSelectedVuln(null)}
+                aria-label="Close vulnerability details"
+                title="Close details"
                 className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 transition-colors"
               >
                 <X className="w-6 h-6" />

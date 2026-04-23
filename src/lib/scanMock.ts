@@ -130,6 +130,8 @@ export async function runMockScan(userId: string, projectId: string, scanner: st
       project_id: projectId,
       scanner,
       status: 'running',
+      is_mock: true,
+      detected_mode: 'MOCK',
       started_at: new Date().toISOString(),
     })
     .select()

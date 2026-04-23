@@ -1,5 +1,5 @@
 import { supabase, ScanSchedule } from './supabase';
-import { runMockScan } from './scanMock';
+import { dispatchScan } from './scanDispatch';
 
 export async function dispatchDueSchedules(userId: string): Promise<number> {
   const nowIso = new Date().toISOString();
@@ -23,11 +23,20 @@ export async function dispatchDueSchedules(userId: string): Promise<number> {
       .update({ last_run_at: runAt.toISOString(), next_run_at: next.toISOString() })
       .eq('id', s.id);
 
-    try {
-      await runMockScan(userId, s.project_id, s.scanner);
+    const projectTarget = await supabase
+      .from('projects')
+      .select('target')
+      .eq('id', s.project_id)
+      .maybeSingle();
+
+    const result = await dispatchScan(
+      userId,
+      s.project_id,
+      s.scanner,
+      projectTarget.data?.target ?? '',
+    );
+    if (result.ok) {
       fired++;
-    } catch (_err) {
-      // continue even if one fails
     }
   }
   return fired;

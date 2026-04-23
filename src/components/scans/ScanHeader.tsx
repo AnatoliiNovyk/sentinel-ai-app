@@ -5,6 +5,7 @@ import type { Project } from '../../lib/supabase';
 interface ScanHeaderProps {
   projects: Project[];
   selectedProjectId: string | null;
+  currentMode?: 'REAL' | 'MOCK' | 'UNKNOWN';
   onSelectProject: (id: string) => void;
   onNewScan: () => void;
 }
@@ -12,6 +13,7 @@ interface ScanHeaderProps {
 export const ScanHeader: React.FC<ScanHeaderProps> = ({ 
   projects, 
   selectedProjectId, 
+  currentMode = 'UNKNOWN',
   onSelectProject,
   onNewScan 
 }) => {
@@ -23,9 +25,22 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <div
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+            currentMode === 'REAL'
+              ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+              : currentMode === 'MOCK'
+              ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+              : 'text-slate-300 border-slate-600/50 bg-slate-800/50'
+          }`}
+        >
+          Mode: {currentMode}
+        </div>
         <div className="relative">
           <Layout className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <select 
+            aria-label="Select project"
+            title="Select project"
             value={selectedProjectId || ''}
             onChange={(e) => onSelectProject(e.target.value)}
             className="pl-10 pr-8 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none min-w-[200px]"
@@ -39,6 +54,8 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
 
         <button 
           onClick={onNewScan}
+          aria-label="Start a new scan"
+          title="Start a new scan"
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-lg shadow-blue-900/20"
         >
           <Plus className="w-4 h-4" />

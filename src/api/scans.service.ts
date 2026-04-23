@@ -54,6 +54,8 @@ export const ScansService = {
         org_id: orgId,
         scanner,
         status: 'running',
+        is_mock: false,
+        detected_mode: 'REAL',
         started_at: new Date().toISOString()
       })
       .select()

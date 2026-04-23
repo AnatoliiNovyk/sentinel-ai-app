@@ -21,6 +21,7 @@ import { supabase, Project, Scan, Report, Vulnerability, Notification } from '..
 import { useAuth } from '../context/AuthContext';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
+import { errorToUserMessage } from '../lib/errors';
 import { buildReport } from '../lib/reportBuilder';
 import { toSarif, toJsonExport, downloadFile } from '../lib/exporters';
 import FindingsTab from '../components/FindingsTab';
@@ -123,7 +124,12 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     if (!user || launching) return;
     setLaunching(true);
     try {
-      await dispatchScan(user.id, project.id, defaultScanner, project.target ?? '');
+      const result = await dispatchScan(user.id, project.id, defaultScanner, project.target ?? '');
+      if (!result.ok) {
+        console.error('[ProjectDetail] quickScan failed:', result.error);
+        alert(errorToUserMessage(result.error));
+        return;
+      }
       await load();
     } finally {
       setLaunching(false);

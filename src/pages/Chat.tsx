@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
 import { runAgent, ToolResult, TOOL_LABELS } from '../lib/agentTools';
+import { errorToUserMessage } from '../lib/errors';
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -155,8 +156,12 @@ export default function Chat() {
           aiContent = "Error: Please select or create a conversation.";
         } else {
           setThinkingLabel('Agent processing...');
-          await AiService.dispatchChatTask(projId, activeId, user.id, text);
-          aiContent = "(AI is responding...)";
+          const dispatchResult = await AiService.dispatchChatTask(projId, activeId, user.id, text);
+          if (!dispatchResult.ok) {
+            aiContent = `Error: ${errorToUserMessage(dispatchResult.error)}`;
+          } else {
+            aiContent = '(AI is responding...)';
+          }
         }
       }
     } catch (err: any) {
@@ -281,7 +286,12 @@ export default function Chat() {
               placeholder="Ask anything..."
               rows={1}
             />
-            <button disabled={sending || !input.trim()} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 p-3 rounded-xl disabled:opacity-50">
+            <button
+              disabled={sending || !input.trim()}
+              aria-label="Send message"
+              title="Send message"
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 p-3 rounded-xl disabled:opacity-50"
+            >
               <Send className="w-5 h-5" />
             </button>
           </div>

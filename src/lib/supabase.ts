@@ -54,8 +54,11 @@ export type Scan = {
   id: string;
   project_id: string;
   user_id: string;
+  org_id?: string;
   scanner: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
+  is_mock?: boolean;
+  detected_mode?: 'REAL' | 'MOCK' | 'UNKNOWN';
   severity_summary: {
     critical: number;
     high: number;
