@@ -7,7 +7,7 @@ import { errorToUserMessage } from '../lib/errors';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const Scans = () => {
   const { user } = useAuth();
@@ -38,41 +38,56 @@ const Scans = () => {
 
   // Load initial data
   useEffect(() => {
-    loadProjects();
-  }, []);
+    (async () => {
+      try {
+        const data = await ScansService.getProjects();
+        setProjects(data);
+        if (data.length > 0 && !selectedProjectId) {
+          setSelectedProjectId(data[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [selectedProjectId]);
 
   // Load scans when project changes
   useEffect(() => {
     if (selectedProjectId) {
-      loadScans(selectedProjectId);
+      (async () => {
+        try {
+          const data = await ScansService.getProjectScans(selectedProjectId);
+          setScans(data);
+          if (data.length > 0 && !selectedScanId) {
+            setSelectedScanId(data[0].id);
+          }
+        } catch (err) {
+          console.error('Failed to load scans:', err);
+        }
+      })();
     } else {
       setScans([]);
       setSelectedScanId(null);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, selectedScanId]);
 
   // Load vulnerabilities when scan changes
   useEffect(() => {
     if (selectedScanId) {
-      loadVulnerabilities(selectedScanId);
+      (async () => {
+        try {
+          const data = await ScansService.getScanVulnerabilities(selectedScanId);
+          setVulnerabilities(data);
+        } catch (err) {
+          console.error('Failed to load vulnerabilities:', err);
+        }
+      })();
     } else {
       setVulnerabilities([]);
     }
   }, [selectedScanId]);
-
-  const loadProjects = async () => {
-    try {
-      const data = await ScansService.getProjects();
-      setProjects(data);
-      if (data.length > 0 && !selectedProjectId) {
-        setSelectedProjectId(data[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load projects:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const loadScans = async (projectId: string) => {
     try {

@@ -3,7 +3,7 @@ import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap } from 'lu
 import { marked } from 'marked';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage, Project } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
 import { runAgent, TOOL_LABELS } from '../lib/agentTools';
@@ -49,23 +49,21 @@ export default function Chat() {
 
   useEffect(() => {
     if (!user) return;
-    loadData();
-  }, [user]);
+    (async () => {
+      try {
+        const [convs, projs] = await Promise.all([
+          supabase.from('ai_conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+          ScansService.getProjects()
+        ]);
 
-  const loadData = async () => {
-    try {
-      const [convs, projs] = await Promise.all([
-        supabase.from('ai_conversations').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
-        ScansService.getProjects()
-      ]);
-      
-      setConversations(convs.data ?? []);
-      setProjects(projs);
-      if (convs.data && convs.data.length > 0) setActiveId(convs.data[0].id);
-    } catch (err) {
-      console.error('Failed to load chat data:', err);
-    }
-  };
+        setConversations(convs.data ?? []);
+        setProjects(projs);
+        if (convs.data && convs.data.length > 0) setActiveId(convs.data[0].id);
+      } catch (err) {
+        console.error('Failed to load chat data:', err);
+      }
+    })();
+  }, [user]);
 
   useEffect(() => {
     if (!activeId) {

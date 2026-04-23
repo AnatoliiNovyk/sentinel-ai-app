@@ -4,7 +4,7 @@ import {
   Loader2, ChevronDown, Radar, Check,
 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 
 const CADENCES = [

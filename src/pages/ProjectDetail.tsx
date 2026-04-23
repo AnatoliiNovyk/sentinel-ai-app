@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ArrowLeft,
   Cloud,
@@ -17,7 +17,7 @@ import {
   Network,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
 import { errorToUserMessage } from '../lib/errors';
@@ -59,7 +59,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const meta = ENV_META[project.environment] ?? ENV_META.external;
   const EnvIcon = meta.icon;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
     try {
       const [sRes, rRes, nRes] = await Promise.all([
@@ -100,11 +100,11 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     } catch (err) {
       console.error('Failed to load project details:', err);
     }
-  };
+  }, [project.id, user]);
 
   useEffect(() => {
     load();
-  }, [project.id, user?.id]);
+  }, [load]);
 
   const totals = useMemo(() => {
     return vulns.reduce(

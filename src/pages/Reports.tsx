@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
 
 export default function Reports() {
@@ -12,7 +12,7 @@ export default function Reports() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<Report | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
     const [rRes, pRes] = await Promise.all([
       supabase.from('reports').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
@@ -21,11 +21,11 @@ export default function Reports() {
     setReports(rRes.data ?? []);
     setProjects(pRes.data ?? []);
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     load();
-  }, [user]);
+  }, [load]);
 
   if (selected) return <ReportView report={selected} onBack={() => setSelected(null)} />;
 

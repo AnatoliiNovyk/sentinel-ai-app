@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
 import { riskBand } from '../lib/riskScore';
 
@@ -19,7 +19,7 @@ export default function Projects() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<Project | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from('projects')
@@ -27,11 +27,11 @@ export default function Projects() {
       .order('created_at', { ascending: false });
     setProjects(data ?? []);
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     load();
-  }, [user]);
+  }, [load]);
 
   const remove = async (id: string) => {
     await supabase.from('projects').delete().eq('id', id);

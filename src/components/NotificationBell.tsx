@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, Radar, FileText, AlertTriangle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Notification } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const SEVERITY_STYLES: Record<Notification['severity'], string> = {
   critical: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
@@ -38,7 +38,7 @@ export default function NotificationBell() {
 
   const unread = items.filter((n) => !n.read_at).length;
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from('notifications')
@@ -47,11 +47,11 @@ export default function NotificationBell() {
       .order('created_at', { ascending: false })
       .limit(25);
     setItems((data ?? []) as Notification[]);
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchItems();
-  }, [user?.id]);
+  }, [fetchItems]);
 
   useEffect(() => {
     if (!user) return;
@@ -69,7 +69,7 @@ export default function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [fetchItems, user]);
 
   useEffect(() => {
     if (!open) return;

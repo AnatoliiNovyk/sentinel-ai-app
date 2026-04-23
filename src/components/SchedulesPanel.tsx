@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Plus, X, Power, Trash2 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 
 const CADENCES: { hours: number; label: string }[] = [
@@ -26,7 +26,7 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from('scan_schedules')
@@ -35,11 +35,11 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
       .order('created_at', { ascending: false });
     setSchedules((data ?? []) as ScanSchedule[]);
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     load();
-  }, [user?.id]);
+  }, [load]);
 
   const toggle = async (s: ScanSchedule) => {
     const next = !s.enabled;

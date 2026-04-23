@@ -4,7 +4,7 @@ import {
   TrendingUp, Zap, BookOpen, AlertCircle, Download, FileText, Printer
 } from 'lucide-react';
 import { supabase, Vulnerability } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { computeCompliance, CisRow, MitreRow, NistRow, Soc2Row } from '../lib/compliance';
 import { buildEvidencePackage, buildEvidenceMarkdown, printReportAsPDF } from '../lib/evidencePackage';
 import { downloadFile } from '../lib/exporters';

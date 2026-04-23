@@ -39,8 +39,14 @@ export default function ScanDiff({
   const previous = completed[1] ?? null;
   const latestScanId = latest?.id;
   const previousScanId = previous?.id;
-  const latestVulns  = latestScanId ? vulns.filter(v => v.scan_id === latestScanId) : [];
-  const previousVulns = previousScanId ? vulns.filter(v => v.scan_id === previousScanId) : [];
+  const latestVulns = useMemo(
+    () => (latestScanId ? vulns.filter((v) => v.scan_id === latestScanId) : []),
+    [latestScanId, vulns],
+  );
+  const previousVulns = useMemo(
+    () => (previousScanId ? vulns.filter((v) => v.scan_id === previousScanId) : []),
+    [previousScanId, vulns],
+  );
 
   const diff: DiffEntry[] = useMemo(() => {
     const prevMap = new Map(previousVulns.map(v => [fingerprint(v), v]));

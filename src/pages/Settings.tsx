@@ -5,7 +5,7 @@ import {
   Webhook, Users, Plus, Trash2
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 const PLANS = [

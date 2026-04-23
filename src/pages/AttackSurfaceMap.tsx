@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { riskBand } from '../lib/riskScore';
 import { ShieldAlert, RefreshCw, Info } from 'lucide-react';
 
@@ -188,7 +188,7 @@ export default function AttackSurfaceMap() {
     };
     animRef.current = requestAnimationFrame(run);
     return () => cancelAnimationFrame(animRef.current);
-  }, [loading]);
+  }, [loading, nodes.length]);
 
   useEffect(() => { load(); }, [load]);
 

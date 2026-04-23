@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, Filte
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
 import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 type SlaFilter = 'all' | 'overdue' | 'at_risk';
 
@@ -58,7 +58,10 @@ export default function FindingsTab({
   const [slaFilter, setSlaFilter] = useState<SlaFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const slaConfig = { ...DEFAULT_SLA_CONFIG, ...(profile?.sla_config ?? {}) };
+  const slaConfig = useMemo(
+    () => ({ ...DEFAULT_SLA_CONFIG, ...(profile?.sla_config ?? {}) }),
+    [profile?.sla_config],
+  );
   const now = Date.now();
 
   const counts = useMemo(() => {

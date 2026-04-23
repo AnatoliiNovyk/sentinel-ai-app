@@ -1,6 +1,6 @@
 import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
 
 export type AppPage = 'dashboard' | 'chat' | 'scans' | 'projects' | 'reports' | 'settings';

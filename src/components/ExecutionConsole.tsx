@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Terminal, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface LogLine {
@@ -19,12 +19,12 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
   const [isFinishing, setIsFinishing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const addLog = (text: string, type: LogLine['type'] = 'info') => {
+  const addLog = useCallback((text: string, type: LogLine['type'] = 'info') => {
     setLogs((prev) => [
       ...prev,
       { text, type, timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) },
     ]);
-  };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -61,7 +61,7 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
     };
 
     sequence();
-  }, []);
+  }, [addLog, code, onComplete, type]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, Globe, AlertTriangle, Loader2, Info, Terminal } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 export default function ActiveRecon() {
   const { user } = useAuth();

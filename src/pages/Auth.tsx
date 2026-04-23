@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Shield, ArrowLeft, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 export default function Auth() {
   const { signIn, signUp } = useAuth();
