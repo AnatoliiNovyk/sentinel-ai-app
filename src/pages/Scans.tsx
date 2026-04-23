@@ -14,7 +14,7 @@ const Scans = () => {
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [generatingId, setGeneratingId] = useState<string | null>(null); // Track specific vuln ID
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
 
   // Load initial data
@@ -82,7 +82,7 @@ const Scans = () => {
       return;
     }
     
-    setIsGeneratingAi(true);
+    setGeneratingId(v.id); // Track this specific vulnerability
     const startTime = Date.now();
     
     try {
@@ -93,17 +93,15 @@ const Scans = () => {
         severity: v.severity,
         asset: v.asset,
         cve_id: v.cve_id,
-        project_id: selectedProjectId, // Use the state variable here
+        project_id: selectedProjectId,
         scan_id: v.scan_id
       });
 
-      const aiResponse = await AiService.pollForResult(v.scan_id, startTime);
+      await AiService.pollForResult(v.scan_id, startTime);
       console.log('✅ [AI] Generation complete');
       
-      // Refresh to show the new "AI Security Response" finding
       await loadVulnerabilities(v.scan_id);
       
-      // Auto-open the result
       const { data: newVulns } = await ScansService.getScanVulnerabilities(v.scan_id);
       const newAiFinding = newVulns.find(nv => nv.title === 'AI Security Response' && new Date(nv.created_at).getTime() > startTime);
       if (newAiFinding) setSelectedVuln(newAiFinding);
@@ -112,7 +110,7 @@ const Scans = () => {
       console.error('❌ [AI] Error:', err.message);
       alert('AI Generation failed: ' + err.message);
     } finally {
-      setIsGeneratingAi(false);
+      setGeneratingId(null); // Reset
     }
   };
 
@@ -179,7 +177,7 @@ const Scans = () => {
             vulnerabilities={vulnerabilities}
             onViewDetails={setSelectedVuln}
             onGenerateAiFix={handleAiGeneration}
-            isGenerating={isGeneratingAi}
+            generatingId={generatingId} // Pass ID instead of boolean
           />
         </div>
       </div>
