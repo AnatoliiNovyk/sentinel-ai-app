@@ -14,14 +14,14 @@ const POLL_INTERVAL   = 3_000; // 3 seconds
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-console.log('🛡️ Sentinel AI Agent v2.2 starting...');
+console.log('🛡️ Sentinel AI Agent v2.3 starting...');
 
 // --- Ollama Integration ---
 async function consultOllama(prompt: string): Promise<string> {
   try {
-    console.log('🤖 Sending prompt to Ollama (llama3)...');
+    console.log('🤖 Sending prompt to Ollama (llama3.1:8b)...');
     const response = await axios.post('http://localhost:11434/api/generate', {
-      model: 'llama3',
+      model: 'llama3.1:8b', // Updated to match user's installed model
       prompt: prompt,
       stream: false,
     }, { timeout: 120000 }); // 2 minute timeout for slow CPUs
@@ -54,7 +54,7 @@ async function reportResult(jobId: string, scanId: string | null, userId: string
       user_id: userId,
       project_id: projectId,
       findings,
-      metadata, // Pass back the metadata (e.g. conversation_id)
+      metadata,
       error_message: error
     }, {
       headers: { 'X-Agent-Secret': AGENT_SECRET }
@@ -75,7 +75,7 @@ async function fetchPendingJob() {
 }
 
 async function runJob(job: any) {
-  console.log(`▶️ Executing ${job.scanner} task for ${job.target}...`);
+  console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
   try {
     let findings: any[] = [];
     
@@ -85,7 +85,7 @@ async function runJob(job: any) {
         title: 'AI Security Response',
         description: aiResponse,
         severity: 'info',
-        asset: job.target.substring(0, 50),
+        asset: 'AI Engine',
         remediation: 'Review AI suggestions',
         remediation_type: 'manual',
         status: 'open'
@@ -94,7 +94,6 @@ async function runJob(job: any) {
       findings = await runNmap(job.target);
     }
 
-    // Pass the original metadata back so the Edge Function knows how to route the result
     await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
   } catch (err: any) {
     console.error(`❌ Job ${job.id} crashed:`, err.message);
