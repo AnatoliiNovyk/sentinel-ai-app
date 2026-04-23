@@ -36,7 +36,7 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
 };
 
 export default function Chat() {
-  const { user } = useAuth();
+  const { user, profile, organizations } = useAuth();
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
