@@ -1,5 +1,8 @@
+import { supabase } from '../api/client';
+
+export { supabase };
+
 // This file now contains ONLY type definitions for the database entities.
-// The actual supabase client is located in src/api/client.ts.
 
 export type SlaConfig = {
   critical: number;
@@ -9,6 +12,8 @@ export type SlaConfig = {
 };
 
 export const DEFAULT_SLA_CONFIG: SlaConfig = { critical: 3, high: 7, medium: 30, low: 90 };
+
+export const VULN_STATUSES = ['open', 'in_progress', 'accepted', 'resolved', 'false_positive'] as const;
 
 export type Profile = {
   id: string;
