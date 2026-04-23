@@ -1,5 +1,4 @@
-import React from 'react';
-import { Layout, Plus, Search } from 'lucide-react';
+import { Layout, Plus } from 'lucide-react';
 import type { Project } from '../../lib/supabase';
 
 interface ScanHeaderProps {

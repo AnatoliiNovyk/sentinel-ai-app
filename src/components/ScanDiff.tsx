@@ -34,24 +34,13 @@ export default function ScanDiff({
   scans: Scan[];
   vulns: Vulnerability[];
 }) {
-  // Need at least 2 completed scans to show a diff
   const completed = scans.filter(s => s.status === 'completed');
-  if (completed.length < 2) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center">
-        <GitCompare className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-        <div className="text-sm font-medium text-slate-300">No diff available yet</div>
-        <div className="text-xs text-slate-500 mt-1">
-          Run at least 2 scans to enable continuous monitoring diff.
-        </div>
-      </div>
-    );
-  }
-
-  // Latest = current, previous = one before
-  const [latest, previous] = [completed[0], completed[1]];
-  const latestVulns  = vulns.filter(v => v.scan_id === latest.id);
-  const previousVulns = vulns.filter(v => v.scan_id === previous.id);
+  const latest = completed[0] ?? null;
+  const previous = completed[1] ?? null;
+  const latestScanId = latest?.id;
+  const previousScanId = previous?.id;
+  const latestVulns  = latestScanId ? vulns.filter(v => v.scan_id === latestScanId) : [];
+  const previousVulns = previousScanId ? vulns.filter(v => v.scan_id === previousScanId) : [];
 
   const diff: DiffEntry[] = useMemo(() => {
     const prevMap = new Map(previousVulns.map(v => [fingerprint(v), v]));
@@ -83,6 +72,18 @@ export default function ScanDiff({
       return (SEV_WEIGHT[b.severity] ?? 0) - (SEV_WEIGHT[a.severity] ?? 0);
     });
   }, [latestVulns, previousVulns]);
+
+  if (!latest || !previous) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center">
+        <GitCompare className="w-8 h-8 text-slate-700 mx-auto mb-3" />
+        <div className="text-sm font-medium text-slate-300">No diff available yet</div>
+        <div className="text-xs text-slate-500 mt-1">
+          Run at least 2 scans to enable continuous monitoring diff.
+        </div>
+      </div>
+    );
+  }
 
   const newCount       = diff.filter(d => d.status === 'new').length;
   const fixedCount     = diff.filter(d => d.status === 'fixed').length;

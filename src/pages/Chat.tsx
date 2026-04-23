@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Wrench, Zap, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap } from 'lucide-react';
 import { marked } from 'marked';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage, Project } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
-import { runAgent, ToolResult, TOOL_LABELS } from '../lib/agentTools';
+import { runAgent, TOOL_LABELS } from '../lib/agentTools';
 import { errorToUserMessage } from '../lib/errors';
 
 marked.setOptions({ breaks: true, gfm: true });
@@ -37,17 +37,14 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
 };
 
 export default function Chat() {
-  const { user, profile, organizations } = useAuth();
+  const { user, organizations } = useAuth();
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [toolByMessage, setToolByMessage] = useState<Record<string, ToolResult>>({});
-  const [providerByMessage, setProviderByMessage] = useState<Record<string, string>>({});
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
-  const [currentProvider, setCurrentProvider] = useState<string>('ollama');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -105,7 +102,6 @@ export default function Chat() {
   const sendMessage = async (text: string) => {
     if (!user || !text.trim() || sending) return;
     setSending(true);
-    const startTime = Date.now();
 
     let convoId = activeId;
     if (!convoId) {
@@ -136,9 +132,6 @@ export default function Chat() {
     }, 900);
 
     let aiContent: string = '';
-    let toolResult: ToolResult | null = null;
-    let provider = 'ollama';
-
     try {
       // 1. Try local agent tools (nmap, etc)
       // Pass the first organization's ID to the agent tools
@@ -147,7 +140,6 @@ export default function Chat() {
       if (agentTurn) {
         setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
         aiContent = agentTurn.content;
-        toolResult = agentTurn.toolCalls[0] ?? null;
       } else {
         const projId = projects[0]?.id;
         if (!projId) {
@@ -164,8 +156,9 @@ export default function Chat() {
           }
         }
       }
-    } catch (err: any) {
-      aiContent = `Error: ${err.message}`;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      aiContent = `Error: ${message}`;
     } finally {
       clearInterval(phaseTimer);
     }
@@ -178,8 +171,6 @@ export default function Chat() {
 
     if (aiMsg) {
       setMessages((p) => [...p, aiMsg]);
-      if (toolResult) setToolByMessage((prev) => ({ ...prev, [aiMsg.id]: toolResult! }));
-      setProviderByMessage((prev) => ({ ...prev, [aiMsg.id]: provider }));
     }
 
     setSending(false);
@@ -190,7 +181,7 @@ export default function Chat() {
     sendMessage(input);
   };
 
-  const providerMeta = PROVIDER_META[currentProvider] ?? PROVIDER_META.mock;
+  const providerMeta = PROVIDER_META.ollama;
 
   return (
     <div className="h-screen flex">

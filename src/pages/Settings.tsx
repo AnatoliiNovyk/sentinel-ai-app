@@ -228,7 +228,6 @@ export default function Settings() {
             const Icon = p.icon;
             const isActive = plan === p.id;
             const isUpgrading = upgrading === p.id;
-            const canUpgrade = !isActive && p.id !== 'free';
             return (
               <div key={p.id} className={`relative rounded-xl border p-5 flex flex-col gap-4 transition ${isActive ? p.activeColor : `${p.color} hover:border-slate-600`}`}>
                 {p.badge && (

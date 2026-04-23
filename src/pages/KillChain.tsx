@@ -24,12 +24,7 @@ export default function KillChain() {
     setLoading(true);
     setChain(null);
     
-    const { data: v } = await supabase
-      .from('vulnerabilities')
-      .select('*')
-      .eq('status', 'open'); // Can't filter easily by project without a join or querying scans first. Let's do a join.
-
-    // Better way: get scans for this project, then get vulns
+    // Get scans for selected project, then pull open vulnerabilities for those scans.
     const { data: scans } = await supabase.from('scans').select('id').eq('project_id', projectId);
     const scanIds = scans?.map(s => s.id) || [];
     

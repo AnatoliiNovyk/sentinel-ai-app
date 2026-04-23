@@ -53,7 +53,6 @@ export default function Dashboard() {
   const thisWeek  = trend30.slice(-7).reduce((s, d) => s + d.opened, 0);
   const lastWeek  = trend30.slice(-14, -7).reduce((s, d) => s + d.opened, 0);
   const wowDelta  = thisWeek - lastWeek;
-  const wowPct    = lastWeek === 0 ? 0 : Math.round((wowDelta / lastWeek) * 100);
 
   // Resolution rate
   const resRate = vulns.length === 0 ? 0 : Math.round((resolvedVulns.length / vulns.length) * 100);

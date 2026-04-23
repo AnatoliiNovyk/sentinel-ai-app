@@ -10,7 +10,6 @@ import {
   Activity as ActivityIcon,
   Play,
   Sparkles,
-  AlertTriangle,
   CheckCircle2,
   Download,
   FileJson,
@@ -23,7 +22,7 @@ import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
 import { errorToUserMessage } from '../lib/errors';
 import { buildReport } from '../lib/reportBuilder';
-import { toSarif, toJsonExport, downloadFile } from '../lib/exporters';
+import { toJsonExport, downloadFile } from '../lib/exporters';
 import FindingsTab from '../components/FindingsTab';
 import AssetGraph from '../components/AssetGraph';
 import ReportViewer from '../components/ReportViewer';
@@ -397,6 +396,13 @@ function OverviewTab({
 }
 
 function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerability[]; project: Project }) {
+  const vulnsByScan = useMemo(() => {
+    return vulns.reduce((acc, v) => {
+      (acc[v.scan_id] ??= []).push(v);
+      return acc;
+    }, {} as Record<string, Vulnerability[]>);
+  }, [vulns]);
+
   if (scans.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
@@ -405,13 +411,6 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
       </div>
     );
   }
-
-  const vulnsByScan = useMemo(() => {
-    return vulns.reduce((acc, v) => {
-      (acc[v.scan_id] ??= []).push(v);
-      return acc;
-    }, {} as Record<string, Vulnerability[]>);
-  }, [vulns]);
 
   return (
     <div className="space-y-6">

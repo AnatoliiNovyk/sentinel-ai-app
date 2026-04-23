@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Terminal, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface LogLine {
   text: string;

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Eye, Search, Shield, AlertTriangle, CheckCircle2, Clock, Loader2, Mail, Info, FileText } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText } from 'lucide-react';
 
 type LeakEntry = {
   source: string;
@@ -10,7 +9,6 @@ type LeakEntry = {
 };
 
 export default function OsintAnalyzer() {
-  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<{ query: string; leaks: LeakEntry[]; checkedAt: string }[]>([]);

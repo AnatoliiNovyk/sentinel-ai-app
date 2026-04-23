@@ -1,8 +1,5 @@
-import { supabase, Project, Scan, Vulnerability } from './supabase';
-import { AVAILABLE_SCANNERS } from './scanMock';
+import { supabase, Project, Scan } from './supabase';
 import { ScansService } from '../api/scans.service';
-import { buildReport, ReportKind } from './reportBuilder';
-import { computeCompliance } from './compliance';
 
 export type ToolName =
   | 'list_projects'
@@ -101,7 +98,7 @@ async function toolRunScan(args: { raw: string; scanner: string | null }, orgId:
 
 // ... (other tools) ...
 
-export async function runAgent(userId: string, userText: string, orgId?: string): Promise<AgentTurn | null> {
+export async function runAgent(_userId: string, userText: string, orgId?: string): Promise<AgentTurn | null> {
   const intent = parseIntent(userText);
   if (!intent) return null;
 

@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Terminal, Github, Gitlab, Copy, Check, Info } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Github, Gitlab, Copy, Check, Info } from 'lucide-react';
 
 export default function Integrations() {
-  const { profile } = useAuth();
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = (text: string, id: string) => {

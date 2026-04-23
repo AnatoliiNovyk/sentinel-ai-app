@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Tag } from 'lucide-react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import ProjectDetail from './ProjectDetail';
@@ -13,7 +13,7 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
 };
 
 export default function Projects() {
-  const { user, organizations } = useAuth();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -128,10 +128,10 @@ export default function Projects() {
 function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { user, organizations } = useAuth();
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [description] = useState('');
   const [target, setTarget] = useState('');
   const [environment, setEnvironment] = useState<'external' | 'cloud' | 'internal' | 'iac'>('external');
-  const [tagsInput, setTagsInput] = useState('');
+  const [tagsInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {

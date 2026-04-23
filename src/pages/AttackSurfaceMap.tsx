@@ -5,7 +5,6 @@ import { riskBand } from '../lib/riskScore';
 import { ShieldAlert, RefreshCw, Info } from 'lucide-react';
 
 // ─── Physics types ────────────────────────────────────────────────────────────
-type Vec = { x: number; y: number };
 type SimNode = {
   id: string;
   label: string;
@@ -55,19 +54,7 @@ function buildGraph(projects: Project[], vulns: Vulnerability[]): { nodes: SimNo
   });
 
   // Top 2 vulns per project
-  const byProject = new Map<string, Vulnerability[]>();
-  for (const v of vulns) {
-    if (!byProject.has(v.scan_id)) byProject.set(v.scan_id, []);
-  }
-  // group by scan then find project
-  const scanToProject = new Map<string, string>();
-  for (const p of projects) scanToProject.set(p.id, p.id); // simplified: we'll group differently
-
-  const vulnsByProject = new Map<string, Vulnerability[]>();
-  for (const v of vulns) {
-    // We need to find project by scan_id — we'll use all vulns associated to project via scan
-    // For now, distribute top severity vulns across their project
-  }
+  // We currently assign top findings in round-robin to project nodes for visualization.
 
   // Better: group vulns by their project (we have scan_id, and scans have project_id)
   // Since we don't have scan→project mapping here, we'll use projectId from parent call

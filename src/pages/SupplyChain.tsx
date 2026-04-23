@@ -1,7 +1,5 @@
 import { useState, useRef } from 'react';
-import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, X, RefreshCw, FileJson } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson } from 'lucide-react';
 
 interface Dependency {
   name: string;
@@ -23,7 +21,6 @@ interface ScanResult {
 }
 
 export default function SupplyChain() {
-  const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState(false);

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Search, AlertCircle, CheckCircle2, ChevronRight, Filter, Play, Plus, Layout, Trash2, Cpu, ExternalLink, X, FileText, Lock, MessageSquare, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, Play, X, FileText, Lock, Loader2 } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
@@ -110,8 +110,9 @@ const Scans = () => {
       setShowNewScanModal(false);
       // Reload scans for the project
       await loadScans(project.id);
-    } catch (err: any) {
-      alert('Failed to start scan: ' + err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert('Failed to start scan: ' + message);
     } finally {
       setIsDispatching(false);
     }
@@ -147,8 +148,9 @@ const Scans = () => {
         throw new Error(errorToUserMessage(pollResult.error));
       }
       await loadVulnerabilities(v.scan_id);
-    } catch (err: any) {
-      alert('AI Generation failed: ' + err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert('AI Generation failed: ' + message);
     } finally {
       setGeneratingId(null);
     }
