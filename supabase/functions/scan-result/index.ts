@@ -6,7 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Agent-Secret",
 };
 
-// Simple shared secret between VPS agent and Supabase
 function verifyAgent(req: Request): boolean {
   const secret = req.headers.get("X-Agent-Secret");
   const expected = Deno.env.get("AGENT_SECRET");
@@ -24,7 +23,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { job_id, scan_id, user_id, project_id, findings, error_message } = body;
+    const { job_id, scan_id, user_id, project_id, findings, error_message, metadata } = body;
 
     if (!job_id) {
       return new Response(JSON.stringify({ error: "job_id required" }), {
@@ -39,16 +38,37 @@ Deno.serve(async (req: Request) => {
 
     const now = new Date().toISOString();
 
-    // Handle error case
+    // 1. Handle error case
     if (error_message) {
       await supabase.from("scan_jobs").update({ status: "error", error_message, completed_at: now }).eq("id", job_id);
-      await supabase.from("scans").update({ status: "failed", completed_at: now }).eq("id", scan_id);
+      if (scan_id) {
+        await supabase.from("scans").update({ status: "failed", completed_at: now }).eq("id", scan_id);
+      }
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
     }
 
-    // Insert vulnerabilities from scanner output
+    // 2. Handle Chat Response (if scan_id is null and conversation_id exists)
+    if (!scan_id && metadata?.conversation_id && metadata?.type === 'chat_response') {
+      const aiResponse = findings[0]?.description || "Agent could not generate a response.";
+      
+      await supabase.from("ai_messages").insert({
+        conversation_id: metadata.conversation_id,
+        user_id: user_id,
+        role: 'assistant',
+        content: aiResponse
+      });
+
+      // Mark job as done
+      await supabase.from("scan_jobs").update({ status: "done", completed_at: now }).eq("id", job_id);
+      
+      return new Response(JSON.stringify({ ok: true, type: 'chat_response' }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. Normal Vulnerability Reporting (Existing Logic)
     if (Array.isArray(findings) && findings.length > 0) {
-      const rows = findings.map((f: Record<string, unknown>) => ({
+      const rows = findings.map((f: any) => ({
         scan_id,
         user_id,
         title: f.title ?? "Unnamed finding",
@@ -66,28 +86,28 @@ Deno.serve(async (req: Request) => {
 
       await supabase.from("vulnerabilities").insert(rows);
 
-      // Build severity_summary
-      const summary = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-      for (const f of findings) {
-        const sev = (f.severity as string) ?? "info";
-        if (sev in summary) summary[sev as keyof typeof summary]++;
-      }
+      if (scan_id) {
+        const summary = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+        for (const f of findings) {
+          const sev = (f.severity as string) ?? "info";
+          if (sev in summary) summary[sev as keyof typeof summary]++;
+        }
 
-      await supabase.from("scans").update({
-        status: "completed",
-        completed_at: now,
-        severity_summary: summary,
-      }).eq("id", scan_id);
-    } else {
-      // No findings
+        await supabase.from("scans").update({
+          status: "completed",
+          completed_at: now,
+          severity_summary: summary,
+        }).eq("id", scan_id);
+      }
+    } else if (scan_id) {
       await supabase.from("scans").update({ status: "completed", completed_at: now }).eq("id", scan_id);
     }
 
     // Mark job done
     await supabase.from("scan_jobs").update({ status: "done", completed_at: now }).eq("id", job_id);
 
-    // Recompute risk score
-    if (project_id) {
+    // Recompute risk score (only if scan_id exists)
+    if (project_id && scan_id) {
       const { data: allVulns } = await supabase.from("vulnerabilities")
         .select("severity, status").eq("scan_id", scan_id);
 
@@ -101,15 +121,15 @@ Deno.serve(async (req: Request) => {
       await supabase.from("projects").update({ risk_score: Math.min(score, 100) }).eq("id", project_id);
     }
 
-    // Create notification for user
+    // Notification
     await supabase.from("notifications").insert({
       user_id,
-      type: "scan_completed",
-      title: "Scan Completed",
-      body: `${findings?.length ?? 0} findings were identified.`,
-      link: `/projects/${project_id}`,
+      type: scan_id ? "scan_completed" : "ai_response",
+      title: scan_id ? "Scan Completed" : "AI Response Ready",
+      body: scan_id ? `${findings?.length ?? 0} findings were identified.` : "Sentinel AI has responded to your inquiry.",
+      link: scan_id ? `/projects/${project_id}` : "/chat",
       severity: "success",
-      metadata: { scan_id, job_id },
+      metadata: { scan_id, job_id, conversation_id: metadata?.conversation_id },
     });
 
     return new Response(JSON.stringify({ ok: true }), {

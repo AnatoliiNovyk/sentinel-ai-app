@@ -14,7 +14,7 @@ const POLL_INTERVAL   = 3_000; // 3 seconds
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-console.log('🛡️ Sentinel AI Agent v2.0 starting...');
+console.log('🛡️ Sentinel AI Agent v2.2 starting...');
 
 // --- Ollama Integration ---
 async function consultOllama(prompt: string): Promise<string> {
@@ -37,7 +37,6 @@ async function consultOllama(prompt: string): Promise<string> {
 // --- Scanner Tools ---
 async function runNmap(target: string): Promise<any[]> {
   console.log(`📡 Running nmap on ${target}...`);
-  // Simplified for audit purposes
   return [{
     title: 'Port Scan Result',
     description: `Scanned ${target}. Found open ports.`,
@@ -47,7 +46,7 @@ async function runNmap(target: string): Promise<any[]> {
 }
 
 // --- Job Processing ---
-async function reportResult(jobId: string, scanId: string, userId: string, projectId: string, findings: any[], error?: string) {
+async function reportResult(jobId: string, scanId: string | null, userId: string, projectId: string, findings: any[], metadata: any, error?: string) {
   try {
     const res = await axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
       job_id: jobId,
@@ -55,6 +54,7 @@ async function reportResult(jobId: string, scanId: string, userId: string, proje
       user_id: userId,
       project_id: projectId,
       findings,
+      metadata, // Pass back the metadata (e.g. conversation_id)
       error_message: error
     }, {
       headers: { 'X-Agent-Secret': AGENT_SECRET }
@@ -67,12 +67,10 @@ async function reportResult(jobId: string, scanId: string, userId: string, proje
 
 async function fetchPendingJob() {
   const { data, error } = await supabase.rpc('claim_next_job');
-
   if (error) {
     console.error('❌ Error claiming job:', error.message);
     return null;
   }
-
   return data && data.length > 0 ? data[0] : null;
 }
 
@@ -81,27 +79,26 @@ async function runJob(job: any) {
   try {
     let findings: any[] = [];
     
-    switch (job.scanner) {
-      case 'ai_task':
-        const aiResponse = await consultOllama(job.target);
-        findings = [{
-          title: 'AI Security Response',
-          description: aiResponse,
-          severity: 'info',
-          asset: job.target.substring(0, 50),
-          remediation: 'Review AI suggestions',
-          remediation_type: 'manual',
-          status: 'open'
-        }];
-        break;
-      default:
-        findings = await runNmap(job.target);
+    if (job.scanner === 'ai_task' || job.scanner === 'ai-agent') {
+      const aiResponse = await consultOllama(job.target);
+      findings = [{
+        title: 'AI Security Response',
+        description: aiResponse,
+        severity: 'info',
+        asset: job.target.substring(0, 50),
+        remediation: 'Review AI suggestions',
+        remediation_type: 'manual',
+        status: 'open'
+      }];
+    } else {
+      findings = await runNmap(job.target);
     }
 
-    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings);
+    // Pass the original metadata back so the Edge Function knows how to route the result
+    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
   } catch (err: any) {
     console.error(`❌ Job ${job.id} crashed:`, err.message);
-    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], err.message);
+    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, err.message);
   }
 }
 
