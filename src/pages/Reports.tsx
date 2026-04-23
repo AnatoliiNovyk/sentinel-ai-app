@@ -307,12 +307,12 @@ function markdownToHtml(md: string): string {
     } else if (/^### /.test(line)) {
       flushList();
       out.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
-    } else if (/^\- /.test(line) || /^\d+\. /.test(line)) {
+    } else if (/^- /.test(line) || /^\d+\. /.test(line)) {
       if (!inList) {
         out.push('<ul>');
         inList = true;
       }
-      const content = line.replace(/^(\- |\d+\. )/, '');
+      const content = line.replace(/^(- |\d+\. )/, '');
       out.push(`<li>${inlineMd(content)}</li>`);
     } else if (line.trim() === '') {
       flushList();

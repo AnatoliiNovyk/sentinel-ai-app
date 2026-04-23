@@ -129,7 +129,7 @@ async function augmentWithAi(
     const data = await res.json();
     const text: string = data?.content ?? "";
     return text.trim().length > 200 ? text : base;
-  } catch (_err) {
+  } catch {
     return base;
   }
 }

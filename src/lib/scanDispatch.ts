@@ -145,7 +145,7 @@ export async function dispatchDueSchedules(userId: string): Promise<number> {
       continue;
     }
 
-    const target = (s as any).projects?.target ?? '';
+    const target = (s as { projects?: { target?: string } }).projects?.target ?? '';
     const result = await dispatchScan(userId, s.project_id, s.scanner, target);
     if (result.ok) {
       fired++;

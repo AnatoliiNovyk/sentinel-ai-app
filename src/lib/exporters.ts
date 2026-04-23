@@ -147,7 +147,7 @@ export function fromSarif(raw: string): ParsedSarif {
   for (const run of doc.runs) {
     const driver = run?.tool?.driver;
     if (driver?.name) scanner = String(driver.name).toLowerCase().replace(/\s+/g, '-');
-    const rules = new Map<string, any>();
+    const rules = new Map<string, unknown>();
     for (const r of driver?.rules ?? []) rules.set(r.id, r);
 
     for (const res of run?.results ?? []) {

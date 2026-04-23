@@ -5,7 +5,13 @@ import { supabase } from './supabase';
  * Uses the local VPS agent (Ollama) instead of commercial APIs.
  */
 
-export async function generateKillChain(projectName: string, vulns: any[]): Promise<any[]> {
+type KillChainInputVuln = {
+  title: string;
+  severity: string;
+  asset: string;
+};
+
+export async function generateKillChain(projectName: string, vulns: KillChainInputVuln[]): Promise<unknown[]> {
   if (vulns.length === 0) return [];
 
   const prompt = `

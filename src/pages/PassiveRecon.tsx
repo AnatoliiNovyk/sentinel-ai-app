@@ -21,8 +21,9 @@ export default function ActiveRecon() {
       setStatus('running');
       await new Promise(r => setTimeout(r, 3000));
       setStatus('done');
-    } catch (err: any) {
-      setError(err.message || 'Failed to start active recon');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to start active recon';
+      setError(message);
       setStatus('idle');
     } finally {
       setLoading(false);

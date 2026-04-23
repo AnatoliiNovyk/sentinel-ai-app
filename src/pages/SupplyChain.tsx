@@ -20,6 +20,24 @@ interface ScanResult {
   vulns: Vulnerability[];
 }
 
+type LockPackage = {
+  version?: string;
+  dev?: boolean;
+};
+
+type OsvEvent = { fixed?: string };
+type OsvRange = { events?: OsvEvent[] };
+type OsvAffected = { ranges?: OsvRange[] };
+type OsvSeverity = { score?: string };
+type OsvVuln = {
+  id: string;
+  summary?: string;
+  details?: string;
+  affected?: OsvAffected[];
+  severity?: OsvSeverity[];
+};
+type OsvResponse = { vulns?: OsvVuln[] };
+
 export default function SupplyChain() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -50,7 +68,7 @@ export default function SupplyChain() {
       const deps: Dependency[] = [];
       
       if (file.name.endsWith('package-lock.json')) {
-        Object.entries(json.packages || json.dependencies || {}).forEach(([name, pkg]: [string, any]) => {
+        Object.entries((json.packages || json.dependencies || {}) as Record<string, LockPackage>).forEach(([name, pkg]) => {
           if (!name) return; // skip root project
           const cleanName = name.replace(/^.*node_modules\//, '');
           if (pkg.version) {
@@ -94,12 +112,12 @@ export default function SupplyChain() {
           });
           
           if (!res.ok) continue;
-          const data = await res.json();
+          const data = (await res.json()) as OsvResponse;
           
           if (data.vulns && data.vulns.length > 0) {
-            const mappedVulns = data.vulns.map((v: any) => {
+            const mappedVulns = data.vulns.map((v) => {
               const affected = v.affected?.[0];
-              const fixed = affected?.ranges?.[0]?.events?.find((e: any) => e.fixed)?.fixed;
+              const fixed = affected?.ranges?.[0]?.events?.find((e) => Boolean(e.fixed))?.fixed;
               
               // Extract severity
               let severity = 'medium';
@@ -128,7 +146,7 @@ export default function SupplyChain() {
       }
 
       setResults(scanResults);
-    } catch (err) {
+    } catch {
       setError('Failed to parse package.json. Ensure it is valid JSON.');
     } finally {
       setScanning(false);

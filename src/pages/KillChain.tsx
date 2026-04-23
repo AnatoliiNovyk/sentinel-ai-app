@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 
 export default function KillChain() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string>('');
-  const [vulns, setVulns] = useState<any[]>([]);
-  const [chain, setChain] = useState<any[] | null>(null);
+  const [vulns, setVulns] = useState<Vulnerability[]>([]);
+  const [chain, setChain] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {

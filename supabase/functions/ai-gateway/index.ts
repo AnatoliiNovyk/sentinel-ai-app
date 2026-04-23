@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ kill_chain, provider }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch (e) {
+      } catch {
         return new Response(JSON.stringify({ error: "AI failed to return valid JSON", raw: content }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500
         });

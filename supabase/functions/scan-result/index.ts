@@ -68,19 +68,19 @@ Deno.serve(async (req: Request) => {
 
     // 3. Normal Vulnerability Reporting (Existing Logic)
     if (Array.isArray(findings) && findings.length > 0) {
-      const rows = findings.map((f: any) => ({
+      const rows = findings.map((f: Record<string, unknown>) => ({
         scan_id,
         user_id,
-        title: f.title ?? "Unnamed finding",
-        description: f.description ?? "",
-        severity: f.severity ?? "info",
-        cve_id: f.cve_id ?? "",
-        mitre_tactic: f.mitre_tactic ?? "",
-        cis_control: f.cis_control ?? "",
-        asset: f.asset ?? "",
-        remediation: f.remediation ?? "",
-        remediation_code: f.remediation_code ?? "",
-        remediation_type: f.remediation_type ?? "manual",
+        title: (f.title as string | undefined) ?? "Unnamed finding",
+        description: (f.description as string | undefined) ?? "",
+        severity: (f.severity as string | undefined) ?? "info",
+        cve_id: (f.cve_id as string | undefined) ?? "",
+        mitre_tactic: (f.mitre_tactic as string | undefined) ?? "",
+        cis_control: (f.cis_control as string | undefined) ?? "",
+        asset: (f.asset as string | undefined) ?? "",
+        remediation: (f.remediation as string | undefined) ?? "",
+        remediation_code: (f.remediation_code as string | undefined) ?? "",
+        remediation_type: (f.remediation_type as string | undefined) ?? "manual",
         status: "open",
       }));
 

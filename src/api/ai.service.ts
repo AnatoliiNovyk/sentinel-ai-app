@@ -71,7 +71,7 @@ export const AiService = {
     return success(data);
   },
 
-  async pollForResult(scanId: string | null, startTime: number): Promise<Result<any>> {
+  async pollForResult(scanId: string | null, startTime: number): Promise<Result<unknown>> {
     const maxRetries = 40; // 2 minutes
     for (let i = 0; i < maxRetries; i++) {
       let query = supabase

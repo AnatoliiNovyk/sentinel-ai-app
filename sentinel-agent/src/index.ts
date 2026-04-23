@@ -1,10 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import axios from 'axios';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
 dotenv.config();
 
 const SUPABASE_URL    = process.env.SUPABASE_URL!;
@@ -13,6 +9,31 @@ const AGENT_SECRET    = process.env.AGENT_SECRET!;
 const POLL_INTERVAL   = 3_000; // 3 seconds
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+type Finding = {
+  title: string;
+  description: string;
+  severity: string;
+  asset: string;
+  remediation?: string;
+  remediation_type?: string;
+  status?: string;
+};
+
+type ScanJob = {
+  id: string;
+  scanner: string;
+  target: string;
+  scan_id: string | null;
+  user_id: string;
+  project_id: string;
+  metadata: Record<string, unknown>;
+};
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 console.log('🛡️ Sentinel AI Agent v2.3 starting...');
 
@@ -27,15 +48,18 @@ async function consultOllama(prompt: string): Promise<string> {
     }, { timeout: 120000 }); // 2 minute timeout for slow CPUs
 
     return response.data.response;
-  } catch (err: any) {
-    console.error('❌ Ollama Error:', err.message);
-    if (err.code === 'ECONNREFUSED') return 'Error: Ollama is not running on localhost:11434';
-    return `Error consulting AI: ${err.message}`;
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    console.error('❌ Ollama Error:', message);
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ECONNREFUSED') {
+      return 'Error: Ollama is not running on localhost:11434';
+    }
+    return `Error consulting AI: ${message}`;
   }
 }
 
 // --- Scanner Tools ---
-async function runNmap(target: string): Promise<any[]> {
+async function runNmap(target: string): Promise<Finding[]> {
   console.log(`📡 Running nmap on ${target}...`);
   return [{
     title: 'Port Scan Result',
@@ -46,7 +70,15 @@ async function runNmap(target: string): Promise<any[]> {
 }
 
 // --- Job Processing ---
-async function reportResult(jobId: string, scanId: string | null, userId: string, projectId: string, findings: any[], metadata: any, error?: string) {
+async function reportResult(
+  jobId: string,
+  scanId: string | null,
+  userId: string,
+  projectId: string,
+  findings: Finding[],
+  metadata: Record<string, unknown>,
+  error?: string
+) {
   try {
     const res = await axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
       job_id: jobId,
@@ -60,24 +92,24 @@ async function reportResult(jobId: string, scanId: string | null, userId: string
       headers: { 'X-Agent-Secret': AGENT_SECRET }
     });
     console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}`);
-  } catch (err: any) {
-    console.error(`❌ Failed to report results for job ${jobId}:`, err.message);
+  } catch (err: unknown) {
+    console.error(`❌ Failed to report results for job ${jobId}:`, getErrorMessage(err));
   }
 }
 
-async function fetchPendingJob() {
+async function fetchPendingJob(): Promise<ScanJob | null> {
   const { data, error } = await supabase.rpc('claim_next_job');
   if (error) {
     console.error('❌ Error claiming job:', error.message);
     return null;
   }
-  return data && data.length > 0 ? data[0] : null;
+  return data && data.length > 0 ? (data[0] as ScanJob) : null;
 }
 
-async function runJob(job: any) {
+async function runJob(job: ScanJob) {
   console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
   try {
-    let findings: any[] = [];
+    let findings: Finding[] = [];
     
     if (job.scanner === 'ai_task' || job.scanner === 'ai-agent') {
       const aiResponse = await consultOllama(job.target);
@@ -95,9 +127,10 @@ async function runJob(job: any) {
     }
 
     await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
-  } catch (err: any) {
-    console.error(`❌ Job ${job.id} crashed:`, err.message);
-    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, err.message);
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    console.error(`❌ Job ${job.id} crashed:`, message);
+    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
   }
 }
 
@@ -110,11 +143,11 @@ async function main() {
       if (job) {
         await runJob(job);
       }
-    } catch (err: any) {
-      console.error('⚠️ Loop Error:', err.message);
+    } catch (err: unknown) {
+      console.error('⚠️ Loop Error:', getErrorMessage(err));
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 }
 
-main().catch(err => console.error('🔥 Fatal Crash:', err));
+main().catch((err: unknown) => console.error('🔥 Fatal Crash:', getErrorMessage(err)));

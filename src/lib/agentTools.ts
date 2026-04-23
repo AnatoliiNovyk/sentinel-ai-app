@@ -59,11 +59,14 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   { name: 'summarize_findings', patterns: [/\bsummarize\b/i, /summary of findings/i, /поточний стан/i], extractArgs: (text) => ({ raw: text }) },
 ];
 
-function parseIntent(text: string): { name: any; args: any } | null {
+function parseIntent(text: string): { name: ToolName | 'greeting' | 'help'; args: Record<string, unknown> } | null {
   const t = text.trim();
   for (const matcher of INTENT_MATCHERS) {
     if (matcher.patterns.some((p) => p.test(t))) {
-      return { name: matcher.name as any, args: matcher.extractArgs ? matcher.extractArgs(t) : {} };
+      return {
+        name: matcher.name,
+        args: matcher.extractArgs ? matcher.extractArgs(t) : {},
+      };
     }
   }
   return null;
@@ -113,10 +116,11 @@ export async function runAgent(_userId: string, userText: string, orgId?: string
       if (!orgId) return { content: "Error: No organization context.", toolCalls: [] };
       result = await toolRunScan(intent.args, orgId); 
       break;
-    case 'list_findings':
+    case 'list_findings': {
       const { data } = await supabase.from('vulnerabilities').select('*').limit(10);
       result = { name: 'list_findings', ok: true, summary: `Found ${data?.length || 0} findings.` };
       break;
+    }
     default: return null;
   }
 
