@@ -19,6 +19,9 @@ export type Profile = {
   id: string;
   email: string;
   full_name: string;
+  company?: string;
+  plan?: string;
+  sla_config?: Partial<SlaConfig>;
   avatar_url: string | null;
   created_at: string;
 };

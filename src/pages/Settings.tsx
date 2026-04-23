@@ -118,8 +118,8 @@ export default function Settings() {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name);
-      setCompany(profile.company);
-      setPlan(profile.plan);
+      setCompany(profile.company ?? '');
+      setPlan(profile.plan ?? 'free');
       setSla({ ...DEFAULT_SLA_CONFIG, ...(profile.sla_config ?? {}) });
     }
   }, [profile]);

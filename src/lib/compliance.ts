@@ -95,6 +95,8 @@ export type Soc2Row = {
   label: string;
   score: number; // 0-100
   weight: number;
+  openCount: number;
+  criticalCount: number;
 };
 
 export type ComplianceResult = {
@@ -176,6 +178,8 @@ export function computeCompliance(vulns: Vulnerability[]): ComplianceResult {
     label: c.label,
     weight: c.weight,
     score: Math.max(0, MAX_SCORE - Math.round(basePenalty * c.weight * 2)),
+    openCount: open.length,
+    criticalCount: critCount,
   }));
 
   const soc2Overall = Math.round(
