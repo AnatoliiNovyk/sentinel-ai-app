@@ -79,7 +79,8 @@ describe('ai-gateway handler', () => {
   });
 
   it('returns 429 when rate limit is exceeded', async () => {
-    for (let i = 0; i < 30; i++) {
+    // Default rate limit is 30 req/min. Send 31 requests to trigger blocking.
+    for (let i = 0; i < 31; i++) {
       const req = new Request('https://example.com/functions/v1/ai-gateway', {
         method: 'POST',
         headers: {

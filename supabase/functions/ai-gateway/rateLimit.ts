@@ -8,6 +8,8 @@ const DEFAULT_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60_000,
 };
 
+export type { RateLimitConfig };
+
 const requestBuckets = new Map<string, number[]>();
 
 export function consumeRateLimit(

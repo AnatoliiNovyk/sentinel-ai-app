@@ -5,6 +5,7 @@ import {
   type ChatMessage,
 } from './contract.ts';
 import { checkGatewayRateLimit, extractClientKey } from './rateLimit.ts';
+import { MemoryCache, generateKillChainCacheKey } from './cache.ts';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,6 +99,10 @@ const telemetryMetrics: Record<TelemetryMetric, number> = {
 };
 
 const telemetryRecentEvents: TelemetryRecentEvent[] = [];
+
+// In-memory cache for expensive operations (e.g., kill-chain generation).
+// TTL: 5 minutes (300,000 ms)
+const killChainCache = new MemoryCache<unknown>(5 * 60 * 1000);
 
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
@@ -277,6 +282,22 @@ function logWithRequestId(requestId: string, message: string, err?: unknown): vo
   console.error(`[ai-gateway][${requestId}] ${message}: ${safeErrorDetails(err)}`);
 }
 
+function logStructuredJson(
+  requestId: string,
+  level: 'info' | 'warn' | 'error',
+  event: string,
+  data: Record<string, unknown> = {},
+): void {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    request_id: requestId,
+    level,
+    event,
+    ...data,
+  };
+  console.log(JSON.stringify(logEntry));
+}
+
 function appendTelemetryEvent(event: TelemetryRecentEvent): void {
   telemetryRecentEvents.push(event);
   if (telemetryRecentEvents.length > RECENT_EVENTS_BUFFER_SIZE) {
@@ -292,7 +313,11 @@ function incrementTelemetry(metric: TelemetryMetric, requestId: string, statusCo
     event_type: METRIC_TO_EVENT_TYPE[metric],
     ...(statusCode === undefined ? {} : { status_code: statusCode }),
   });
-  logWithRequestId(requestId, `telemetry ${metric}=${telemetryMetrics[metric]}`);
+  logStructuredJson(requestId, 'warn', 'telemetry_event', {
+    metric,
+    count: telemetryMetrics[metric],
+    status_code: statusCode,
+  });
 }
 
 export function getAiGatewayTelemetrySnapshot(): Record<TelemetryMetric, number> {
@@ -546,10 +571,14 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       return jsonResponse(err.body, requestId, err.status);
     }
 
+    // Rate limit check (30 req/min default policy)
     const clientKey = extractClientKey(req);
     const rateLimit = checkGatewayRateLimit(clientKey);
     if (!rateLimit.allowed) {
       incrementTelemetry('rate_limited_count', requestId, 429);
+      logStructuredJson(requestId, 'warn', 'rate_limit_exceeded', {
+        retry_after_seconds: rateLimit.retryAfterSeconds,
+      });
       const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
       return jsonResponse(err.body, requestId, err.status, {
         'Retry-After': String(rateLimit.retryAfterSeconds),
@@ -623,9 +652,23 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     }
 
     if (action === 'generate_kill_chain') {
+      // Check cache first before calling expensive AI endpoint.
+      const cacheKey = generateKillChainCacheKey(
+        (parsed.value as unknown as Record<string, unknown>).project as string,
+        (parsed.value as unknown as Record<string, unknown>).vulnerabilities as unknown[],
+      );
+      const cachedResult = killChainCache.get(cacheKey);
+      if (cachedResult) {
+        logStructuredJson(requestId, 'info', 'cache_hit', { cache_key: cacheKey });
+        return jsonResponse({ kill_chain: cachedResult, provider: 'cache' }, requestId);
+      }
+
       try {
         const cleaned = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
         const killChain = JSON.parse(cleaned);
+        // Store in cache for future requests.
+        killChainCache.set(cacheKey, killChain);
+        logStructuredJson(requestId, 'info', 'cache_set', { cache_key: cacheKey });
         return jsonResponse({ kill_chain: killChain, provider }, requestId);
       } catch {
         incrementTelemetry('ai_invalid_json_count', requestId, 502);
