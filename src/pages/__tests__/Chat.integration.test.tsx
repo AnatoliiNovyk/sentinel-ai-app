@@ -1,0 +1,154 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import Chat from '../Chat';
+
+const { mockRunAgent, mockGetProjects, authValue } = vi.hoisted(() => ({
+  mockRunAgent: vi.fn(),
+  mockGetProjects: vi.fn(),
+  authValue: {
+    user: { id: 'user-1' },
+    organizations: [{ id: 'org-1' }],
+  },
+}));
+
+type Conversation = { id: string; title: string; created_at?: string; user_id?: string };
+type Message = {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+};
+
+let conversations: Conversation[];
+let messages: Message[];
+let convoIdCounter = 1;
+let msgIdCounter = 1;
+
+vi.mock('../../context/useAuth', () => ({
+  useAuth: () => authValue,
+}));
+
+vi.mock('../../api/scans.service', () => ({
+  ScansService: {
+    getProjects: mockGetProjects,
+  },
+}));
+
+vi.mock('../../lib/agentTools', () => ({
+  runAgent: mockRunAgent,
+  TOOL_LABELS: {
+    list_projects: 'Listed projects',
+  },
+}));
+
+vi.mock('../../api/ai.service', () => ({
+  AiService: {
+    dispatchChatTask: vi.fn(),
+  },
+}));
+
+vi.mock('marked', () => ({
+  marked: {
+    setOptions: vi.fn(),
+    parse: (s: string) => s,
+  },
+}));
+
+vi.mock('../../api/client', () => {
+  const from = vi.fn((table: string) => {
+    if (table === 'ai_conversations') {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: [...conversations] }),
+          }),
+        }),
+        insert: (payload: { user_id: string; title: string }) => ({
+          select: () => ({
+            maybeSingle: async () => {
+              const created = {
+                id: `convo-${convoIdCounter++}`,
+                title: payload.title,
+                user_id: payload.user_id,
+                created_at: new Date().toISOString(),
+              };
+              conversations = [created, ...conversations];
+              return { data: created };
+            },
+          }),
+        }),
+      };
+    }
+
+    if (table === 'ai_messages') {
+      return {
+        select: () => ({
+          eq: (_field: string, convoId: string) => ({
+            order: () => Promise.resolve({ data: messages.filter((m) => m.conversation_id === convoId) }),
+          }),
+        }),
+        insert: (payload: {
+          conversation_id: string;
+          user_id: string;
+          role: 'user' | 'assistant';
+          content: string;
+        }) => ({
+          select: () => ({
+            maybeSingle: async () => {
+              const created: Message = {
+                id: `msg-${msgIdCounter++}`,
+                conversation_id: payload.conversation_id,
+                user_id: payload.user_id,
+                role: payload.role,
+                content: payload.content,
+                created_at: new Date().toISOString(),
+              };
+              messages = [...messages, created];
+              return { data: created };
+            },
+          }),
+        }),
+      };
+    }
+
+    throw new Error(`Unexpected table: ${table}`);
+  });
+
+  return { supabase: { from } };
+});
+
+describe('Chat integration flow', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    vi.clearAllMocks();
+    conversations = [];
+    messages = [];
+    convoIdCounter = 1;
+    msgIdCounter = 1;
+
+    mockGetProjects.mockResolvedValue([{ id: 'project-1', name: 'Main project' }]);
+    mockRunAgent.mockResolvedValue({
+      content: 'Agent response ready',
+      toolCalls: [{ name: 'list_projects', ok: true, summary: 'ok' }],
+    });
+  });
+
+  it('sends suggestion and persists user+assistant messages via agent path', async () => {
+    render(<Chat />);
+
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'List my open findings' }));
+
+    await waitFor(() => expect(mockRunAgent).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('Agent response ready')).toBeInTheDocument());
+
+    expect(screen.getAllByText('List my open findings').length).toBeGreaterThan(0);
+  });
+});

@@ -99,6 +99,13 @@ async function toolRunScan(args: { raw: string; scanner: string | null }, orgId:
   return { name: 'run_scan', ok: true, summary: `Successfully launched **${scanner}** scan for **${project.name}**.`, data: { scanId: scan.id } };
 }
 
+function toRunScanArgs(args: Record<string, unknown>): { raw: string; scanner: string | null } {
+  return {
+    raw: typeof args.raw === 'string' ? args.raw : '',
+    scanner: typeof args.scanner === 'string' ? args.scanner : null,
+  };
+}
+
 // ... (other tools) ...
 
 export async function runAgent(_userId: string, userText: string, orgId?: string): Promise<AgentTurn | null> {
@@ -114,7 +121,7 @@ export async function runAgent(_userId: string, userText: string, orgId?: string
     case 'list_scans': result = await toolListScans(); break;
     case 'run_scan': 
       if (!orgId) return { content: "Error: No organization context.", toolCalls: [] };
-      result = await toolRunScan(intent.args, orgId); 
+      result = await toolRunScan(toRunScanArgs(intent.args), orgId); 
       break;
     case 'list_findings': {
       const { data } = await supabase.from('vulnerabilities').select('*').limit(10);

@@ -122,7 +122,7 @@ export default function SupplyChain() {
               // Extract severity
               let severity = 'medium';
               if (v.severity && v.severity.length > 0) {
-                const score = v.severity[0].score;
+                const score = v.severity[0].score ?? '';
                 if (score.includes('CRITICAL')) severity = 'critical';
                 else if (score.includes('HIGH')) severity = 'high';
                 else if (score.includes('LOW')) severity = 'low';

@@ -3,11 +3,19 @@ import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug } from 'lucide-react
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 
+type KillChainStep = {
+  phase: string;
+  tactic: string;
+  description: string;
+  exploited_vuln: string;
+  asset: string;
+};
+
 export default function KillChain() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string>('');
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
-  const [chain, setChain] = useState<unknown[] | null>(null);
+  const [chain, setChain] = useState<KillChainStep[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -39,8 +47,8 @@ export default function KillChain() {
 
     const project = projects.find(p => p.id === projectId);
     const result = await generateKillChain(project?.name || 'Unknown', finalVulns);
-    
-    setChain(result);
+
+    setChain(result as KillChainStep[]);
     setLoading(false);
   };
 

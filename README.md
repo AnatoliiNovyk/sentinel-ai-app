@@ -72,6 +72,27 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ---
 
+## Quality Gate
+
+Before creating a PR, run the full local quality gate:
+
+```bash
+npm run quality:check
+```
+
+Command matrix:
+
+| Command | What it validates |
+|---|---|
+| `npm run lint -- --max-warnings=0` | ESLint rules with zero warnings policy |
+| `npm run typecheck` | TypeScript static typing (`tsc --noEmit`) |
+| `npm run test:run` | Unit and integration tests (Vitest) |
+| `npm run build` | Production build health (Vite) |
+
+If `quality:check` passes locally, the branch is ready for CI review.
+
+---
+
 ## 🏗️ Architecture
 
 ```

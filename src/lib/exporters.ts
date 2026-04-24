@@ -119,6 +119,15 @@ export type ParsedSarif = {
   findings: ParsedFinding[];
 };
 
+type SarifRule = {
+  name?: string;
+  properties?: Record<string, unknown>;
+  shortDescription?: { text?: string };
+  fullDescription?: { text?: string };
+  help?: { text?: string };
+  helpUri?: string;
+};
+
 function normalizeSeverity(raw: unknown): ParsedFinding['severity'] {
   const s = String(raw ?? '').toLowerCase();
   if (['critical', 'high', 'medium', 'low', 'info'].includes(s)) return s as ParsedFinding['severity'];
@@ -147,11 +156,13 @@ export function fromSarif(raw: string): ParsedSarif {
   for (const run of doc.runs) {
     const driver = run?.tool?.driver;
     if (driver?.name) scanner = String(driver.name).toLowerCase().replace(/\s+/g, '-');
-    const rules = new Map<string, unknown>();
-    for (const r of driver?.rules ?? []) rules.set(r.id, r);
+    const rules = new Map<string, SarifRule>();
+    for (const r of driver?.rules ?? []) {
+      rules.set(r.id, r as SarifRule);
+    }
 
     for (const res of run?.results ?? []) {
-      const rule = rules.get(res.ruleId);
+      const rule = rules.get(res.ruleId) ?? {};
       const props = { ...(rule?.properties ?? {}), ...(res.properties ?? {}) };
       const score = Number(props['security-severity']);
       const severity = props.severity
