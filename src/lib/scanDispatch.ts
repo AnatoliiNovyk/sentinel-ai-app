@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
 import { runMockScan } from './scanMock';
 import { ErrorCode, failure, Result, success } from './errors';
+import { InMemoryScanQueue, type ScanJob, type ScanPriority } from './scanQueue';
+import { runScansParallel, summarizeScanResults } from './parallelScanner';
 
 const EDGE_BASE = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
@@ -156,3 +158,68 @@ export async function dispatchDueSchedules(userId: string): Promise<number> {
 
   return fired;
 }
+
+/**
+ * Dispatch multiple scans in parallel with concurrency limiting.
+ *
+ * @param userId User ID
+ * @param scans Array of { projectId, targetUrl, scanner, priority }
+ * @param concurrency Max concurrent scans (default 3)
+ * @returns Summary of results with per-scan status
+ */
+export async function dispatchScansParallel(
+  userId: string,
+  scans: Array<{
+    projectId: string;
+    targetUrl: string;
+    scanner: string;
+    priority?: ScanPriority;
+  }>,
+  concurrency = 3,
+): Promise<Result<{ scanIds: string[]; summary: ReturnType<typeof summarizeScanResults> }>> {
+  if (!scans.length) {
+    return success({ scanIds: [], summary: summarizeScanResults([]) });
+  }
+
+  // Create scan jobs
+  const queue = new InMemoryScanQueue();
+  const scanIds: string[] = [];
+
+  for (const scan of scans) {
+    const job: ScanJob = {
+      id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      projectId: scan.projectId,
+      targetUrl: scan.targetUrl,
+      scanTypes: [scan.scanner],
+      priority: scan.priority ?? 'medium',
+      createdAt: new Date(),
+      userId,
+    };
+    queue.enqueue(job);
+  }
+
+  // Execute in parallel
+  const workerFn = async (job: ScanJob): Promise<unknown[]> => {
+    const result = await dispatchScan(userId, job.projectId, job.scanTypes[0], job.targetUrl);
+    if (result.ok) {
+      scanIds.push(result.data.scanId);
+      return [{ scanId: result.data.scanId, mode: result.data.mode }];
+    }
+    throw new Error(result.error?.message ?? 'Unknown error');
+  };
+
+  const allJobs: ScanJob[] = [];
+  while (queue.size() > 0) {
+    const job = queue.dequeue();
+    if (job) allJobs.push(job);
+  }
+
+  const scanResults = await runScansParallel(allJobs, workerFn, concurrency);
+  const summary = summarizeScanResults(scanResults);
+
+  return success({
+    scanIds,
+    summary,
+  });
+}
+

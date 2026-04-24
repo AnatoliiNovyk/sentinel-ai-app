@@ -117,3 +117,104 @@ describe('dispatchScan', () => {
     expect(result).toEqual({ ok: true, data: { scanId: 'scan-real-1', mode: 'REAL' } });
   });
 });
+
+describe('dispatchScansParallel', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('dispatches multiple scans and returns summary', async () => {
+    const mockSupabase = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-p1' }, error: null },
+      token: 'token-123',
+    });
+    const runMockScan = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ job_id: 'job-x' }),
+    });
+
+    vi.doMock('../supabase', () => ({ supabase: mockSupabase.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+    const { dispatchScansParallel } = await import('../scanDispatch');
+
+    const scans = [
+      { projectId: 'proj1', targetUrl: 'https://example1.com', scanner: 'nmap' },
+      { projectId: 'proj2', targetUrl: 'https://example2.com', scanner: 'nuclei' },
+      { projectId: 'proj3', targetUrl: 'https://example3.com', scanner: 'trivy', priority: 'high' as const },
+    ];
+
+    const result = await dispatchScansParallel('user-1', scans, 2);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.scanIds.length).toBeGreaterThanOrEqual(0);
+      expect(result.data.summary.total).toBe(3);
+    }
+  });
+
+  it('handles empty scan list', async () => {
+    const mockSupabase = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-1' }, error: null },
+    });
+    vi.doMock('../supabase', () => ({ supabase: mockSupabase.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan: vi.fn() }));
+
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    const { dispatchScansParallel } = await import('../scanDispatch');
+
+    const result = await dispatchScansParallel('user-1', []);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.scanIds).toEqual([]);
+      expect(result.data.summary.total).toBe(0);
+    }
+  });
+
+  it('respects concurrency limit', async () => {
+    const mockSupabase = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-1' }, error: null },
+      token: 'token-123',
+    });
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+
+    const fetchMock = vi.fn(async () => {
+      currentConcurrent += 1;
+      maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+      await new Promise((r) => setTimeout(r, 10));
+      currentConcurrent -= 1;
+      return {
+        ok: true,
+        json: async () => ({ job_id: 'job-1' }),
+      };
+    });
+
+    vi.doMock('../supabase', () => ({ supabase: mockSupabase.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan: vi.fn() }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+    const { dispatchScansParallel } = await import('../scanDispatch');
+
+    const scans = Array.from({ length: 5 }, (_, i) => ({
+      projectId: `proj${i}`,
+      targetUrl: `https://example${i}.com`,
+      scanner: 'nmap',
+    }));
+
+    await dispatchScansParallel('user-1', scans, 2);
+
+    expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+});

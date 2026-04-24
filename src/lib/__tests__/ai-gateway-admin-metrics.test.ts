@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  getAiGatewayPrometheusMetrics,
   getAiGatewayTelemetrySnapshot,
   handleAiGatewayRequest,
   resetAiGatewayTelemetryForTests,
@@ -199,5 +200,60 @@ describe('ai-gateway admin metrics endpoint', () => {
     expect(res.status).toBe(200);
     expect(body.provider).toBe('mock');
     expect(typeof body.content).toBe('string');
+  });
+
+  it('returns Prometheus text format for GET /metrics with valid admin key', async () => {
+    const runtime = globalThis as unknown as {
+      Deno?: { env?: { get: (key: string) => string | undefined } };
+    };
+    runtime.Deno = {
+      env: {
+        get: (key: string) => {
+          if (key === 'AI_GATEWAY_ADMIN_KEY') return 'admin-secret';
+          if (key === 'AI_GATEWAY_VERSION') return 'test-v1';
+          return undefined;
+        },
+      },
+    };
+
+    const req = new Request('https://example.com/functions/v1/ai-gateway/metrics', {
+      method: 'GET',
+      headers: {
+        'x-gateway-admin-key': 'admin-secret',
+        'x-forwarded-for': '203.0.113.50',
+      },
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const body = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/plain');
+    expect(body).toContain('# HELP ai_gateway_uptime_seconds');
+    expect(body).toContain('# TYPE ai_gateway_uptime_seconds gauge');
+    expect(body).toContain('# HELP ai_gateway_unauthorized_total');
+    expect(body).toContain('# TYPE ai_gateway_unauthorized_total counter');
+    expect(body).toContain('# HELP ai_gateway_rate_limited_total');
+    expect(body).toContain('# HELP ai_gateway_cache_size');
+    expect(body).toContain('# HELP ai_gateway_compression_ratio');
+    expect(body.endsWith('\n')).toBe(true);
+  });
+
+  it('returns 401 for GET /metrics without valid admin key', async () => {
+    const req = new Request('https://example.com/functions/v1/ai-gateway/metrics', {
+      method: 'GET',
+      headers: { 'x-forwarded-for': '203.0.113.51' },
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    expect(res.status).toBe(401);
+  });
+
+  it('getAiGatewayPrometheusMetrics returns valid Prometheus text', () => {
+    const output = getAiGatewayPrometheusMetrics();
+    expect(typeof output).toBe('string');
+    expect(output).toContain('# HELP ai_gateway_uptime_seconds');
+    expect(output).toContain('ai_gateway_unauthorized_total');
+    expect(output.endsWith('\n')).toBe(true);
   });
 });

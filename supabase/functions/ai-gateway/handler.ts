@@ -6,6 +6,15 @@ import {
 } from './contract.ts';
 import { checkGatewayRateLimit, extractClientKey } from './rateLimit.ts';
 import { MemoryCache, generateKillChainCacheKey } from './cache.ts';
+import { gzipCompress, shouldCompress } from './compression.ts';
+import { buildPrometheusResponse, buildGatewayPrometheusMetrics, serializePrometheusMetrics } from './prometheus.ts';
+import {
+  extractTraceContext,
+  buildTraceparent,
+  injectTraceContext,
+  buildChildSpan,
+  type TraceContext,
+} from './tracing.ts';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +39,9 @@ type TelemetryMetric =
   | 'payload_too_large_count'
   | 'rate_limited_count'
   | 'provider_fallback_count'
-  | 'ai_invalid_json_count';
+  | 'ai_invalid_json_count'
+  | 'response_compressed_count'
+  | 'response_skipped_compression_count';
 
 type TelemetryEventType =
   | 'unauthorized'
@@ -38,7 +49,9 @@ type TelemetryEventType =
   | 'payload_too_large'
   | 'rate_limited'
   | 'provider_fallback'
-  | 'ai_invalid_json';
+  | 'ai_invalid_json'
+  | 'response_compressed'
+  | 'response_skipped_compression';
 
 type TelemetryRecentEvent = {
   timestamp: string;
@@ -75,6 +88,8 @@ const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
   rate_limited_count: 'rate_limited',
   provider_fallback_count: 'provider_fallback',
   ai_invalid_json_count: 'ai_invalid_json',
+  response_compressed_count: 'response_compressed',
+  response_skipped_compression_count: 'response_skipped_compression',
 };
 
 const RECENT_EVENTS_BUFFER_SIZE = 50;
@@ -96,6 +111,8 @@ const telemetryMetrics: Record<TelemetryMetric, number> = {
   rate_limited_count: 0,
   provider_fallback_count: 0,
   ai_invalid_json_count: 0,
+  response_compressed_count: 0,
+  response_skipped_compression_count: 0,
 };
 
 const telemetryRecentEvents: TelemetryRecentEvent[] = [];
@@ -121,7 +138,7 @@ When a user describes a goal, you:
 
 Keep responses clear, technical, and action-oriented. Use Markdown formatting (bold, bullet points, code blocks). Never invent data you don't have — describe what you would do.`;
 
-async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<string> {
+async function callGemini(apiKey: string, messages: ChatMessage[], traceCtx?: TraceContext): Promise<string> {
   const userMessages = messages.filter((m) => m.role !== 'system');
 
   const contents = userMessages.map((m) => ({
@@ -129,11 +146,15 @@ async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
     parts: [{ text: m.content }],
   }));
 
+  const spanHeaders = traceCtx
+    ? injectTraceContext({ 'Content-Type': 'application/json' }, buildChildSpan(traceCtx))
+    : { 'Content-Type': 'application/json' };
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: spanHeaders,
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents,
@@ -154,14 +175,17 @@ async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
   return json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-async function callAnthropic(apiKey: string, messages: ChatMessage[]): Promise<string> {
+async function callAnthropic(apiKey: string, messages: ChatMessage[], traceCtx?: TraceContext): Promise<string> {
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+  const spanHeaders = traceCtx ? injectTraceContext(baseHeaders, buildChildSpan(traceCtx)) : baseHeaders;
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: spanHeaders,
     body: JSON.stringify({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1024,
@@ -178,13 +202,16 @@ async function callAnthropic(apiKey: string, messages: ChatMessage[]): Promise<s
   return json.content?.[0]?.text ?? '';
 }
 
-async function callOpenAI(apiKey: string, messages: ChatMessage[]): Promise<string> {
+async function callOpenAI(apiKey: string, messages: ChatMessage[], traceCtx?: TraceContext): Promise<string> {
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+  const spanHeaders = traceCtx ? injectTraceContext(baseHeaders, buildChildSpan(traceCtx)) : baseHeaders;
+
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: spanHeaders,
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       max_tokens: 1024,
@@ -233,19 +260,81 @@ function mockResponse(prompt: string): string {
   return `I'm **Sentinel**, your AI security auditor. I can orchestrate external, cloud, IaC, and vulnerability scans, map findings to MITRE ATT&CK and CIS Controls, and generate reports with ready-to-apply remediation.\n\nTry: *"Scan my AWS account for SOC2 compliance"*.`;
 }
 
-function jsonResponse(
+type CompressionMetrics = {
+  response_original_bytes: number;
+  response_compressed_bytes: number;
+  compression_ratio: number;
+};
+
+const compressionMetrics: CompressionMetrics = {
+  response_original_bytes: 0,
+  response_compressed_bytes: 0,
+  compression_ratio: 0,
+};
+
+async function jsonResponse(
   payload: unknown,
   requestId: string,
   status = 200,
   extraHeaders: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(payload), {
+  acceptEncoding: string | null = null,
+  traceCtx?: TraceContext,
+): Promise<Response> {
+  const traceHeaders: Record<string, string> = traceCtx ? { traceparent: buildTraceparent(traceCtx) } : {};
+  const jsonStr = JSON.stringify(payload);
+  const encoder = new TextEncoder();
+  const originalBytes = encoder.encode(jsonStr);
+  const originalSize = originalBytes.length;
+
+  // Attempt compression if client accepts it and payload is large enough
+  if (shouldCompress(originalSize, acceptEncoding)) {
+    try {
+      const compressed = await gzipCompress(originalBytes);
+      // Only use compression if it actually reduces size
+      if (compressed.length < originalSize) {
+        incrementTelemetry('response_compressed_count', requestId);
+        compressionMetrics.response_original_bytes += originalSize;
+        compressionMetrics.response_compressed_bytes += compressed.length;
+        compressionMetrics.compression_ratio =
+          compressionMetrics.response_compressed_bytes / compressionMetrics.response_original_bytes;
+        logStructuredJson(requestId, 'info', 'response_compressed', {
+          original_bytes: originalSize,
+          compressed_bytes: compressed.length,
+          ratio: (1 - compressed.length / originalSize).toFixed(2),
+        });
+        return new Response(compressed, {
+          status,
+          headers: {
+            ...corsHeaders,
+            ...securityHeaders,
+            [REQUEST_ID_HEADER]: requestId,
+            'Content-Type': 'application/json',
+            'Content-Encoding': 'gzip',
+            ...traceHeaders,
+            ...extraHeaders,
+          },
+        });
+      }
+    } catch (err) {
+      // If compression fails, fall through to uncompressed
+      logStructuredJson(requestId, 'warn', 'compression_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (originalSize >= 2048) {
+    incrementTelemetry('response_skipped_compression_count', requestId);
+  }
+
+  return new Response(jsonStr, {
     status,
     headers: {
       ...corsHeaders,
       ...securityHeaders,
       [REQUEST_ID_HEADER]: requestId,
       'Content-Type': 'application/json',
+      ...traceHeaders,
       ...extraHeaders,
     },
   });
@@ -287,12 +376,14 @@ function logStructuredJson(
   level: 'info' | 'warn' | 'error',
   event: string,
   data: Record<string, unknown> = {},
+  traceCtx?: TraceContext,
 ): void {
   const logEntry = {
     timestamp: new Date().toISOString(),
     request_id: requestId,
     level,
     event,
+    ...(traceCtx ? { trace_id: traceCtx.traceId, span_id: traceCtx.spanId } : {}),
     ...data,
   };
   console.log(JSON.stringify(logEntry));
@@ -339,6 +430,8 @@ function createEmptyByTypeCounter(): Record<TelemetryEventType, number> {
     rate_limited: 0,
     provider_fallback: 0,
     ai_invalid_json: 0,
+    response_compressed: 0,
+    response_skipped_compression: 0,
   };
 }
 
@@ -481,6 +574,24 @@ export function resetAiGatewayTelemetryForTests(): void {
     telemetryMetrics[metric] = 0;
   });
   telemetryRecentEvents.length = 0;
+  compressionMetrics.response_original_bytes = 0;
+  compressionMetrics.response_compressed_bytes = 0;
+  compressionMetrics.compression_ratio = 0;
+  killChainCache.clear();
+}
+
+export function getAiGatewayPrometheusMetrics(): string {
+  const now = Date.now();
+  const metrics = buildGatewayPrometheusMetrics({
+    uptimeSeconds: Math.max(0, (now - GATEWAY_STARTED_AT_MS) / 1000),
+    telemetry: getAiGatewayTelemetrySnapshot(),
+    cacheSize: killChainCache.size(),
+    compressionOriginalBytes: compressionMetrics.response_original_bytes,
+    compressionCompressedBytes: compressionMetrics.response_compressed_bytes,
+    compressionRatio: compressionMetrics.compression_ratio,
+    version: getGatewayVersion(),
+  });
+  return serializePrometheusMetrics(metrics);
 }
 
 function hasValidBearerAuth(req: Request): boolean {
@@ -517,6 +628,9 @@ function getGatewayVersion(): string {
 
 export async function handleAiGatewayRequest(req: Request): Promise<Response> {
   const requestId = resolveRequestId(req);
+  const acceptEncoding = req.headers.get('accept-encoding');
+  const traceCtx = extractTraceContext(req);
+  const traceparentValue = buildTraceparent(traceCtx);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -525,6 +639,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         ...corsHeaders,
         ...securityHeaders,
         [REQUEST_ID_HEADER]: requestId,
+        traceparent: traceparentValue,
       },
     });
   }
@@ -534,7 +649,27 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       if (!hasValidAdminKey(req)) {
         incrementTelemetry('unauthorized_count', requestId, 401);
         const err = gatewayError('UNAUTHORIZED', 'Valid admin key is required.', 401);
-        return jsonResponse(err.body, requestId, err.status);
+        return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
+      }
+
+      // Prometheus metrics endpoint: GET /metrics
+      const url = new URL(req.url);
+      if (url.pathname.endsWith('/metrics')) {
+        return buildPrometheusResponse(
+          {
+            uptimeSeconds: Math.max(0, (Date.now() - GATEWAY_STARTED_AT_MS) / 1000),
+            telemetry: getAiGatewayTelemetrySnapshot(),
+            cacheSize: killChainCache.size(),
+            compressionOriginalBytes: compressionMetrics.response_original_bytes,
+            compressionCompressedBytes: compressionMetrics.response_compressed_bytes,
+            compressionRatio: compressionMetrics.compression_ratio,
+            version: getGatewayVersion(),
+          },
+          requestId,
+          corsHeaders,
+          securityHeaders,
+          REQUEST_ID_HEADER,
+        );
       }
 
       const now = Date.now();
@@ -542,7 +677,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       const alerts = getAiGatewayAlertsSnapshot(eventRates);
       const overallRiskLevel = getAiGatewayOverallRiskLevel(alerts, eventRates);
 
-      return jsonResponse(
+      return await jsonResponse(
         {
           request_id: requestId,
           status: 'ok',
@@ -557,18 +692,22 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
           recommended_actions: getAiGatewayRecommendedActions(alerts, overallRiskLevel),
         },
         requestId,
+        200,
+        {},
+        acceptEncoding,
+        traceCtx,
       );
     }
 
     if (req.method !== 'POST') {
       const err = gatewayError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
-      return jsonResponse(err.body, requestId, err.status);
+      return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
     }
 
     if (!hasValidBearerAuth(req)) {
       incrementTelemetry('unauthorized_count', requestId, 401);
       const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
-      return jsonResponse(err.body, requestId, err.status);
+      return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
     }
 
     // Rate limit check (30 req/min default policy)
@@ -578,11 +717,11 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       incrementTelemetry('rate_limited_count', requestId, 429);
       logStructuredJson(requestId, 'warn', 'rate_limit_exceeded', {
         retry_after_seconds: rateLimit.retryAfterSeconds,
-      });
+      }, traceCtx);
       const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
-      return jsonResponse(err.body, requestId, err.status, {
+      return await jsonResponse(err.body, requestId, err.status, {
         'Retry-After': String(rateLimit.retryAfterSeconds),
-      });
+      }, acceptEncoding, traceCtx);
     }
 
     let rawBody: unknown;
@@ -591,19 +730,19 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       if (isPayloadTooLarge(bodyText)) {
         incrementTelemetry('payload_too_large_count', requestId, 413);
         const err = gatewayError('PAYLOAD_TOO_LARGE', 'Request payload is too large.', 413);
-        return jsonResponse(err.body, requestId, err.status);
+        return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
       }
 
       rawBody = JSON.parse(bodyText);
     } catch {
       incrementTelemetry('invalid_json_count', requestId, 400);
       const err = gatewayError('INVALID_JSON', 'Invalid JSON body.', 400);
-      return jsonResponse(err.body, requestId, err.status);
+      return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
     }
 
     const parsed = parseGatewayRequest(rawBody);
     if (!parsed.ok) {
-      return jsonResponse(parsed.error.body, requestId, parsed.error.status);
+      return await jsonResponse(parsed.error.body, requestId, parsed.error.status, {}, acceptEncoding, traceCtx);
     }
 
     const { action, messages } = parsed.value;
@@ -617,7 +756,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
     if (geminiKey) {
       try {
-        content = await callGemini(geminiKey, messages);
+        content = await callGemini(geminiKey, messages, traceCtx);
         provider = 'gemini-1.5-pro';
       } catch (err) {
         logWithRequestId(requestId, 'Gemini error, trying next provider', err);
@@ -626,7 +765,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
     if (!content && anthropicKey) {
       try {
-        content = await callAnthropic(anthropicKey, messages);
+        content = await callAnthropic(anthropicKey, messages, traceCtx);
         provider = 'anthropic';
       } catch (err) {
         logWithRequestId(requestId, 'Anthropic error, trying next provider', err);
@@ -635,7 +774,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
     if (!content && openaiKey) {
       try {
-        content = await callOpenAI(openaiKey, messages);
+        content = await callOpenAI(openaiKey, messages, traceCtx);
         provider = 'openai';
       } catch (err) {
         logWithRequestId(requestId, 'OpenAI error, using mock', err);
@@ -659,8 +798,8 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       );
       const cachedResult = killChainCache.get(cacheKey);
       if (cachedResult) {
-        logStructuredJson(requestId, 'info', 'cache_hit', { cache_key: cacheKey });
-        return jsonResponse({ kill_chain: cachedResult, provider: 'cache' }, requestId);
+        logStructuredJson(requestId, 'info', 'cache_hit', { cache_key: cacheKey }, traceCtx);
+        return await jsonResponse({ kill_chain: cachedResult, provider: 'cache' }, requestId, 200, {}, acceptEncoding, traceCtx);
       }
 
       try {
@@ -668,19 +807,19 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         const killChain = JSON.parse(cleaned);
         // Store in cache for future requests.
         killChainCache.set(cacheKey, killChain);
-        logStructuredJson(requestId, 'info', 'cache_set', { cache_key: cacheKey });
-        return jsonResponse({ kill_chain: killChain, provider }, requestId);
+        logStructuredJson(requestId, 'info', 'cache_set', { cache_key: cacheKey }, traceCtx);
+        return await jsonResponse({ kill_chain: killChain, provider }, requestId, 200, {}, acceptEncoding, traceCtx);
       } catch {
         incrementTelemetry('ai_invalid_json_count', requestId, 502);
         const err = gatewayError('AI_INVALID_JSON', 'AI failed to return a valid JSON payload.', 502);
-        return jsonResponse(err.body, requestId, err.status);
+        return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
       }
     }
 
-    return jsonResponse({ content, provider }, requestId);
+    return await jsonResponse({ content, provider }, requestId, 200, {}, acceptEncoding, traceCtx);
   } catch (err) {
     logWithRequestId(requestId, 'Unhandled gateway error', err);
     const safeError = gatewayError('INTERNAL_ERROR', 'Unexpected gateway error.', 500);
-    return jsonResponse(safeError.body, requestId, safeError.status);
+    return await jsonResponse(safeError.body, requestId, safeError.status, {}, acceptEncoding, traceCtx);
   }
 }
