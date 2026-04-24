@@ -41,6 +41,7 @@ const MAX_MESSAGES = 50;
 const MAX_MESSAGE_CONTENT_LENGTH = 8000;
 const MAX_PROJECT_LENGTH = 200;
 const MAX_VULNERABILITIES = 100;
+const MAX_PROMPT_SOURCE_CHARS = 40_000;
 
 const ALLOWED_ROLES = new Set<ChatMessageRole>(['user', 'assistant', 'system']);
 
@@ -54,6 +55,49 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function normalizeAction(value: unknown): GatewayAction {
   if (value === 'generate_kill_chain') return 'generate_kill_chain';
   return 'chat';
+}
+
+function sanitizeText(value: string): string {
+  let out = '';
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    const isForbiddenControl =
+      (code >= 0 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127;
+
+    if (!isForbiddenControl) {
+      out += value[i];
+    }
+  }
+  return out.trim();
+}
+
+function sanitizeForPrompt(value: unknown, depth = 0): unknown {
+  if (depth > 4) return null;
+
+  if (typeof value === 'string') {
+    return sanitizeText(value).slice(0, 500);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizeForPrompt(item, depth + 1));
+  }
+
+  if (value && typeof value === 'object') {
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const [rawKey, rawVal] of Object.entries(input).slice(0, 20)) {
+      const key = sanitizeText(rawKey).slice(0, 60);
+      if (!key) continue;
+      output[key] = sanitizeForPrompt(rawVal, depth + 1);
+    }
+    return output;
+  }
+
+  return null;
 }
 
 function validateMessages(value: unknown): ChatMessage[] | null {
@@ -73,15 +117,16 @@ function validateMessages(value: unknown): ChatMessage[] | null {
       return null;
     }
 
-    if (
-      typeof content !== 'string' ||
-      content.trim().length === 0 ||
-      content.length > MAX_MESSAGE_CONTENT_LENGTH
-    ) {
+    if (typeof content !== 'string') {
       return null;
     }
 
-    parsed.push({ role: role as ChatMessageRole, content });
+    const normalizedContent = sanitizeText(content);
+    if (normalizedContent.length === 0 || normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return null;
+    }
+
+    parsed.push({ role: role as ChatMessageRole, content: normalizedContent });
   }
 
   return parsed;
@@ -124,10 +169,12 @@ export function parseGatewayRequest(body: unknown):
     const project = parsedBody.project;
     const vulnerabilities = parsedBody.vulnerabilities;
 
+    const normalizedProject = typeof project === 'string' ? sanitizeText(project) : '';
+
     if (
       typeof project !== 'string' ||
-      project.trim().length === 0 ||
-      project.length > MAX_PROJECT_LENGTH
+      normalizedProject.length === 0 ||
+      normalizedProject.length > MAX_PROJECT_LENGTH
     ) {
       return {
         ok: false,
@@ -153,17 +200,31 @@ export function parseGatewayRequest(body: unknown):
       };
     }
 
+    const sanitizedVulnerabilities = vulnerabilities.map((item) => sanitizeForPrompt(item));
+    const serializedVulnerabilities = JSON.stringify(sanitizedVulnerabilities, null, 2);
+
+    if (serializedVulnerabilities.length > MAX_PROMPT_SOURCE_CHARS) {
+      return {
+        ok: false,
+        error: gatewayError(
+          'INVALID_REQUEST',
+          'Field "vulnerabilities" is too large to process safely.',
+          400,
+        ),
+      };
+    }
+
     const message: ChatMessage = {
       role: 'user',
-      content: `You are an expert Red Teamer. Generate a MITRE ATT&CK Kill Chain attack path based on these vulnerabilities for project ${project}:\n${JSON.stringify(vulnerabilities, null, 2)}\nRespond ONLY with a JSON array of objects without markdown block formatting. Each object must have: phase (e.g. Reconnaissance, Initial Access, Execution, Exfiltration), tactic (e.g. TA0043), description (how attacker moves), exploited_vuln (title of the vuln used), asset (the target asset).`,
+      content: `You are an expert Red Teamer. Generate a MITRE ATT&CK Kill Chain attack path based on these vulnerabilities for project ${normalizedProject}:\n${serializedVulnerabilities}\nRespond ONLY with a JSON array of objects without markdown block formatting. Each object must have: phase (e.g. Reconnaissance, Initial Access, Execution, Exfiltration), tactic (e.g. TA0043), description (how attacker moves), exploited_vuln (title of the vuln used), asset (the target asset).`,
     };
 
     return {
       ok: true,
       value: {
         action,
-        project,
-        vulnerabilities,
+        project: normalizedProject,
+        vulnerabilities: sanitizedVulnerabilities,
         messages: [message],
       },
     };
