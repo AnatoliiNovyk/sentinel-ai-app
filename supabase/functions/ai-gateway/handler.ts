@@ -19,6 +19,8 @@ const securityHeaders = {
   'Cache-Control': 'no-store',
 };
 
+const REQUEST_ID_HEADER = 'X-Request-Id';
+
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
 Your role is to orchestrate infrastructure security audits. You can reason about:
@@ -150,6 +152,7 @@ function mockResponse(prompt: string): string {
 
 function jsonResponse(
   payload: unknown,
+  requestId: string,
   status = 200,
   extraHeaders: Record<string, string> = {},
 ): Response {
@@ -158,10 +161,42 @@ function jsonResponse(
     headers: {
       ...corsHeaders,
       ...securityHeaders,
+      [REQUEST_ID_HEADER]: requestId,
       'Content-Type': 'application/json',
       ...extraHeaders,
     },
   });
+}
+
+function buildRequestId(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `req-${Date.now().toString(36)}-${hex}`;
+}
+
+function resolveRequestId(req: Request): string {
+  const incoming = req.headers.get('x-request-id')?.trim() ?? '';
+  const isValid = /^[a-zA-Z0-9._:-]{8,128}$/.test(incoming);
+  return isValid ? incoming : buildRequestId();
+}
+
+function safeErrorDetails(err: unknown): string {
+  const text = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return text
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
+    .replace(/(apikey|api_key|token|authorization)\s*[:=]\s*['"]?[^\s,'"]+/gi, '$1=[REDACTED]');
+}
+
+function logWithRequestId(requestId: string, message: string, err?: unknown): void {
+  if (err === undefined) {
+    console.error(`[ai-gateway][${requestId}] ${message}`);
+    return;
+  }
+
+  console.error(`[ai-gateway][${requestId}] ${message}: ${safeErrorDetails(err)}`);
 }
 
 function hasValidBearerAuth(req: Request): boolean {
@@ -187,26 +222,35 @@ function getEnvKey(name: string): string | undefined {
 }
 
 export async function handleAiGatewayRequest(req: Request): Promise<Response> {
+  const requestId = resolveRequestId(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return new Response(null, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        ...securityHeaders,
+        [REQUEST_ID_HEADER]: requestId,
+      },
+    });
   }
 
   try {
     if (req.method !== 'POST') {
       const err = gatewayError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
-      return jsonResponse(err.body, err.status);
+      return jsonResponse(err.body, requestId, err.status);
     }
 
     if (!hasValidBearerAuth(req)) {
       const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
-      return jsonResponse(err.body, err.status);
+      return jsonResponse(err.body, requestId, err.status);
     }
 
     const clientKey = extractClientKey(req);
     const rateLimit = checkGatewayRateLimit(clientKey);
     if (!rateLimit.allowed) {
       const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
-      return jsonResponse(err.body, err.status, {
+      return jsonResponse(err.body, requestId, err.status, {
         'Retry-After': String(rateLimit.retryAfterSeconds),
       });
     }
@@ -216,18 +260,18 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       const bodyText = await req.text();
       if (isPayloadTooLarge(bodyText)) {
         const err = gatewayError('PAYLOAD_TOO_LARGE', 'Request payload is too large.', 413);
-        return jsonResponse(err.body, err.status);
+        return jsonResponse(err.body, requestId, err.status);
       }
 
       rawBody = JSON.parse(bodyText);
     } catch {
       const err = gatewayError('INVALID_JSON', 'Invalid JSON body.', 400);
-      return jsonResponse(err.body, err.status);
+      return jsonResponse(err.body, requestId, err.status);
     }
 
     const parsed = parseGatewayRequest(rawBody);
     if (!parsed.ok) {
-      return jsonResponse(parsed.error.body, parsed.error.status);
+      return jsonResponse(parsed.error.body, requestId, parsed.error.status);
     }
 
     const { action, messages } = parsed.value;
@@ -244,7 +288,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         content = await callGemini(geminiKey, messages);
         provider = 'gemini-1.5-pro';
       } catch (err) {
-        console.error('Gemini error, trying next provider:', err);
+        logWithRequestId(requestId, 'Gemini error, trying next provider', err);
       }
     }
 
@@ -253,7 +297,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         content = await callAnthropic(anthropicKey, messages);
         provider = 'anthropic';
       } catch (err) {
-        console.error('Anthropic error, trying next provider:', err);
+        logWithRequestId(requestId, 'Anthropic error, trying next provider', err);
       }
     }
 
@@ -262,7 +306,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         content = await callOpenAI(openaiKey, messages);
         provider = 'openai';
       } catch (err) {
-        console.error('OpenAI error, using mock:', err);
+        logWithRequestId(requestId, 'OpenAI error, using mock', err);
       }
     }
 
@@ -278,17 +322,17 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       try {
         const cleaned = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
         const killChain = JSON.parse(cleaned);
-        return jsonResponse({ kill_chain: killChain, provider });
+        return jsonResponse({ kill_chain: killChain, provider }, requestId);
       } catch {
         const err = gatewayError('AI_INVALID_JSON', 'AI failed to return a valid JSON payload.', 502);
-        return jsonResponse(err.body, err.status);
+        return jsonResponse(err.body, requestId, err.status);
       }
     }
 
-    return jsonResponse({ content, provider });
+    return jsonResponse({ content, provider }, requestId);
   } catch (err) {
-    console.error('ai-gateway unhandled error:', err);
+    logWithRequestId(requestId, 'Unhandled gateway error', err);
     const safeError = gatewayError('INTERNAL_ERROR', 'Unexpected gateway error.', 500);
-    return jsonResponse(safeError.body, safeError.status);
+    return jsonResponse(safeError.body, requestId, safeError.status);
   }
 }

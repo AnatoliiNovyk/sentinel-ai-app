@@ -19,6 +19,7 @@ describe('ai-gateway handler', () => {
     const body = await res.json();
 
     expect(res.status).toBe(405);
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
     expect(body).toEqual({
       error: {
         code: 'METHOD_NOT_ALLOWED',
@@ -42,6 +43,7 @@ describe('ai-gateway handler', () => {
     const body = await res.json();
 
     expect(res.status).toBe(400);
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
     expect(body).toEqual({
       error: {
         code: 'INVALID_JSON',
@@ -67,6 +69,7 @@ describe('ai-gateway handler', () => {
     const body = await res.json();
 
     expect(res.status).toBe(413);
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
     expect(body).toEqual({
       error: {
         code: 'PAYLOAD_TOO_LARGE',
@@ -104,6 +107,7 @@ describe('ai-gateway handler', () => {
 
     expect(blockedRes.status).toBe(429);
     expect(blockedRes.headers.get('Retry-After')).toBeTruthy();
+    expect(blockedRes.headers.get('X-Request-Id')).toBeTruthy();
     expect(blockedBody).toEqual({
       error: {
         code: 'RATE_LIMITED',
@@ -126,6 +130,7 @@ describe('ai-gateway handler', () => {
     const body = await res.json();
 
     expect(res.status).toBe(401);
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
     expect(body).toEqual({
       error: {
         code: 'UNAUTHORIZED',
@@ -149,6 +154,7 @@ describe('ai-gateway handler', () => {
     const body = await res.json();
 
     expect(res.status).toBe(401);
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
     expect(body).toEqual({
       error: {
         code: 'UNAUTHORIZED',
@@ -174,5 +180,42 @@ describe('ai-gateway handler', () => {
     expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
     expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(res.headers.get('X-Request-Id')).toBeTruthy();
+  });
+
+  it('preserves incoming x-request-id when valid', async () => {
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.17',
+        'x-request-id': 'client.req-12345',
+      },
+      body: '{"messages": [invalid]}',
+    });
+
+    const res = await handleAiGatewayRequest(req);
+
+    expect(res.headers.get('X-Request-Id')).toBe('client.req-12345');
+  });
+
+  it('generates x-request-id when incoming one is invalid', async () => {
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.18',
+        'x-request-id': 'bad id with spaces',
+      },
+      body: '{"messages": [invalid]}',
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const generated = res.headers.get('X-Request-Id') ?? '';
+
+    expect(generated).toMatch(/^req-/);
+    expect(generated.length).toBeGreaterThan(10);
   });
 });
