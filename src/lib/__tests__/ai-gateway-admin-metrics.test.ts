@@ -86,6 +86,11 @@ describe('ai-gateway admin metrics endpoint', () => {
     expect(body.recent_events.length).toBeGreaterThan(0);
     expect(body.recent_events[0].event_type).toBe('unauthorized');
     expect(body.recent_events[0].status_code).toBe(401);
+    expect(body.event_rates).toBeTruthy();
+    expect(body.event_rates.window_5m).toBeTruthy();
+    expect(body.event_rates.window_15m).toBeTruthy();
+    expect(body.event_rates.window_5m.total).toBeGreaterThanOrEqual(1);
+    expect(body.event_rates.window_5m.by_type.unauthorized).toBeGreaterThanOrEqual(1);
 
     const serialized = JSON.stringify(body.recent_events);
     expect(serialized).not.toContain('Bearer');

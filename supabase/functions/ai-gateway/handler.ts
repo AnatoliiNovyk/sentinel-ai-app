@@ -46,6 +46,12 @@ type TelemetryRecentEvent = {
   status_code?: number;
 };
 
+type TelemetryEventRateWindow = {
+  total: number;
+  per_minute: number;
+  by_type: Record<TelemetryEventType, number>;
+};
+
 const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
   unauthorized_count: 'unauthorized',
   invalid_json_count: 'invalid_json',
@@ -57,6 +63,7 @@ const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
 
 const RECENT_EVENTS_BUFFER_SIZE = 50;
 const RECENT_EVENTS_RESPONSE_LIMIT = 20;
+const EVENT_RATE_WINDOWS_MINUTES = [5, 15] as const;
 
 const telemetryMetrics: Record<TelemetryMetric, number> = {
   unauthorized_count: 0,
@@ -276,6 +283,49 @@ export function getAiGatewayRecentEventsSnapshot(limit = RECENT_EVENTS_RESPONSE_
   return telemetryRecentEvents.slice(-normalizedLimit).reverse();
 }
 
+function createEmptyByTypeCounter(): Record<TelemetryEventType, number> {
+  return {
+    unauthorized: 0,
+    invalid_json: 0,
+    payload_too_large: 0,
+    rate_limited: 0,
+    provider_fallback: 0,
+    ai_invalid_json: 0,
+  };
+}
+
+export function getAiGatewayEventRatesSnapshot(
+  nowMs = Date.now(),
+): Record<`window_${number}m`, TelemetryEventRateWindow> {
+  const result: Record<`window_${number}m`, TelemetryEventRateWindow> = {};
+
+  for (const minutes of EVENT_RATE_WINDOWS_MINUTES) {
+    const windowMs = minutes * 60_000;
+    const threshold = nowMs - windowMs;
+    const byType = createEmptyByTypeCounter();
+    let total = 0;
+
+    for (const event of telemetryRecentEvents) {
+      const eventMs = Date.parse(event.timestamp);
+      if (!Number.isFinite(eventMs) || eventMs < threshold) {
+        continue;
+      }
+
+      total += 1;
+      byType[event.event_type] += 1;
+    }
+
+    const key = `window_${minutes}m` as const;
+    result[key] = {
+      total,
+      per_minute: Number((total / minutes).toFixed(2)),
+      by_type: byType,
+    };
+  }
+
+  return result;
+}
+
 export function resetAiGatewayTelemetryForTests(): void {
   (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
     telemetryMetrics[metric] = 0;
@@ -348,6 +398,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
           version: getGatewayVersion(),
           telemetry: getAiGatewayTelemetrySnapshot(),
           recent_events: getAiGatewayRecentEventsSnapshot(RECENT_EVENTS_RESPONSE_LIMIT),
+          event_rates: getAiGatewayEventRatesSnapshot(now),
         },
         requestId,
       );
