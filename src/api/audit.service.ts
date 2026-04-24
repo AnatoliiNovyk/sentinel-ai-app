@@ -1,4 +1,7 @@
 import { supabase } from './client';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('AuditService');
 
 // ---------------------------------------------------------------------------
 // Retry helper — exponential backoff, used internally by AuditService.log()
@@ -105,8 +108,8 @@ export const AuditService = {
         if (error) throw error;
       });
     } catch (err) {
-      // All retries exhausted — log to console only, do not throw
-      console.error('Audit log failed after retries:', err);
+      // All retries exhausted — log to structured output, do not throw
+      log.error('Audit log failed after retries', err, { action: entry.action, orgId: entry.orgId });
     }
   },
 
@@ -132,7 +135,7 @@ export const AuditService = {
       metadata,
     }).catch((err) => {
       // log() itself handles retries and only rejects in extreme cases
-      console.warn(`[AuditService] logSecurityEvent exhausted retries for action="${action}":`, err);
+      log.warn(`logSecurityEvent exhausted retries for action="${action}"`, { err });
     });
   },
 
