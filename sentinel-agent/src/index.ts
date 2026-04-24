@@ -10,6 +10,63 @@ const POLL_INTERVAL   = 3_000; // 3 seconds
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+// ---------------------------------------------------------------------------
+// Circuit Breaker
+// ---------------------------------------------------------------------------
+type CBState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+class CircuitBreaker {
+  private state: CBState = 'CLOSED';
+  private failureCount = 0;
+  private readonly failureThreshold: number;
+  private readonly recoveryMs: number;
+  private nextAttemptAt = 0;
+  readonly name: string;
+
+  constructor(name: string, failureThreshold = 5, recoveryMs = 30_000) {
+    this.name = name;
+    this.failureThreshold = failureThreshold;
+    this.recoveryMs = recoveryMs;
+  }
+
+  async call<T>(fn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    if (this.state === 'OPEN') {
+      if (now < this.nextAttemptAt) {
+        throw new Error(`[CircuitBreaker:${this.name}] OPEN — retry after ${Math.ceil((this.nextAttemptAt - now) / 1000)}s`);
+      }
+      this.state = 'HALF_OPEN';
+      console.log(`[CircuitBreaker:${this.name}] HALF_OPEN — probing...`);
+    }
+
+    try {
+      const result = await fn();
+      if (this.state === 'HALF_OPEN') {
+        this.state = 'CLOSED';
+        this.failureCount = 0;
+        console.log(`[CircuitBreaker:${this.name}] CLOSED — recovered`);
+      }
+      return result;
+    } catch (err) {
+      this.failureCount++;
+      if (this.state === 'HALF_OPEN' || this.failureCount >= this.failureThreshold) {
+        this.state = 'OPEN';
+        this.nextAttemptAt = Date.now() + this.recoveryMs;
+        console.error(`[CircuitBreaker:${this.name}] OPEN — ${this.failureCount} failures, recovery in ${this.recoveryMs / 1000}s`);
+      }
+      throw err;
+    }
+  }
+
+  isOpen(): boolean {
+    return this.state === 'OPEN' && Date.now() < this.nextAttemptAt;
+  }
+}
+
+const reportCB  = new CircuitBreaker('scan-result', 5, 30_000);
+const ollamaCB  = new CircuitBreaker('ollama', 3, 60_000);
+// ---------------------------------------------------------------------------
+
 type Finding = {
   title: string;
   description: string;
@@ -39,23 +96,22 @@ console.log('🛡️ Sentinel AI Agent v2.3 starting...');
 
 // --- Ollama Integration ---
 async function consultOllama(prompt: string): Promise<string> {
-  try {
+  return ollamaCB.call(async () => {
     console.log('🤖 Sending prompt to Ollama (llama3.1:8b)...');
     const response = await axios.post('http://localhost:11434/api/generate', {
       model: 'llama3.1:8b', // Updated to match user's installed model
       prompt: prompt,
       stream: false,
     }, { timeout: 120000 }); // 2 minute timeout for slow CPUs
-
-    return response.data.response;
-  } catch (err: unknown) {
+    return response.data.response as string;
+  }).catch((err: unknown) => {
     const message = getErrorMessage(err);
     console.error('❌ Ollama Error:', message);
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ECONNREFUSED') {
       return 'Error: Ollama is not running on localhost:11434';
     }
     return `Error consulting AI: ${message}`;
-  }
+  });
 }
 
 // --- Scanner Tools ---
@@ -80,17 +136,19 @@ async function reportResult(
   error?: string
 ) {
   try {
-    const res = await axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
-      job_id: jobId,
-      scan_id: scanId,
-      user_id: userId,
-      project_id: projectId,
-      findings,
-      metadata,
-      error_message: error
-    }, {
-      headers: { 'X-Agent-Secret': AGENT_SECRET }
-    });
+    const res = await reportCB.call(() =>
+      axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
+        job_id: jobId,
+        scan_id: scanId,
+        user_id: userId,
+        project_id: projectId,
+        findings,
+        metadata,
+        error_message: error
+      }, {
+        headers: { 'X-Agent-Secret': AGENT_SECRET }
+      })
+    );
     console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}`);
   } catch (err: unknown) {
     console.error(`❌ Failed to report results for job ${jobId}:`, getErrorMessage(err));

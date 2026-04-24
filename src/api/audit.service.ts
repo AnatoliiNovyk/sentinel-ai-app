@@ -1,5 +1,28 @@
 import { supabase } from './client';
 
+// ---------------------------------------------------------------------------
+// Retry helper — exponential backoff, used internally by AuditService.log()
+// ---------------------------------------------------------------------------
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1000
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
+// ---------------------------------------------------------------------------
+
 export interface AuditLogEntry {
   id?: string;
   orgId: string;
@@ -57,37 +80,39 @@ export enum AuditAction {
 export const AuditService = {
   /**
    * Log an audit entry to the database.
-   * Handles async logging without blocking main request flow.
+   * Retries up to 3 times with exponential backoff before giving up.
    */
   async log(entry: AuditLogEntry): Promise<void> {
-    try {
-      const { error } = await supabase.from('audit_logs').insert({
-        org_id: entry.orgId,
-        user_id: entry.userId,
-        action: entry.action,
-        resource_type: entry.resourceType,
-        resource_id: entry.resourceId,
-        changes: entry.changes ? JSON.stringify(entry.changes) : null,
-        status: entry.status,
-        error_code: entry.errorCode || null,
-        error_message: entry.errorMessage || null,
-        ip_address: entry.ipAddress || null,
-        user_agent: entry.userAgent || null,
-        metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
-        created_at: new Date().toISOString(),
-      });
+    const payload = {
+      org_id: entry.orgId,
+      user_id: entry.userId,
+      action: entry.action,
+      resource_type: entry.resourceType,
+      resource_id: entry.resourceId,
+      changes: entry.changes ? JSON.stringify(entry.changes) : null,
+      status: entry.status,
+      error_code: entry.errorCode || null,
+      error_message: entry.errorMessage || null,
+      ip_address: entry.ipAddress || null,
+      user_agent: entry.userAgent || null,
+      metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
+      created_at: new Date().toISOString(),
+    };
 
-      if (error) {
-        // Log to console but don't throw - audit failures shouldn't break main flow
-        console.error('Audit log failed:', error);
-      }
+    try {
+      await withRetry(async () => {
+        const { error } = await supabase.from('audit_logs').insert(payload);
+        if (error) throw error;
+      });
     } catch (err) {
-      console.error('Audit logging error:', err);
+      // All retries exhausted — log to console only, do not throw
+      console.error('Audit log failed after retries:', err);
     }
   },
 
   /**
    * Log security event (fire-and-forget for performance).
+   * Retries are handled inside log(). Logs a warning if all retries are exhausted.
    */
   logSecurityEvent(
     orgId: string,
@@ -97,7 +122,6 @@ export const AuditService = {
     resourceId: string,
     metadata?: Record<string, unknown>
   ): void {
-    // Fire and forget - don't await
     AuditService.log({
       orgId,
       userId,
@@ -106,8 +130,9 @@ export const AuditService = {
       resourceId,
       status: 'success',
       metadata,
-    }).catch(() => {
-      // Silently fail - don't interrupt main flow
+    }).catch((err) => {
+      // log() itself handles retries and only rejects in extreme cases
+      console.warn(`[AuditService] logSecurityEvent exhausted retries for action="${action}":`, err);
     });
   },
 
