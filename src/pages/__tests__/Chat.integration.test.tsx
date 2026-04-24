@@ -1,10 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ErrorCode } from '../../lib/errors';
 import Chat from '../Chat';
 
-const { mockRunAgent, mockGetProjects, authValue } = vi.hoisted(() => ({
+const { mockRunAgent, mockGetProjects, mockDispatchChatTask, mockPollForResult, authValue } = vi.hoisted(() => ({
   mockRunAgent: vi.fn(),
   mockGetProjects: vi.fn(),
+  mockDispatchChatTask: vi.fn(),
+  mockPollForResult: vi.fn(),
   authValue: {
     user: { id: 'user-1' },
     organizations: [{ id: 'org-1' }],
@@ -45,7 +48,8 @@ vi.mock('../../lib/agentTools', () => ({
 
 vi.mock('../../api/ai.service', () => ({
   AiService: {
-    dispatchChatTask: vi.fn(),
+    dispatchChatTask: mockDispatchChatTask,
+    pollForResult: mockPollForResult,
   },
 }));
 
@@ -137,6 +141,8 @@ describe('Chat integration flow', () => {
       content: 'Agent response ready',
       toolCalls: [{ name: 'list_projects', ok: true, summary: 'ok' }],
     });
+    mockDispatchChatTask.mockResolvedValue({ ok: true, data: 'job-1' });
+    mockPollForResult.mockResolvedValue({ ok: true, data: { description: 'AI polling response' } });
   });
 
   it('sends suggestion and persists user+assistant messages via agent path', async () => {
@@ -150,5 +156,47 @@ describe('Chat integration flow', () => {
     await waitFor(() => expect(screen.getByText('Agent response ready')).toBeInTheDocument());
 
     expect(screen.getAllByText('List my open findings').length).toBeGreaterThan(0);
+  });
+
+  it('renders assistant response from polling after dispatch success', async () => {
+    mockRunAgent.mockResolvedValueOnce(null);
+    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-2' });
+    mockPollForResult.mockResolvedValueOnce({
+      ok: true,
+      data: { description: 'Recovered answer after retry' },
+    });
+
+    render(<Chat />);
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check compliance status' }));
+
+    await waitFor(() => expect(mockDispatchChatTask).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockPollForResult).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('Recovered answer after retry')).toBeInTheDocument());
+  });
+
+  it('renders timeout error message when polling times out', async () => {
+    mockRunAgent.mockResolvedValueOnce(null);
+    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-timeout' });
+    mockPollForResult.mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: ErrorCode.AI_PROCESSING_TIMEOUT,
+        message: 'timed out',
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    render(<Chat />);
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate an executive summary' }));
+
+    await waitFor(() => expect(mockDispatchChatTask).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockPollForResult).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
+    );
   });
 });

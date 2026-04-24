@@ -36,6 +36,21 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
   mock:             { label: 'Local AI',        color: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
 };
 
+function extractAssistantText(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const record = payload as Record<string, unknown>;
+  const direct = ['content', 'description', 'remediation', 'explanation'];
+  for (const key of direct) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
 export default function Chat() {
   const { user, organizations } = useAuth();
   const [conversations, setConversations] = useState<AiConversation[]>([]);
@@ -142,15 +157,22 @@ export default function Chat() {
         const projId = projects[0]?.id;
         if (!projId) {
           aiContent = "Error: No project found. Please create a project to use the AI Assistant.";
-        } else if (!activeId) {
+        } else if (!convoId) {
           aiContent = "Error: Please select or create a conversation.";
         } else {
           setThinkingLabel('Agent processing...');
-          const dispatchResult = await AiService.dispatchChatTask(projId, activeId, user.id, text);
+          const pollingStart = Date.now();
+          const dispatchResult = await AiService.dispatchChatTask(projId, convoId, user.id, text);
           if (!dispatchResult.ok) {
             aiContent = `Error: ${errorToUserMessage(dispatchResult.error)}`;
           } else {
-            aiContent = '(AI is responding...)';
+            setThinkingLabel('Awaiting AI result...');
+            const pollResult = await AiService.pollForResult(null, pollingStart);
+            if (!pollResult.ok) {
+              aiContent = `Error: ${errorToUserMessage(pollResult.error)}`;
+            } else {
+              aiContent = extractAssistantText(pollResult.data) ?? '(AI is responding...)';
+            }
           }
         }
       }
