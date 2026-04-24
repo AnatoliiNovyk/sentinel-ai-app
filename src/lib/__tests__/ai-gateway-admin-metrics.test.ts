@@ -97,6 +97,7 @@ describe('ai-gateway admin metrics endpoint', () => {
       high_invalid_json_5m: false,
       degraded_mode: false,
     });
+    expect(body.overall_risk_level).toBe('low');
 
     const serialized = JSON.stringify(body.recent_events);
     expect(serialized).not.toContain('Bearer');
@@ -166,6 +167,7 @@ describe('ai-gateway admin metrics endpoint', () => {
     expect(body.alerts.high_invalid_json_5m).toBe(true);
     expect(body.alerts.degraded_mode).toBe(true);
     expect(body.alerts.high_rate_limited_5m).toBe(false);
+    expect(body.overall_risk_level).toBe('high');
   });
 
   it('does not change standard POST behavior with valid auth', async () => {

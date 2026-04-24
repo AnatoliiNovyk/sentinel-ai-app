@@ -59,6 +59,8 @@ type GatewayAlerts = {
   degraded_mode: boolean;
 };
 
+type GatewayRiskLevel = 'low' | 'medium' | 'high';
+
 const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
   unauthorized_count: 'unauthorized',
   invalid_json_count: 'invalid_json',
@@ -77,6 +79,7 @@ const ALERT_UNAUTHORIZED_5M_MIN = 5;
 const ALERT_INVALID_JSON_5M_MIN = 5;
 const ALERT_DEGRADED_MIN_TOTAL_15M = 3;
 const ALERT_DEGRADED_FALLBACK_RATIO_15M = 0.6;
+const MEDIUM_RISK_MIN_TOTAL_EVENTS_15M = 10;
 
 const telemetryMetrics: Record<TelemetryMetric, number> = {
   unauthorized_count: 0,
@@ -357,6 +360,25 @@ function getAiGatewayAlertsSnapshot(
   };
 }
 
+function getAiGatewayOverallRiskLevel(
+  alerts: GatewayAlerts,
+  eventRates: Record<`window_${number}m`, TelemetryEventRateWindow>,
+): GatewayRiskLevel {
+  if (alerts.degraded_mode || alerts.high_rate_limited_5m) {
+    return 'high';
+  }
+
+  if (alerts.high_unauthorized_5m || alerts.high_invalid_json_5m) {
+    return 'medium';
+  }
+
+  if (eventRates.window_15m.total >= MEDIUM_RISK_MIN_TOTAL_EVENTS_15M) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
 export function resetAiGatewayTelemetryForTests(): void {
   (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
     telemetryMetrics[metric] = 0;
@@ -420,6 +442,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
       const now = Date.now();
       const eventRates = getAiGatewayEventRatesSnapshot(now);
+      const alerts = getAiGatewayAlertsSnapshot(eventRates);
 
       return jsonResponse(
         {
@@ -431,7 +454,8 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
           telemetry: getAiGatewayTelemetrySnapshot(),
           recent_events: getAiGatewayRecentEventsSnapshot(RECENT_EVENTS_RESPONSE_LIMIT),
           event_rates: eventRates,
-          alerts: getAiGatewayAlertsSnapshot(eventRates),
+          alerts,
+          overall_risk_level: getAiGatewayOverallRiskLevel(alerts, eventRates),
         },
         requestId,
       );
