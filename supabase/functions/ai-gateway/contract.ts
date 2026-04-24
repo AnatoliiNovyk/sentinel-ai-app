@@ -9,6 +9,7 @@ export type GatewayAction = 'chat' | 'generate_kill_chain';
 
 export type GatewayErrorCode =
   | 'METHOD_NOT_ALLOWED'
+  | 'UNAUTHORIZED'
   | 'INVALID_JSON'
   | 'INVALID_REQUEST'
   | 'PAYLOAD_TOO_LARGE'

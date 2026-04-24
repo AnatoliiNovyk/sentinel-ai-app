@@ -12,6 +12,13 @@ export const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
+const securityHeaders = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+  'Cache-Control': 'no-store',
+};
+
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
 Your role is to orchestrate infrastructure security audits. You can reason about:
@@ -148,8 +155,23 @@ function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
+    headers: {
+      ...corsHeaders,
+      ...securityHeaders,
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    },
   });
+}
+
+function hasValidBearerAuth(req: Request): boolean {
+  const auth = req.headers.get('authorization')?.trim() ?? '';
+  if (!auth.toLowerCase().startsWith('bearer ')) {
+    return false;
+  }
+
+  const token = auth.slice(7).trim();
+  return token.length > 0;
 }
 
 function getEnvKey(name: string): string | undefined {
@@ -172,6 +194,11 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
   try {
     if (req.method !== 'POST') {
       const err = gatewayError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
+      return jsonResponse(err.body, err.status);
+    }
+
+    if (!hasValidBearerAuth(req)) {
+      const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
       return jsonResponse(err.body, err.status);
     }
 
