@@ -20,6 +20,8 @@ const securityHeaders = {
 };
 
 const REQUEST_ID_HEADER = 'X-Request-Id';
+const ADMIN_KEY_HEADER = 'x-gateway-admin-key';
+const GATEWAY_STARTED_AT_MS = Date.now();
 
 type TelemetryMetric =
   | 'unauthorized_count'
@@ -29,6 +31,33 @@ type TelemetryMetric =
   | 'provider_fallback_count'
   | 'ai_invalid_json_count';
 
+type TelemetryEventType =
+  | 'unauthorized'
+  | 'invalid_json'
+  | 'payload_too_large'
+  | 'rate_limited'
+  | 'provider_fallback'
+  | 'ai_invalid_json';
+
+type TelemetryRecentEvent = {
+  timestamp: string;
+  request_id: string;
+  event_type: TelemetryEventType;
+  status_code?: number;
+};
+
+const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
+  unauthorized_count: 'unauthorized',
+  invalid_json_count: 'invalid_json',
+  payload_too_large_count: 'payload_too_large',
+  rate_limited_count: 'rate_limited',
+  provider_fallback_count: 'provider_fallback',
+  ai_invalid_json_count: 'ai_invalid_json',
+};
+
+const RECENT_EVENTS_BUFFER_SIZE = 50;
+const RECENT_EVENTS_RESPONSE_LIMIT = 20;
+
 const telemetryMetrics: Record<TelemetryMetric, number> = {
   unauthorized_count: 0,
   invalid_json_count: 0,
@@ -37,6 +66,8 @@ const telemetryMetrics: Record<TelemetryMetric, number> = {
   provider_fallback_count: 0,
   ai_invalid_json_count: 0,
 };
+
+const telemetryRecentEvents: TelemetryRecentEvent[] = [];
 
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
@@ -216,8 +247,21 @@ function logWithRequestId(requestId: string, message: string, err?: unknown): vo
   console.error(`[ai-gateway][${requestId}] ${message}: ${safeErrorDetails(err)}`);
 }
 
-function incrementTelemetry(metric: TelemetryMetric, requestId: string): void {
+function appendTelemetryEvent(event: TelemetryRecentEvent): void {
+  telemetryRecentEvents.push(event);
+  if (telemetryRecentEvents.length > RECENT_EVENTS_BUFFER_SIZE) {
+    telemetryRecentEvents.splice(0, telemetryRecentEvents.length - RECENT_EVENTS_BUFFER_SIZE);
+  }
+}
+
+function incrementTelemetry(metric: TelemetryMetric, requestId: string, statusCode?: number): void {
   telemetryMetrics[metric] += 1;
+  appendTelemetryEvent({
+    timestamp: new Date().toISOString(),
+    request_id: requestId,
+    event_type: METRIC_TO_EVENT_TYPE[metric],
+    ...(statusCode === undefined ? {} : { status_code: statusCode }),
+  });
   logWithRequestId(requestId, `telemetry ${metric}=${telemetryMetrics[metric]}`);
 }
 
@@ -225,10 +269,18 @@ export function getAiGatewayTelemetrySnapshot(): Record<TelemetryMetric, number>
   return { ...telemetryMetrics };
 }
 
+export function getAiGatewayRecentEventsSnapshot(limit = RECENT_EVENTS_RESPONSE_LIMIT): TelemetryRecentEvent[] {
+  const normalizedLimit = Number.isFinite(limit)
+    ? Math.max(0, Math.min(RECENT_EVENTS_BUFFER_SIZE, Math.floor(limit)))
+    : RECENT_EVENTS_RESPONSE_LIMIT;
+  return telemetryRecentEvents.slice(-normalizedLimit).reverse();
+}
+
 export function resetAiGatewayTelemetryForTests(): void {
   (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
     telemetryMetrics[metric] = 0;
   });
+  telemetryRecentEvents.length = 0;
 }
 
 function hasValidBearerAuth(req: Request): boolean {
@@ -241,6 +293,12 @@ function hasValidBearerAuth(req: Request): boolean {
   return token.length > 0;
 }
 
+function hasValidAdminKey(req: Request): boolean {
+  const configured = getEnvKey('AI_GATEWAY_ADMIN_KEY')?.trim() ?? '';
+  const provided = req.headers.get(ADMIN_KEY_HEADER)?.trim() ?? '';
+  return configured.length > 0 && provided.length > 0 && configured === provided;
+}
+
 function getEnvKey(name: string): string | undefined {
   const denoLike = globalThis as unknown as {
     Deno?: {
@@ -251,6 +309,10 @@ function getEnvKey(name: string): string | undefined {
   };
 
   return denoLike.Deno?.env?.get(name);
+}
+
+function getGatewayVersion(): string {
+  return getEnvKey('AI_GATEWAY_VERSION')?.trim() || 'unknown';
 }
 
 export async function handleAiGatewayRequest(req: Request): Promise<Response> {
@@ -268,13 +330,36 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
   }
 
   try {
+    if (req.method === 'GET') {
+      if (!hasValidAdminKey(req)) {
+        incrementTelemetry('unauthorized_count', requestId, 401);
+        const err = gatewayError('UNAUTHORIZED', 'Valid admin key is required.', 401);
+        return jsonResponse(err.body, requestId, err.status);
+      }
+
+      const now = Date.now();
+
+      return jsonResponse(
+        {
+          request_id: requestId,
+          status: 'ok',
+          uptime_ms: Math.max(0, now - GATEWAY_STARTED_AT_MS),
+          timestamp: new Date(now).toISOString(),
+          version: getGatewayVersion(),
+          telemetry: getAiGatewayTelemetrySnapshot(),
+          recent_events: getAiGatewayRecentEventsSnapshot(RECENT_EVENTS_RESPONSE_LIMIT),
+        },
+        requestId,
+      );
+    }
+
     if (req.method !== 'POST') {
       const err = gatewayError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
       return jsonResponse(err.body, requestId, err.status);
     }
 
     if (!hasValidBearerAuth(req)) {
-      incrementTelemetry('unauthorized_count', requestId);
+      incrementTelemetry('unauthorized_count', requestId, 401);
       const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
       return jsonResponse(err.body, requestId, err.status);
     }
@@ -282,7 +367,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     const clientKey = extractClientKey(req);
     const rateLimit = checkGatewayRateLimit(clientKey);
     if (!rateLimit.allowed) {
-      incrementTelemetry('rate_limited_count', requestId);
+      incrementTelemetry('rate_limited_count', requestId, 429);
       const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
       return jsonResponse(err.body, requestId, err.status, {
         'Retry-After': String(rateLimit.retryAfterSeconds),
@@ -293,14 +378,14 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     try {
       const bodyText = await req.text();
       if (isPayloadTooLarge(bodyText)) {
-        incrementTelemetry('payload_too_large_count', requestId);
+        incrementTelemetry('payload_too_large_count', requestId, 413);
         const err = gatewayError('PAYLOAD_TOO_LARGE', 'Request payload is too large.', 413);
         return jsonResponse(err.body, requestId, err.status);
       }
 
       rawBody = JSON.parse(bodyText);
     } catch {
-      incrementTelemetry('invalid_json_count', requestId);
+      incrementTelemetry('invalid_json_count', requestId, 400);
       const err = gatewayError('INVALID_JSON', 'Invalid JSON body.', 400);
       return jsonResponse(err.body, requestId, err.status);
     }
@@ -361,7 +446,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         const killChain = JSON.parse(cleaned);
         return jsonResponse({ kill_chain: killChain, provider }, requestId);
       } catch {
-        incrementTelemetry('ai_invalid_json_count', requestId);
+        incrementTelemetry('ai_invalid_json_count', requestId, 502);
         const err = gatewayError('AI_INVALID_JSON', 'AI failed to return a valid JSON payload.', 502);
         return jsonResponse(err.body, requestId, err.status);
       }

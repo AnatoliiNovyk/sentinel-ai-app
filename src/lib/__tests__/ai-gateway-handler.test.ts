@@ -7,9 +7,9 @@ describe('ai-gateway handler', () => {
     resetGatewayRateLimitStoreForTests();
   });
 
-  it('returns 405 for non-POST method with safe error payload', async () => {
+  it('returns 405 for unsupported method with safe error payload', async () => {
     const req = new Request('https://example.com/functions/v1/ai-gateway', {
-      method: 'GET',
+      method: 'PUT',
       headers: {
         'x-forwarded-for': '198.51.100.10',
       },
