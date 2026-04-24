@@ -1,55 +1,36 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson } from 'lucide-react';
+import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
+import { getCircuitBreaker } from '../lib/rateLimiter';
 
-interface Dependency {
-  name: string;
-  version: string;
-  type: 'prod' | 'dev';
+interface ScanResultUI {
+  dep: { name: string; version: string; type: 'prod' | 'dev' };
+  vulns: Array<{
+    id: string;
+    summary: string;
+    details: string;
+    severity: string;
+    fixed_in?: string;
+  }>;
 }
-
-interface Vulnerability {
-  id: string;
-  summary: string;
-  details: string;
-  severity: string;
-  fixed_in?: string;
-}
-
-interface ScanResult {
-  dep: Dependency;
-  vulns: Vulnerability[];
-}
-
-type LockPackage = {
-  version?: string;
-  dev?: boolean;
-};
-
-type OsvEvent = { fixed?: string };
-type OsvRange = { events?: OsvEvent[] };
-type OsvAffected = { ranges?: OsvRange[] };
-type OsvSeverity = { score?: string };
-type OsvVuln = {
-  id: string;
-  summary?: string;
-  details?: string;
-  affected?: OsvAffected[];
-  severity?: OsvSeverity[];
-};
-type OsvResponse = { vulns?: OsvVuln[] };
 
 export default function SupplyChain() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [results, setResults] = useState<ScanResult[] | null>(null);
+  const [results, setResults] = useState<ScanResultUI[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const parseVersion = (v: string) => {
-    const match = v.match(/(\d+\.\d+\.\d+)/);
-    return match ? match[0] : null;
-  };
+  useEffect(() => {
+    // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
+    getCircuitBreaker('osv-api', {
+      failureThreshold: 3,
+      successThreshold: 2,
+      timeout: 30 * 1000,
+      volumeThreshold: 1
+    });
+  }, []);
 
   const handleFile = async (file: File) => {
     if (!file.name.endsWith('package.json') && !file.name.endsWith('package-lock.json')) {
@@ -65,89 +46,37 @@ export default function SupplyChain() {
       const text = await file.text();
       const json = JSON.parse(text);
       
-      const deps: Dependency[] = [];
-      
-      if (file.name.endsWith('package-lock.json')) {
-        Object.entries((json.packages || json.dependencies || {}) as Record<string, LockPackage>).forEach(([name, pkg]) => {
-          if (!name) return; // skip root project
-          const cleanName = name.replace(/^.*node_modules\//, '');
-          if (pkg.version) {
-            const v = parseVersion(pkg.version);
-            if (v) deps.push({ name: cleanName, version: v, type: pkg.dev ? 'dev' : 'prod' });
-          }
-        });
-      } else {
-        if (json.dependencies) {
-          Object.entries(json.dependencies).forEach(([name, version]) => {
-            const v = parseVersion(version as string);
-            if (v) deps.push({ name, version: v, type: 'prod' });
-          });
-        }
-        if (json.devDependencies) {
-          Object.entries(json.devDependencies).forEach(([name, version]) => {
-            const v = parseVersion(version as string);
-            if (v) deps.push({ name, version: v, type: 'dev' });
-          });
-        }
-      }
+      const analyzer = getGlobalScaAnalyzer();
+      const scanResult = await analyzer.scan(json);
 
-      if (deps.length === 0) {
-        setError('No dependencies found in package.json.');
+      if (!scanResult.ok) {
+        setError(scanResult.error.message);
         setScanning(false);
         return;
       }
 
-      // Query OSV API in batches
-      const scanResults: ScanResult[] = [];
+      const sbomScanResult = scanResult.data;
       
-      for (const dep of deps) {
-        try {
-          const res = await fetch('https://api.osv.dev/v1/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              version: dep.version,
-              package: { name: dep.name, ecosystem: 'npm' }
-            })
-          });
-          
-          if (!res.ok) continue;
-          const data = (await res.json()) as OsvResponse;
-          
-          if (data.vulns && data.vulns.length > 0) {
-            const mappedVulns = data.vulns.map((v) => {
-              const affected = v.affected?.[0];
-              const fixed = affected?.ranges?.[0]?.events?.find((e) => Boolean(e.fixed))?.fixed;
-              
-              // Extract severity
-              let severity = 'medium';
-              if (v.severity && v.severity.length > 0) {
-                const score = v.severity[0].score ?? '';
-                if (score.includes('CRITICAL')) severity = 'critical';
-                else if (score.includes('HIGH')) severity = 'high';
-                else if (score.includes('LOW')) severity = 'low';
-              }
-              
-              return {
-                id: v.id,
-                summary: v.summary || 'Known vulnerability',
-                details: v.details || '',
-                severity,
-                fixed_in: fixed
-              };
-            });
-            scanResults.push({ dep, vulns: mappedVulns });
-          } else {
-            scanResults.push({ dep, vulns: [] });
-          }
-        } catch (err) {
-          console.error(`Failed to scan ${dep.name}:`, err);
-        }
-      }
+      // Transform SbomScanResult.risks to UI format
+      const uiResults: ScanResultUI[] = sbomScanResult.risks.map((risk: DependencyRisk) => ({
+        dep: {
+          name: risk.dependency.name,
+          version: risk.dependency.version,
+          type: risk.dependency.type as 'prod' | 'dev'
+        },
+        vulns: risk.vulnerabilities.map(v => ({
+          id: v.id,
+          summary: v.summary,
+          details: v.details,
+          severity: v.severity,
+          fixed_in: v.fixedIn
+        }))
+      }));
 
-      setResults(scanResults);
-    } catch {
-      setError('Failed to parse package.json. Ensure it is valid JSON.');
+      setResults(uiResults);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to parse package.json. Ensure it is valid JSON.';
+      setError(errorMsg);
     } finally {
       setScanning(false);
     }

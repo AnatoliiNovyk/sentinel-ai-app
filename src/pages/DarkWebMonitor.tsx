@@ -1,33 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText } from 'lucide-react';
+import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
+import { getRateLimiter } from '../lib/rateLimiter';
 
-type LeakEntry = {
-  source: string;
-  date: string;
-  type: string;
-  severity: 'high' | 'medium' | 'low';
-};
+interface ScanHistory {
+  query: string;
+  result: LeakScanResult;
+  error?: string;
+}
 
 export default function OsintAnalyzer() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<{ query: string; leaks: LeakEntry[]; checkedAt: string }[]>([]);
+  const [results, setResults] = useState<ScanHistory[]>([]);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Initialize rate limiter for DarkWebMonitor (10 scans per minute per session)
+    getRateLimiter('darkwebmonitor-ui', { maxRequests: 10, windowMs: 60 * 1000 });
+  }, []);
 
   const analyze = async () => {
     if (!query.trim()) return;
-    setLoading(true);
-    
-    // Simulate searching local OSINT databases and leaked dumps
-    await new Promise(r => setTimeout(r, 2000));
-    
-    const mockLeaks: LeakEntry[] = query.includes('admin') ? [
-      { source: 'Breach-X (2022)', date: '2022-05-14', type: 'Credentials', severity: 'high' },
-      { source: 'Log4j-Dump', date: '2021-12-10', type: 'System Info', severity: 'medium' }
-    ] : [];
 
-    setResults(prev => [{ query: query.trim(), leaks: mockLeaks, checkedAt: new Date().toISOString() }, ...prev]);
-    setQuery('');
-    setLoading(false);
+    const limiter = getRateLimiter('darkwebmonitor-ui', { maxRequests: 10, windowMs: 60 * 1000 });
+    const rateLimitCheck = limiter.check('session');
+
+    if (!rateLimitCheck.allowed) {
+      setRateLimitError(`Rate limit exceeded. Try again in ${Math.ceil(rateLimitCheck.retryAfterMs / 1000)}s.`);
+      setTimeout(() => setRateLimitError(null), rateLimitCheck.retryAfterMs + 100);
+      return;
+    }
+
+    setRateLimitError(null);
+    setLoading(true);
+
+    try {
+      const client = getGlobalDarkWebMonitor();
+      const result = await client.scan(query.trim());
+
+      if (!result.ok) {
+        setResults(prev => [
+          { query: query.trim(), result: {} as LeakScanResult, error: result.error.message },
+          ...prev
+        ]);
+      } else {
+        setResults(prev => [{ query: query.trim(), result: result.data }, ...prev]);
+      }
+
+      setQuery('');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error during scan';
+      setResults(prev => [{ query: query.trim(), result: {} as LeakScanResult, error: errorMsg }, ...prev]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,6 +80,15 @@ export default function OsintAnalyzer() {
           </div>
         </div>
 
+        {rateLimitError && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-sm text-amber-400">
+              <AlertTriangle className="w-4 h-4" />
+              {rateLimitError}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             value={query}
@@ -76,43 +112,109 @@ export default function OsintAnalyzer() {
         <div className="space-y-4">
           <h2 className="font-semibold text-white">Analysis Results</h2>
           {results.map((r, idx) => (
-            <div key={idx} className={`rounded-xl border overflow-hidden ${r.leaks.length > 0 ? 'border-red-500/30' : 'border-emerald-500/20'}`}>
-              <div className={`flex items-center justify-between px-5 py-4 ${r.leaks.length > 0 ? 'bg-red-500/5' : 'bg-emerald-500/5'}`}>
+            <div
+              key={idx}
+              className={`rounded-xl border overflow-hidden ${
+                r.error || r.result.breachCount === 0 ? 'border-emerald-500/20' : 'border-red-500/30'
+              }`}
+            >
+              <div
+                className={`flex items-center justify-between px-5 py-4 ${
+                  r.error || r.result.breachCount === 0 ? 'bg-emerald-500/5' : 'bg-red-500/5'
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  {r.leaks.length > 0
-                    ? <AlertTriangle className="w-4 h-4 text-red-400" />
-                    : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                  {r.error || r.result.breachCount === 0
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    : <AlertTriangle className="w-4 h-4 text-red-400" />}
                   <div>
                     <div className="text-sm font-medium text-white">{r.query}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{new Date(r.checkedAt).toLocaleString()}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {r.result.scannedAt ? new Date(r.result.scannedAt).toLocaleString() : 'Scan failed'}
+                    </div>
                   </div>
                 </div>
-                <div className={`text-sm font-bold ${r.leaks.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {r.leaks.length > 0 ? `${r.leaks.length} Match Found` : 'No Leaks Detected'}
+                <div
+                  className={`text-sm font-bold ${
+                    r.error
+                      ? 'text-amber-400'
+                      : r.result.breachCount > 0
+                        ? 'text-red-400'
+                        : 'text-emerald-400'
+                  }`}
+                >
+                  {r.error ? 'Error' : r.result.breachCount > 0 ? `${r.result.breachCount} Breach${r.result.breachCount !== 1 ? 'es' : ''} Found` : 'No Leaks Detected'}
                 </div>
               </div>
 
-              {r.leaks.length > 0 && (
-                <div className="divide-y divide-slate-800">
-                  {r.leaks.map((l, i) => (
-                    <div key={i} className="px-5 py-3 flex items-start justify-between gap-4 hover:bg-slate-900/30 transition">
-                      <div className="flex items-center gap-3">
-                         <div className="p-2 rounded bg-slate-800">
-                            <FileText className="w-4 h-4 text-slate-400" />
-                         </div>
-                         <div>
-                            <div className="text-sm font-medium text-white">{l.source}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">{l.type} · Detected on {l.date}</div>
-                         </div>
-                      </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded border capitalize ${
-                        l.severity === 'high' ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-orange-400 border-orange-500/30 bg-orange-500/10'
-                      }`}>
-                        {l.severity} Risk
-                      </span>
+              {r.error && (
+                <div className="px-5 py-3 text-sm text-amber-300">{r.error}</div>
+              )}
+
+              {!r.error && r.result.breaches && r.result.breaches.length > 0 && (
+                <>
+                  <div className="border-t border-slate-800 px-5 py-3 bg-slate-900/20">
+                    <div className="text-xs text-slate-400 mb-2">Risk Score: {r.result.riskScore}/100</div>
+                    <div
+                      className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold border capitalize ${
+                        r.result.riskLevel === 'critical'
+                          ? 'text-red-400 border-red-500/30 bg-red-500/10'
+                          : r.result.riskLevel === 'high'
+                            ? 'text-orange-400 border-orange-500/30 bg-orange-500/10'
+                            : r.result.riskLevel === 'medium'
+                              ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'
+                              : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                      }`}
+                    >
+                      {r.result.riskLevel} Risk
                     </div>
-                  ))}
-                </div>
+                  </div>
+
+                  <div className="divide-y divide-slate-800">
+                    {r.result.breaches.map((breach, i) => (
+                      <div key={i} className="px-5 py-3 flex items-start justify-between gap-4 hover:bg-slate-900/30 transition">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="p-2 rounded bg-slate-800">
+                            <FileText className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-white">{breach.source}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {breach.dataClasses?.slice(0, 2).join(', ')} · Detected on {breach.breachDate}
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded border capitalize whitespace-nowrap ${
+                            breach.severity === 'critical'
+                              ? 'text-red-400 border-red-500/30 bg-red-500/10'
+                              : breach.severity === 'high'
+                                ? 'text-orange-400 border-orange-500/30 bg-orange-500/10'
+                                : breach.severity === 'medium'
+                                  ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'
+                                  : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                          }`}
+                        >
+                          {breach.severity} Severity
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {r.result.recommendedActions && r.result.recommendedActions.length > 0 && (
+                    <div className="border-t border-slate-800 px-5 py-3 bg-slate-900/40">
+                      <div className="text-xs font-semibold text-slate-300 mb-2">Recommended Actions:</div>
+                      <ul className="text-xs text-slate-400 space-y-1">
+                        {r.result.recommendedActions.slice(0, 3).map((action, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="text-emerald-400">•</span>
+                            {action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}

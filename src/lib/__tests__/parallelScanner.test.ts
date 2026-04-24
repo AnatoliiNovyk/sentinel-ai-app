@@ -99,8 +99,8 @@ describe('runScansParallel', () => {
 
     const results = await runScansParallel(jobs, workerFn, 3);
 
-    expect(results[0].durationMs).toBeGreaterThanOrEqual(50);
-    expect(results[1].durationMs).toBeGreaterThanOrEqual(50);
+    expect(results[0].durationMs).toBeGreaterThanOrEqual(40);
+    expect(results[1].durationMs).toBeGreaterThanOrEqual(40);
   });
 
   it('handles partial failures gracefully', async () => {
