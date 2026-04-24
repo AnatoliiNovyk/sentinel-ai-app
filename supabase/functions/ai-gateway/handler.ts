@@ -21,6 +21,23 @@ const securityHeaders = {
 
 const REQUEST_ID_HEADER = 'X-Request-Id';
 
+type TelemetryMetric =
+  | 'unauthorized_count'
+  | 'invalid_json_count'
+  | 'payload_too_large_count'
+  | 'rate_limited_count'
+  | 'provider_fallback_count'
+  | 'ai_invalid_json_count';
+
+const telemetryMetrics: Record<TelemetryMetric, number> = {
+  unauthorized_count: 0,
+  invalid_json_count: 0,
+  payload_too_large_count: 0,
+  rate_limited_count: 0,
+  provider_fallback_count: 0,
+  ai_invalid_json_count: 0,
+};
+
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
 Your role is to orchestrate infrastructure security audits. You can reason about:
@@ -199,6 +216,21 @@ function logWithRequestId(requestId: string, message: string, err?: unknown): vo
   console.error(`[ai-gateway][${requestId}] ${message}: ${safeErrorDetails(err)}`);
 }
 
+function incrementTelemetry(metric: TelemetryMetric, requestId: string): void {
+  telemetryMetrics[metric] += 1;
+  logWithRequestId(requestId, `telemetry ${metric}=${telemetryMetrics[metric]}`);
+}
+
+export function getAiGatewayTelemetrySnapshot(): Record<TelemetryMetric, number> {
+  return { ...telemetryMetrics };
+}
+
+export function resetAiGatewayTelemetryForTests(): void {
+  (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
+    telemetryMetrics[metric] = 0;
+  });
+}
+
 function hasValidBearerAuth(req: Request): boolean {
   const auth = req.headers.get('authorization')?.trim() ?? '';
   if (!auth.toLowerCase().startsWith('bearer ')) {
@@ -242,6 +274,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     }
 
     if (!hasValidBearerAuth(req)) {
+      incrementTelemetry('unauthorized_count', requestId);
       const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
       return jsonResponse(err.body, requestId, err.status);
     }
@@ -249,6 +282,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     const clientKey = extractClientKey(req);
     const rateLimit = checkGatewayRateLimit(clientKey);
     if (!rateLimit.allowed) {
+      incrementTelemetry('rate_limited_count', requestId);
       const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
       return jsonResponse(err.body, requestId, err.status, {
         'Retry-After': String(rateLimit.retryAfterSeconds),
@@ -259,12 +293,14 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     try {
       const bodyText = await req.text();
       if (isPayloadTooLarge(bodyText)) {
+        incrementTelemetry('payload_too_large_count', requestId);
         const err = gatewayError('PAYLOAD_TOO_LARGE', 'Request payload is too large.', 413);
         return jsonResponse(err.body, requestId, err.status);
       }
 
       rawBody = JSON.parse(bodyText);
     } catch {
+      incrementTelemetry('invalid_json_count', requestId);
       const err = gatewayError('INVALID_JSON', 'Invalid JSON body.', 400);
       return jsonResponse(err.body, requestId, err.status);
     }
@@ -311,6 +347,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     }
 
     if (!content) {
+      incrementTelemetry('provider_fallback_count', requestId);
       const lastUser = [...messages].reverse().find((m) => m.role === 'user');
       content = mockResponse(
         (lastUser?.content ?? '') + (action === 'generate_kill_chain' ? ' kill_chain_mock' : ''),
@@ -324,6 +361,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
         const killChain = JSON.parse(cleaned);
         return jsonResponse({ kill_chain: killChain, provider }, requestId);
       } catch {
+        incrementTelemetry('ai_invalid_json_count', requestId);
         const err = gatewayError('AI_INVALID_JSON', 'AI failed to return a valid JSON payload.', 502);
         return jsonResponse(err.body, requestId, err.status);
       }
