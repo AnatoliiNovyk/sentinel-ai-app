@@ -1,0 +1,113 @@
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { describe, expect, it } from 'vitest';
+import AssetGraph from '../AssetGraph';
+import type { Vulnerability } from '../../lib/supabase';
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+let _seq = 0;
+function makeVuln(asset: string, severity: Vulnerability['severity'] = 'high'): Vulnerability {
+  _seq++;
+  return {
+    id: `v-${_seq}`,
+    scan_id: 'scan-1',
+    user_id: 'user-1',
+    title: `Finding ${_seq}`,
+    description: 'desc',
+    severity,
+    cve_id: '',
+    mitre_tactic: '',
+    cis_control: '',
+    asset,
+    remediation: 'fix',
+    remediation_code: '',
+    remediation_type: 'manual',
+    created_at: '2026-01-01T00:00:00Z',
+    status: 'open',
+    note: '',
+    status_updated_at: '2026-01-01T00:00:00Z',
+    sla_breached_at: null,
+    sla_warned_at: null,
+  };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────
+
+describe('AssetGraph — empty state', () => {
+  it('shows empty state message when no vulns', () => {
+    render(<AssetGraph projectName="TestProject" vulns={[]} />);
+    expect(
+      screen.getByText(/No assets mapped\. Run a scan to discover topology\./i),
+    ).toBeInTheDocument();
+  });
+
+  it('does not render the topology SVG when no vulns', () => {
+    const { container } = render(<AssetGraph projectName="TestProject" vulns={[]} />);
+    // The topology SVG has a viewBox="0 0 600 500" attribute
+    expect(container.querySelector('svg[viewBox="0 0 600 500"]')).not.toBeInTheDocument();
+  });
+});
+
+describe('AssetGraph — with vulns', () => {
+  it('renders SVG when vulns are provided', () => {
+    const { container } = render(
+      <AssetGraph projectName="TestProject" vulns={[makeVuln('api.example.com')]} />,
+    );
+    expect(container.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('shows "Asset Topology" heading', () => {
+    render(
+      <AssetGraph projectName="TestProject" vulns={[makeVuln('api.example.com')]} />,
+    );
+    expect(screen.getByText('Asset Topology')).toBeInTheDocument();
+  });
+
+  it('renders project name node (uppercase first segment)', () => {
+    render(
+      <AssetGraph projectName="my-project" vulns={[makeVuln('api.example.com')]} />,
+    );
+    // Project node label is projectName.split('.')[0].toUpperCase()
+    expect(screen.getByText('MY-PROJECT')).toBeInTheDocument();
+  });
+
+  it('renders asset node label (uppercase first segment)', () => {
+    render(
+      <AssetGraph projectName="TestProject" vulns={[makeVuln('api.example.com')]} />,
+    );
+    // asset.split('.')[0].toUpperCase() → 'API'
+    expect(screen.getByText('API')).toBeInTheDocument();
+  });
+
+  it('deduplicates assets — same asset with multiple vulns = one node', () => {
+    const vulns = [
+      makeVuln('db.example.com', 'high'),
+      makeVuln('db.example.com', 'critical'),
+    ];
+    render(<AssetGraph projectName="TestProject" vulns={vulns} />);
+    // Only one 'DB' node text label
+    expect(screen.getAllByText('DB').length).toBe(1);
+  });
+
+  it('renders legend pills (Secure, Risk, Critical)', () => {
+    render(
+      <AssetGraph projectName="TestProject" vulns={[makeVuln('api.example.com')]} />,
+    );
+    expect(screen.getByText('Secure')).toBeInTheDocument();
+    expect(screen.getByText('Risk')).toBeInTheDocument();
+    expect(screen.getByText('Critical')).toBeInTheDocument();
+  });
+
+  it('renders connecting lines for each asset node', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('api.example.com'), makeVuln('db.example.com')]}
+      />,
+    );
+    const lines = container.querySelectorAll('line');
+    // One line per asset node (2)
+    expect(lines.length).toBe(2);
+  });
+});
