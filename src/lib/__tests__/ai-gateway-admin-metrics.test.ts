@@ -91,10 +91,81 @@ describe('ai-gateway admin metrics endpoint', () => {
     expect(body.event_rates.window_15m).toBeTruthy();
     expect(body.event_rates.window_5m.total).toBeGreaterThanOrEqual(1);
     expect(body.event_rates.window_5m.by_type.unauthorized).toBeGreaterThanOrEqual(1);
+    expect(body.alerts).toEqual({
+      high_rate_limited_5m: false,
+      high_unauthorized_5m: false,
+      high_invalid_json_5m: false,
+      degraded_mode: false,
+    });
 
     const serialized = JSON.stringify(body.recent_events);
     expect(serialized).not.toContain('Bearer');
     expect(serialized).not.toContain('test-token');
+  });
+
+  it('sets alerts to true when thresholds are exceeded', async () => {
+    const runtime = globalThis as unknown as {
+      Deno?: { env?: { get: (key: string) => string | undefined } };
+    };
+    runtime.Deno = {
+      env: {
+        get: (key: string) => (key === 'AI_GATEWAY_ADMIN_KEY' ? 'admin-secret' : undefined),
+      },
+    };
+
+    for (let i = 0; i < 5; i++) {
+      const unauthorizedReq = new Request('https://example.com/functions/v1/ai-gateway', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': `203.0.113.${20 + i}`,
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'scan' }] }),
+      });
+      await handleAiGatewayRequest(unauthorizedReq);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const invalidJsonReq = new Request('https://example.com/functions/v1/ai-gateway', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+          'x-forwarded-for': `203.0.113.${40 + i}`,
+        },
+        body: '{"messages": [invalid]}',
+      });
+      await handleAiGatewayRequest(invalidJsonReq);
+    }
+
+    for (let i = 0; i < 20; i++) {
+      const fallbackReq = new Request('https://example.com/functions/v1/ai-gateway', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+          'x-forwarded-for': `203.0.113.${60 + i}`,
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'run audit' }] }),
+      });
+      await handleAiGatewayRequest(fallbackReq);
+    }
+
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'GET',
+      headers: {
+        'x-gateway-admin-key': 'admin-secret',
+      },
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.alerts.high_unauthorized_5m).toBe(true);
+    expect(body.alerts.high_invalid_json_5m).toBe(true);
+    expect(body.alerts.degraded_mode).toBe(true);
+    expect(body.alerts.high_rate_limited_5m).toBe(false);
   });
 
   it('does not change standard POST behavior with valid auth', async () => {

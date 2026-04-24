@@ -52,6 +52,13 @@ type TelemetryEventRateWindow = {
   by_type: Record<TelemetryEventType, number>;
 };
 
+type GatewayAlerts = {
+  high_rate_limited_5m: boolean;
+  high_unauthorized_5m: boolean;
+  high_invalid_json_5m: boolean;
+  degraded_mode: boolean;
+};
+
 const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
   unauthorized_count: 'unauthorized',
   invalid_json_count: 'invalid_json',
@@ -64,6 +71,12 @@ const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
 const RECENT_EVENTS_BUFFER_SIZE = 50;
 const RECENT_EVENTS_RESPONSE_LIMIT = 20;
 const EVENT_RATE_WINDOWS_MINUTES = [5, 15] as const;
+
+const ALERT_RATE_LIMITED_5M_MIN = 5;
+const ALERT_UNAUTHORIZED_5M_MIN = 5;
+const ALERT_INVALID_JSON_5M_MIN = 5;
+const ALERT_DEGRADED_MIN_TOTAL_15M = 3;
+const ALERT_DEGRADED_FALLBACK_RATIO_15M = 0.6;
 
 const telemetryMetrics: Record<TelemetryMetric, number> = {
   unauthorized_count: 0,
@@ -326,6 +339,24 @@ export function getAiGatewayEventRatesSnapshot(
   return result;
 }
 
+function getAiGatewayAlertsSnapshot(
+  eventRates: Record<`window_${number}m`, TelemetryEventRateWindow>,
+): GatewayAlerts {
+  const window5m = eventRates.window_5m;
+  const window15m = eventRates.window_15m;
+  const fallbackRatio15m =
+    window15m.total > 0 ? window15m.by_type.provider_fallback / window15m.total : 0;
+
+  return {
+    high_rate_limited_5m: window5m.by_type.rate_limited >= ALERT_RATE_LIMITED_5M_MIN,
+    high_unauthorized_5m: window5m.by_type.unauthorized >= ALERT_UNAUTHORIZED_5M_MIN,
+    high_invalid_json_5m: window5m.by_type.invalid_json >= ALERT_INVALID_JSON_5M_MIN,
+    degraded_mode:
+      window15m.total >= ALERT_DEGRADED_MIN_TOTAL_15M &&
+      fallbackRatio15m >= ALERT_DEGRADED_FALLBACK_RATIO_15M,
+  };
+}
+
 export function resetAiGatewayTelemetryForTests(): void {
   (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
     telemetryMetrics[metric] = 0;
@@ -388,6 +419,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       }
 
       const now = Date.now();
+      const eventRates = getAiGatewayEventRatesSnapshot(now);
 
       return jsonResponse(
         {
@@ -398,7 +430,8 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
           version: getGatewayVersion(),
           telemetry: getAiGatewayTelemetrySnapshot(),
           recent_events: getAiGatewayRecentEventsSnapshot(RECENT_EVENTS_RESPONSE_LIMIT),
-          event_rates: getAiGatewayEventRatesSnapshot(now),
+          event_rates: eventRates,
+          alerts: getAiGatewayAlertsSnapshot(eventRates),
         },
         requestId,
       );
