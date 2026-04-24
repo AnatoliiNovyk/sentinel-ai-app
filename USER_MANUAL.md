@@ -127,4 +127,30 @@ npm run quality:check
 
 ---
 
+## 12. AI Gateway Admin Diagnostics (для DevOps/Backend)
+
+Для сервісної діагностики Edge Function `ai-gateway` доступний захищений admin endpoint:
+
+- Метод: `GET`
+- Header: `x-gateway-admin-key`
+- Server env: `AI_GATEWAY_ADMIN_KEY`
+
+При валідному ключі endpoint повертає:
+
+- `request_id`, `status`, `uptime_ms`, `timestamp`, `version`
+- `telemetry` (агреговані counters)
+- `recent_events` (безпечна bounded історія останніх подій)
+- `event_rates` (вікна 5м/15м)
+- `alerts` (порогові індикатори)
+- `overall_risk_level` (`low|medium|high`)
+- `recommended_actions` (runbook-підказки)
+
+Безпекові гарантії:
+
+- Без валідного admin key повертається `401` у safe error форматі.
+- У diagnostics payload немає чутливих даних (токени, сирі payload-и, ключі).
+- Усі відповіді повертають `X-Request-Id` для кореляції інцидентів.
+
+---
+
 **Sentinel AI — Безпека, яка випереджає атаку.**

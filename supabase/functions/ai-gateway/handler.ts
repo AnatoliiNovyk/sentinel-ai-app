@@ -61,6 +61,12 @@ type GatewayAlerts = {
 
 type GatewayRiskLevel = 'low' | 'medium' | 'high';
 
+type RecommendedAction = {
+  id: string;
+  priority: 'low' | 'medium' | 'high';
+  action: string;
+};
+
 const METRIC_TO_EVENT_TYPE: Record<TelemetryMetric, TelemetryEventType> = {
   unauthorized_count: 'unauthorized',
   invalid_json_count: 'invalid_json',
@@ -80,6 +86,7 @@ const ALERT_INVALID_JSON_5M_MIN = 5;
 const ALERT_DEGRADED_MIN_TOTAL_15M = 3;
 const ALERT_DEGRADED_FALLBACK_RATIO_15M = 0.6;
 const MEDIUM_RISK_MIN_TOTAL_EVENTS_15M = 10;
+const MAX_RECOMMENDED_ACTIONS = 5;
 
 const telemetryMetrics: Record<TelemetryMetric, number> = {
   unauthorized_count: 0,
@@ -379,6 +386,71 @@ function getAiGatewayOverallRiskLevel(
   return 'low';
 }
 
+function getAiGatewayRecommendedActions(
+  alerts: GatewayAlerts,
+  overallRiskLevel: GatewayRiskLevel,
+): RecommendedAction[] {
+  const actions: RecommendedAction[] = [];
+
+  if (alerts.high_rate_limited_5m) {
+    actions.push({
+      id: 'tighten-rate-limits',
+      priority: 'high',
+      action: 'Increase edge rate-limiting strictness and investigate burst traffic sources.',
+    });
+  }
+
+  if (alerts.high_unauthorized_5m) {
+    actions.push({
+      id: 'review-auth-clients',
+      priority: 'high',
+      action: 'Audit clients sending unauthorized requests and rotate exposed credentials if needed.',
+    });
+  }
+
+  if (alerts.high_invalid_json_5m) {
+    actions.push({
+      id: 'validate-client-payloads',
+      priority: 'medium',
+      action: 'Review client payload serialization and enforce stricter schema validation upstream.',
+    });
+  }
+
+  if (alerts.degraded_mode) {
+    actions.push({
+      id: 'check-provider-health',
+      priority: 'high',
+      action: 'Check upstream AI provider health and failover policy due to elevated fallback ratio.',
+    });
+  }
+
+  if (overallRiskLevel === 'low' && actions.length === 0) {
+    actions.push({
+      id: 'monitor-baseline',
+      priority: 'low',
+      action: 'Gateway health is stable; continue routine monitoring and keep thresholds under review.',
+    });
+  }
+
+  if (overallRiskLevel === 'medium' && actions.length < MAX_RECOMMENDED_ACTIONS) {
+    actions.push({
+      id: 'schedule-config-review',
+      priority: 'medium',
+      action: 'Schedule a configuration review for auth, payload validation, and traffic patterns.',
+    });
+  }
+
+  if (overallRiskLevel === 'high' && actions.length < MAX_RECOMMENDED_ACTIONS) {
+    actions.push({
+      id: 'trigger-incident-triage',
+      priority: 'high',
+      action: 'Trigger incident triage and assign ownership for immediate gateway stabilization actions.',
+    });
+  }
+
+  return actions.slice(0, MAX_RECOMMENDED_ACTIONS);
+}
+
 export function resetAiGatewayTelemetryForTests(): void {
   (Object.keys(telemetryMetrics) as TelemetryMetric[]).forEach((metric) => {
     telemetryMetrics[metric] = 0;
@@ -443,6 +515,7 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       const now = Date.now();
       const eventRates = getAiGatewayEventRatesSnapshot(now);
       const alerts = getAiGatewayAlertsSnapshot(eventRates);
+      const overallRiskLevel = getAiGatewayOverallRiskLevel(alerts, eventRates);
 
       return jsonResponse(
         {
@@ -455,7 +528,8 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
           recent_events: getAiGatewayRecentEventsSnapshot(RECENT_EVENTS_RESPONSE_LIMIT),
           event_rates: eventRates,
           alerts,
-          overall_risk_level: getAiGatewayOverallRiskLevel(alerts, eventRates),
+          overall_risk_level: overallRiskLevel,
+          recommended_actions: getAiGatewayRecommendedActions(alerts, overallRiskLevel),
         },
         requestId,
       );

@@ -98,6 +98,10 @@ describe('ai-gateway admin metrics endpoint', () => {
       degraded_mode: false,
     });
     expect(body.overall_risk_level).toBe('low');
+    expect(Array.isArray(body.recommended_actions)).toBe(true);
+    expect(body.recommended_actions.length).toBeGreaterThan(0);
+    expect(body.recommended_actions[0].id).toBe('monitor-baseline');
+    expect(body.recommended_actions[0].priority).toBe('low');
 
     const serialized = JSON.stringify(body.recent_events);
     expect(serialized).not.toContain('Bearer');
@@ -168,6 +172,14 @@ describe('ai-gateway admin metrics endpoint', () => {
     expect(body.alerts.degraded_mode).toBe(true);
     expect(body.alerts.high_rate_limited_5m).toBe(false);
     expect(body.overall_risk_level).toBe('high');
+    expect(body.recommended_actions.length).toBeGreaterThan(0);
+    expect(body.recommended_actions.length).toBeLessThanOrEqual(5);
+
+    const actionIds = body.recommended_actions.map((item: { id: string }) => item.id);
+    expect(actionIds).toContain('review-auth-clients');
+    expect(actionIds).toContain('validate-client-payloads');
+    expect(actionIds).toContain('check-provider-health');
+    expect(actionIds).toContain('trigger-incident-triage');
   });
 
   it('does not change standard POST behavior with valid auth', async () => {
