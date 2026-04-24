@@ -18,13 +18,16 @@ type QueryMock = {
   maybeSingle: ReturnType<typeof vi.fn>;
 };
 
-function makeQuery(data: unknown): QueryMock {
+function makeQuery(
+  data: unknown,
+  error: unknown = null,
+): QueryMock {
   const query = {
     select: vi.fn(),
     eq: vi.fn(),
     gt: vi.fn(),
     is: vi.fn(),
-    maybeSingle: vi.fn().mockResolvedValue({ data }),
+    maybeSingle: vi.fn().mockResolvedValue({ data, error }),
   };
 
   query.select.mockReturnValue(query);
@@ -91,11 +94,12 @@ describe('AiService', () => {
 
   it('pollForResult returns timeout after retries', async () => {
     vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const query = makeQuery(null);
     vi.mocked(supabase.from).mockImplementation(() => query as never);
 
     const promise = AiService.pollForResult('scan-1', Date.now() - 1000);
-    await vi.advanceTimersByTimeAsync(40 * 3000);
+    await vi.runAllTimersAsync();
     const res = await promise;
 
     expect(query.eq).toHaveBeenCalledWith('scan_id', 'scan-1');
@@ -103,6 +107,40 @@ describe('AiService', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.error.code).toBe(ErrorCode.AI_PROCESSING_TIMEOUT);
+    }
+  });
+
+  it('pollForResult succeeds after retryable query error', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const transientError = { code: 'ETIMEDOUT', message: 'temporary db timeout' };
+    const query = makeQuery(null);
+    query.maybeSingle
+      .mockResolvedValueOnce({ data: null, error: transientError })
+      .mockResolvedValueOnce({ data: { id: 'vuln-retry' }, error: null });
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const promise = AiService.pollForResult('scan-2', Date.now() - 1000);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+
+    expect(query.maybeSingle).toHaveBeenCalledTimes(2);
+    expect(res).toEqual({ ok: true, data: { id: 'vuln-retry' } });
+  });
+
+  it('pollForResult fails immediately on non-retryable query error', async () => {
+    const nonRetryableError = { code: '42501', message: 'permission denied' };
+    const query = makeQuery(null, nonRetryableError);
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const res = await AiService.pollForResult('scan-3', Date.now() - 1000);
+
+    expect(query.maybeSingle).toHaveBeenCalledTimes(1);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe(ErrorCode.AI_POLLING_FAILED);
+      expect(res.error.cause).toEqual(nonRetryableError);
     }
   });
 });

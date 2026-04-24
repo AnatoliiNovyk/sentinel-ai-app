@@ -1,5 +1,6 @@
 export enum ErrorCode {
   AI_RPC_FAILED = 'AI_RPC_FAILED',
+  AI_POLLING_FAILED = 'AI_POLLING_FAILED',
   AI_PROCESSING_TIMEOUT = 'AI_PROCESSING_TIMEOUT',
   SCAN_DB_INSERT_FAILED = 'SCAN_DB_INSERT_FAILED',
   SCAN_EDGE_FN_ERROR = 'SCAN_EDGE_FN_ERROR',
@@ -45,6 +46,8 @@ export function errorToUserMessage(err: ApiError): string {
   switch (err.code) {
     case ErrorCode.AI_RPC_FAILED:
       return 'AI task dispatch failed. Please retry in a moment.';
+    case ErrorCode.AI_POLLING_FAILED:
+      return 'AI polling failed due to a service error. Please retry shortly.';
     case ErrorCode.AI_PROCESSING_TIMEOUT:
       return 'AI processing timed out. Please try again.';
     case ErrorCode.SCAN_DB_INSERT_FAILED:

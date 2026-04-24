@@ -1,6 +1,30 @@
 import { supabase } from '../lib/supabase';
 import { ErrorCode, failure, Result, success } from '../lib/errors';
 
+const POLL_MAX_ATTEMPTS = 40;
+const POLL_BASE_DELAY_MS = 1_500;
+const POLL_MAX_DELAY_MS = 8_000;
+const POLL_JITTER_RATIO = 0.2;
+
+const NON_RETRYABLE_DB_ERROR_CODES = new Set(['42501', 'PGRST301', 'PGRST302']);
+
+function getBackoffDelayMs(attempt: number): number {
+  const exponential = Math.min(POLL_MAX_DELAY_MS, POLL_BASE_DELAY_MS * (2 ** attempt));
+  const jitterMultiplier = 1 + ((Math.random() * 2 - 1) * POLL_JITTER_RATIO);
+  return Math.max(250, Math.round(exponential * jitterMultiplier));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryablePollingError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return true;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code !== 'string') return true;
+  return !NON_RETRYABLE_DB_ERROR_CODES.has(code);
+}
+
 export interface AiTaskRequest {
   title: string;
   description: string;
@@ -72,8 +96,9 @@ export const AiService = {
   },
 
   async pollForResult(scanId: string | null, startTime: number): Promise<Result<unknown>> {
-    const maxRetries = 40; // 2 minutes
-    for (let i = 0; i < maxRetries; i++) {
+    let lastRetryableError: unknown;
+
+    for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
       let query = supabase
         .from('vulnerabilities')
         .select('*')
@@ -86,16 +111,44 @@ export const AiService = {
         query = query.is('scan_id', null);
       }
 
-      const { data } = await query.maybeSingle();
+      try {
+        const { data, error } = await query.maybeSingle();
 
-      if (data) return success(data);
-      await new Promise(r => setTimeout(r, 3000));
+        if (data) return success(data);
+
+        if (error) {
+          if (!isRetryablePollingError(error)) {
+            return failure(
+              ErrorCode.AI_POLLING_FAILED,
+              'AI polling failed due to a non-retryable query error.',
+              error,
+              { scanId, attempt: i + 1 },
+            );
+          }
+          lastRetryableError = error;
+        }
+      } catch (err) {
+        if (!isRetryablePollingError(err)) {
+          return failure(
+            ErrorCode.AI_POLLING_FAILED,
+            'AI polling failed due to a non-retryable runtime error.',
+            err,
+            { scanId, attempt: i + 1 },
+          );
+        }
+        lastRetryableError = err;
+      }
+
+      if (i < POLL_MAX_ATTEMPTS - 1) {
+        await sleep(getBackoffDelayMs(i));
+      }
     }
+
     return failure(
       ErrorCode.AI_PROCESSING_TIMEOUT,
       'AI processing timed out. Please check again in a moment.',
-      undefined,
-      { scanId },
+      lastRetryableError,
+      { scanId, attempts: POLL_MAX_ATTEMPTS },
     );
   }
 };
