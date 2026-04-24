@@ -4,6 +4,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+import {
+  gatewayError,
+  isPayloadTooLarge,
+  parseGatewayRequest,
+  type ChatMessage,
+} from './contract.ts';
+import { checkGatewayRateLimit, extractClientKey } from './rateLimit.ts';
+
 const SYSTEM_PROMPT = `You are Sentinel, an autonomous AI cybersecurity auditor agent.
 
 Your role is to orchestrate infrastructure security audits. You can reason about:
@@ -20,8 +28,6 @@ When a user describes a goal, you:
 5. Provide ready-to-apply remediation as Terraform or Kubernetes patches when relevant.
 
 Keep responses clear, technical, and action-oriented. Use Markdown formatting (bold, bullet points, code blocks). Never invent data you don't have — describe what you would do.`;
-
-type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
 // ─── Google Gemini ────────────────────────────────────────────────────────────
 async function callGemini(apiKey: string, messages: ChatMessage[]): Promise<string> {
@@ -117,6 +123,17 @@ function mockResponse(prompt: string): string {
   return `I'm **Sentinel**, your AI security auditor. I can orchestrate external, cloud, IaC, and vulnerability scans, map findings to MITRE ATT&CK and CIS Controls, and generate reports with ready-to-apply remediation.\n\nTry: *"Scan my AWS account for SOC2 compliance"*.`;
 }
 
+function jsonResponse(
+  payload: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
+  });
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -125,28 +142,39 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const err = gatewayError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
+      return jsonResponse(err.body, err.status);
+    }
+
+    const clientKey = extractClientKey(req);
+    const rateLimit = checkGatewayRateLimit(clientKey);
+    if (!rateLimit.allowed) {
+      const err = gatewayError('RATE_LIMITED', 'Too many requests. Please retry later.', 429);
+      return jsonResponse(err.body, err.status, {
+        'Retry-After': String(rateLimit.retryAfterSeconds),
       });
     }
 
-    const body = await req.json();
-    let messages: ChatMessage[] = [];
-    
-    if (body.action === 'generate_kill_chain') {
-      const prompt = `You are an expert Red Teamer. Generate a MITRE ATT&CK Kill Chain attack path based on these vulnerabilities for project ${body.project}:\n${JSON.stringify(body.vulnerabilities, null, 2)}\nRespond ONLY with a JSON array of objects without markdown block formatting. Each object must have: phase (e.g. Reconnaissance, Initial Access, Execution, Exfiltration), tactic (e.g. TA0043), description (how attacker moves), exploited_vuln (title of the vuln used), asset (the target asset).`;
-      messages = [{ role: 'user', content: prompt }];
-    } else {
-      messages = body.messages ?? [];
+    let rawBody: unknown;
+    try {
+      const bodyText = await req.text();
+      if (isPayloadTooLarge(bodyText)) {
+        const err = gatewayError('PAYLOAD_TOO_LARGE', 'Request payload is too large.', 413);
+        return jsonResponse(err.body, err.status);
+      }
+
+      rawBody = JSON.parse(bodyText);
+    } catch {
+      const err = gatewayError('INVALID_JSON', 'Invalid JSON body.', 400);
+      return jsonResponse(err.body, err.status);
     }
 
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "messages required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const parsed = parseGatewayRequest(rawBody);
+    if (!parsed.ok) {
+      return jsonResponse(parsed.error.body, parsed.error.status);
     }
+
+    const { action, messages } = parsed.value;
 
     // Priority: Gemini → Anthropic → OpenAI → mock
     const geminiKey    = Deno.env.get("GEMINI_API_KEY");
@@ -185,31 +213,25 @@ Deno.serve(async (req: Request) => {
 
     if (!content) {
       const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      content = mockResponse((lastUser?.content ?? "") + (body.action === 'generate_kill_chain' ? ' kill_chain_mock' : ''));
+      content = mockResponse((lastUser?.content ?? "") + (action === 'generate_kill_chain' ? ' kill_chain_mock' : ''));
       provider = "mock";
     }
 
-    if (body.action === 'generate_kill_chain') {
+    if (action === 'generate_kill_chain') {
       try {
         const cleaned = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
         const kill_chain = JSON.parse(cleaned);
-        return new Response(JSON.stringify({ kill_chain, provider }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ kill_chain, provider });
       } catch {
-        return new Response(JSON.stringify({ error: "AI failed to return valid JSON", raw: content }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500
-        });
+        const err = gatewayError('AI_INVALID_JSON', 'AI failed to return a valid JSON payload.', 502);
+        return jsonResponse(err.body, err.status);
       }
     }
 
-    return new Response(JSON.stringify({ content, provider }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ content, provider });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error('ai-gateway unhandled error:', err);
+    const safeError = gatewayError('INTERNAL_ERROR', 'Unexpected gateway error.', 500);
+    return jsonResponse(safeError.body, safeError.status);
   }
 });
