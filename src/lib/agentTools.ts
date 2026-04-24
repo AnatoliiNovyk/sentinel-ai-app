@@ -36,7 +36,7 @@ function keywordScanner(text: string): string | null {
   return null;
 }
 
-function extractQueryFromText(text: string): string {
+export function extractQueryFromText(text: string): string {
   // Extract email, domain, username, or IP from text
   // Pattern: "scan for X", "check X", "search X"
   const emailMatch = text.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
