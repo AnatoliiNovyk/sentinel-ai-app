@@ -1,0 +1,163 @@
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import ScanDiff from '../ScanDiff';
+import type { Scan, Vulnerability } from '../../lib/supabase';
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function makeScan(id: string, createdAt: string, status: Scan['status'] = 'completed'): Scan {
+  return {
+    id,
+    project_id: 'proj-1',
+    user_id: 'user-1',
+    scanner: 'nmap',
+    status,
+    is_mock: false,
+    severity_summary: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+    started_at: createdAt,
+    completed_at: createdAt,
+    created_at: createdAt,
+  };
+}
+
+function makeVuln(
+  id: string,
+  scanId: string,
+  title: string,
+  asset: string,
+  severity: Vulnerability['severity'] = 'high',
+): Vulnerability {
+  return {
+    id,
+    scan_id: scanId,
+    user_id: 'user-1',
+    title,
+    description: 'desc',
+    severity,
+    cve_id: '',
+    mitre_tactic: '',
+    cis_control: '',
+    asset,
+    remediation: 'fix it',
+    remediation_code: '',
+    remediation_type: '',
+    created_at: '2026-01-01T00:00:00Z',
+    status: 'open',
+    note: '',
+    status_updated_at: '2026-01-01T00:00:00Z',
+    sla_breached_at: null,
+    sla_warned_at: null,
+  };
+}
+
+const SCAN_NEW = makeScan('scan-new', '2026-04-24T10:00:00Z');
+const SCAN_OLD = makeScan('scan-old', '2026-04-23T10:00:00Z');
+
+// ── Tests ─────────────────────────────────────────────────────────────────
+
+describe('ScanDiff', () => {
+  describe('empty / insufficient data', () => {
+    it('shows "No diff available yet" when no scans provided', () => {
+      render(<ScanDiff scans={[]} vulns={[]} />);
+      expect(screen.getByText('No diff available yet')).toBeInTheDocument();
+    });
+
+    it('shows empty state when only one completed scan', () => {
+      render(<ScanDiff scans={[SCAN_NEW]} vulns={[]} />);
+      expect(screen.getByText('No diff available yet')).toBeInTheDocument();
+    });
+
+    it('ignores non-completed scans for diff calculation', () => {
+      const runningScan = makeScan('scan-run', '2026-04-24T09:00:00Z', 'running');
+      render(<ScanDiff scans={[SCAN_NEW, runningScan]} vulns={[]} />);
+      expect(screen.getByText('No diff available yet')).toBeInTheDocument();
+    });
+  });
+
+  describe('diff classification', () => {
+    it('classifies NEW findings (in latest, not in previous)', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'SQL Injection', 'api.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('new')).toBeInTheDocument();
+    });
+
+    it('classifies FIXED findings (in previous, not in latest)', () => {
+      const vulns = [
+        makeVuln('v2', 'scan-old', 'Open SSH Port', 'bastion.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('fixed')).toBeInTheDocument();
+    });
+
+    it('classifies PERSISTED findings (in both scans)', () => {
+      const vulns = [
+        makeVuln('v3', 'scan-new', 'XSS Vulnerability', 'web.example.com'),
+        makeVuln('v4', 'scan-old', 'XSS Vulnerability', 'web.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('persisted')).toBeInTheDocument();
+    });
+
+    it('shows correct counts in summary pills', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New Bug', 'host1.com'),       // new
+        makeVuln('v2', 'scan-old', 'Old Bug', 'host2.com'),        // fixed
+        makeVuln('v3', 'scan-new', 'Both Bug', 'host3.com'),       // persisted
+        makeVuln('v4', 'scan-old', 'Both Bug', 'host3.com'),       // persisted
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('1 New')).toBeInTheDocument();
+      expect(screen.getByText('1 Fixed')).toBeInTheDocument();
+      expect(screen.getByText('1 Persisted')).toBeInTheDocument();
+    });
+  });
+
+  describe('trend indicator', () => {
+    it('shows "+N new risks" when new > fixed', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'Bug A', 'host1.com'),
+        makeVuln('v2', 'scan-new', 'Bug B', 'host2.com'),
+        // nothing fixed
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('+2 new risks')).toBeInTheDocument();
+    });
+
+    it('shows "N fewer risks" when fixed > new', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-old', 'Bug A', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Bug B', 'host2.com'),
+        // nothing new
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('2 fewer risks')).toBeInTheDocument();
+    });
+
+    it('shows "No change" when new === fixed', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New Bug', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Fixed Bug', 'host2.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('No change')).toBeInTheDocument();
+    });
+  });
+
+  describe('rendering', () => {
+    it('displays the "Scan Diff" heading', () => {
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={[]} />);
+      expect(screen.getByText('Scan Diff')).toBeInTheDocument();
+    });
+
+    it('shows severity badge for listed findings', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'Critical RCE', 'prod.example.com', 'critical'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('critical')).toBeInTheDocument();
+    });
+  });
+});
