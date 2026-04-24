@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Play, X, FileText, Lock, Loader2 } from 'lucide-react';
+import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { AiService } from '../api/ai.service';
@@ -23,6 +23,7 @@ const Scans = () => {
   // New Scan Modal state
   const [showNewScanModal, setShowNewScanModal] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [showMockWarning, setShowMockWarning] = useState(false);
   const [newScanConfig, setNewScanConfig] = useState({
     scanner: 'Nmap:Intense',
     target: ''
@@ -35,6 +36,13 @@ const Scans = () => {
     if (scan.is_mock) return 'MOCK';
     return 'REAL';
   })();
+
+  // Show mock warning whenever the active scan is in MOCK mode
+  useEffect(() => {
+    if (currentScanMode === 'MOCK') {
+      setShowMockWarning(true);
+    }
+  }, [currentScanMode]);
 
   // Load initial data
   useEffect(() => {
@@ -191,6 +199,22 @@ const Scans = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Mock Mode Warning Toast */}
+      {showMockWarning && (
+        <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span className="flex-1">
+            <strong>Demo Mode:</strong> The real scanner agent is unavailable. Results shown are simulated and do not reflect your actual infrastructure.
+          </span>
+          <button
+            onClick={() => setShowMockWarning(false)}
+            aria-label="Dismiss mock warning"
+            className="ml-2 text-amber-400 hover:text-amber-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <ScanHeader 
         projects={projects}
         selectedProjectId={selectedProjectId}
@@ -223,7 +247,12 @@ const Scans = () => {
                   <span className="font-medium text-sm capitalize">{scan.scanner}</span>
                   <span className="text-[10px] opacity-60">{new Date(scan.created_at).toLocaleDateString()}</span>
                 </div>
-                <div className="text-[10px] uppercase font-bold opacity-80">{scan.status}</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold opacity-80">{scan.status}</span>
+                  {scan.is_mock && (
+                    <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">DEMO</span>
+                  )}
+                </div>
               </button>
             ))}
           </div>

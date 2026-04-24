@@ -1,4 +1,4 @@
-import { Layout, Plus } from 'lucide-react';
+import { Layout, Plus, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
 import type { Project } from '../../lib/supabase';
 
 interface ScanHeaderProps {
@@ -25,15 +25,18 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
 
       <div className="flex flex-wrap items-center gap-3">
         <div
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
             currentMode === 'REAL'
               ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
               : currentMode === 'MOCK'
-              ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+              ? 'text-amber-300 border-amber-500/40 bg-amber-500/15'
               : 'text-slate-300 border-slate-600/50 bg-slate-800/50'
           }`}
         >
-          Mode: {currentMode}
+          {currentMode === 'REAL' && <CheckCircle2 className="w-3 h-3" />}
+          {currentMode === 'MOCK' && <AlertTriangle className="w-3 h-3" />}
+          {currentMode === 'UNKNOWN' && <HelpCircle className="w-3 h-3" />}
+          {currentMode === 'MOCK' ? '⚠ DEMO MODE' : `Mode: ${currentMode}`}
         </div>
         <div className="relative">
           <Layout className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

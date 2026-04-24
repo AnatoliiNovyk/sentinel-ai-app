@@ -6,6 +6,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// ---------------------------------------------------------------------------
+// In-memory rate limiter for scan dispatch (10 scans / 60s per user)
+// ---------------------------------------------------------------------------
+const SCAN_RATE_LIMIT = 10;
+const SCAN_WINDOW_MS = 60_000;
+const scanBuckets = new Map<string, number[]>();
+
+function checkScanRateLimit(userId: string): { allowed: boolean; retryAfterSeconds: number } {
+  const now = Date.now();
+  const windowStart = now - SCAN_WINDOW_MS;
+  const prev = scanBuckets.get(userId) ?? [];
+  const recent = prev.filter((t) => t > windowStart);
+
+  if (recent.length >= SCAN_RATE_LIMIT) {
+    const oldest = recent[0];
+    const retryMs = Math.max(1, SCAN_WINDOW_MS - (now - oldest));
+    scanBuckets.set(userId, recent);
+    return { allowed: false, retryAfterSeconds: Math.ceil(retryMs / 1000) };
+  }
+
+  recent.push(now);
+  scanBuckets.set(userId, recent);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+// ---------------------------------------------------------------------------
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
@@ -24,6 +50,15 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Rate limit: 10 scans per minute per user
+    const rl = checkScanRateLimit(user.id);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many scan requests. Please wait before starting another scan.", retryAfterSeconds: rl.retryAfterSeconds }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rl.retryAfterSeconds) } },
+      );
     }
 
     const body = await req.json();
