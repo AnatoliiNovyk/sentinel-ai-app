@@ -199,4 +199,31 @@ describe('Chat integration flow', () => {
       expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
     );
   });
+
+  it('shows retrying label while polling reports transient retry', async () => {
+    mockRunAgent.mockResolvedValueOnce(null);
+    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-retry-ui' });
+
+    let releasePoll!: () => void;
+    const pollPromise = new Promise<void>((resolve) => {
+      releasePoll = () => resolve();
+    });
+
+    mockPollForResult.mockImplementationOnce(
+      async (_scanId, _startTime, onProgress?: (p: { status: string }) => void) => {
+        onProgress?.({ status: 'retrying' });
+        await pollPromise;
+        return { ok: true, data: { description: 'Recovered after retry loop' } };
+      },
+    );
+
+    render(<Chat />);
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'SLA status — what is overdue?' }));
+
+    await waitFor(() => expect(screen.getByText(/Retrying after transient error/)).toBeInTheDocument());
+    releasePoll();
+    await waitFor(() => expect(screen.getByText('Recovered after retry loop')).toBeInTheDocument());
+  });
 });

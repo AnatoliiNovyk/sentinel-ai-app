@@ -1,16 +1,90 @@
 import { supabase } from '../lib/supabase';
 import { ErrorCode, failure, Result, success } from '../lib/errors';
 
-const POLL_MAX_ATTEMPTS = 40;
-const POLL_BASE_DELAY_MS = 1_500;
-const POLL_MAX_DELAY_MS = 8_000;
-const POLL_JITTER_RATIO = 0.2;
+type PollingPolicy = {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  jitterRatio: number;
+};
+
+const DEFAULT_POLLING_POLICY: PollingPolicy = {
+  maxAttempts: 40,
+  baseDelayMs: 1_500,
+  maxDelayMs: 8_000,
+  jitterRatio: 0.2,
+};
+
+const POLL_ATTEMPTS_RANGE = { min: 1, max: 300 };
+const POLL_DELAY_RANGE_MS = { min: 100, max: 60_000 };
+const POLL_JITTER_RANGE = { min: 0, max: 1 };
 
 const NON_RETRYABLE_DB_ERROR_CODES = new Set(['42501', 'PGRST301', 'PGRST302']);
 
-function getBackoffDelayMs(attempt: number): number {
-  const exponential = Math.min(POLL_MAX_DELAY_MS, POLL_BASE_DELAY_MS * (2 ** attempt));
-  const jitterMultiplier = 1 + ((Math.random() * 2 - 1) * POLL_JITTER_RATIO);
+export type PollingProgress = {
+  status: 'querying' | 'retrying';
+  attempt: number;
+  maxAttempts: number;
+  nextDelayMs?: number;
+  errorCode?: string;
+};
+
+function parseNumberEnv(name: string): number | null {
+  const raw = import.meta.env[name];
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampToInt(value: number): number {
+  return Math.trunc(value);
+}
+
+export function getPollingPolicy(): PollingPolicy {
+  const attempts = parseNumberEnv('VITE_AI_POLL_MAX_ATTEMPTS');
+  const baseDelay = parseNumberEnv('VITE_AI_POLL_BASE_DELAY_MS');
+  const maxDelay = parseNumberEnv('VITE_AI_POLL_MAX_DELAY_MS');
+  const jitter = parseNumberEnv('VITE_AI_POLL_JITTER_RATIO');
+
+  const maxAttempts =
+    attempts !== null &&
+    attempts >= POLL_ATTEMPTS_RANGE.min &&
+    attempts <= POLL_ATTEMPTS_RANGE.max
+      ? clampToInt(attempts)
+      : DEFAULT_POLLING_POLICY.maxAttempts;
+
+  const baseDelayMs =
+    baseDelay !== null &&
+    baseDelay >= POLL_DELAY_RANGE_MS.min &&
+    baseDelay <= POLL_DELAY_RANGE_MS.max
+      ? clampToInt(baseDelay)
+      : DEFAULT_POLLING_POLICY.baseDelayMs;
+
+  const maxDelayMsCandidate =
+    maxDelay !== null &&
+    maxDelay >= POLL_DELAY_RANGE_MS.min &&
+    maxDelay <= POLL_DELAY_RANGE_MS.max
+      ? clampToInt(maxDelay)
+      : DEFAULT_POLLING_POLICY.maxDelayMs;
+
+  const maxDelayMs = Math.max(baseDelayMs, maxDelayMsCandidate);
+
+  const jitterRatio =
+    jitter !== null && jitter >= POLL_JITTER_RANGE.min && jitter <= POLL_JITTER_RANGE.max
+      ? jitter
+      : DEFAULT_POLLING_POLICY.jitterRatio;
+
+  return {
+    maxAttempts,
+    baseDelayMs,
+    maxDelayMs,
+    jitterRatio,
+  };
+}
+
+function getBackoffDelayMs(attempt: number, policy: PollingPolicy): number {
+  const exponential = Math.min(policy.maxDelayMs, policy.baseDelayMs * (2 ** attempt));
+  const jitterMultiplier = 1 + ((Math.random() * 2 - 1) * policy.jitterRatio);
   return Math.max(250, Math.round(exponential * jitterMultiplier));
 }
 
@@ -95,10 +169,16 @@ export const AiService = {
     return success(data);
   },
 
-  async pollForResult(scanId: string | null, startTime: number): Promise<Result<unknown>> {
+  async pollForResult(
+    scanId: string | null,
+    startTime: number,
+    onProgress?: (progress: PollingProgress) => void,
+  ): Promise<Result<unknown>> {
+    const policy = getPollingPolicy();
     let lastRetryableError: unknown;
 
-    for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+    for (let i = 0; i < policy.maxAttempts; i++) {
+      onProgress?.({ status: 'querying', attempt: i + 1, maxAttempts: policy.maxAttempts });
       let query = supabase
         .from('vulnerabilities')
         .select('*')
@@ -126,6 +206,18 @@ export const AiService = {
             );
           }
           lastRetryableError = error;
+          const errorCode =
+            typeof (error as { code?: unknown }).code === 'string'
+              ? (error as { code: string }).code
+              : undefined;
+          const nextDelayMs = i < policy.maxAttempts - 1 ? getBackoffDelayMs(i, policy) : undefined;
+          onProgress?.({
+            status: 'retrying',
+            attempt: i + 1,
+            maxAttempts: policy.maxAttempts,
+            nextDelayMs,
+            ...(errorCode ? { errorCode } : {}),
+          });
         }
       } catch (err) {
         if (!isRetryablePollingError(err)) {
@@ -137,10 +229,23 @@ export const AiService = {
           );
         }
         lastRetryableError = err;
+        const errorCode =
+          typeof (err as { code?: unknown }).code === 'string'
+            ? (err as { code: string }).code
+            : undefined;
+        const nextDelayMs = i < policy.maxAttempts - 1 ? getBackoffDelayMs(i, policy) : undefined;
+        onProgress?.({
+          status: 'retrying',
+          attempt: i + 1,
+          maxAttempts: policy.maxAttempts,
+          nextDelayMs,
+          ...(errorCode ? { errorCode } : {}),
+        });
       }
 
-      if (i < POLL_MAX_ATTEMPTS - 1) {
-        await sleep(getBackoffDelayMs(i));
+      if (i < policy.maxAttempts - 1) {
+        const delayMs = getBackoffDelayMs(i, policy);
+        await sleep(delayMs);
       }
     }
 
@@ -148,7 +253,7 @@ export const AiService = {
       ErrorCode.AI_PROCESSING_TIMEOUT,
       'AI processing timed out. Please check again in a moment.',
       lastRetryableError,
-      { scanId, attempts: POLL_MAX_ATTEMPTS },
+      { scanId, attempts: policy.maxAttempts },
     );
   }
 };

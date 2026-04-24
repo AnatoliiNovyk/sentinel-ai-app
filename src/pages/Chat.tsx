@@ -160,14 +160,21 @@ export default function Chat() {
         } else if (!convoId) {
           aiContent = "Error: Please select or create a conversation.";
         } else {
-          setThinkingLabel('Agent processing...');
+          clearInterval(phaseTimer);
+          setThinkingLabel('Dispatching AI task');
           const pollingStart = Date.now();
           const dispatchResult = await AiService.dispatchChatTask(projId, convoId, user.id, text);
           if (!dispatchResult.ok) {
             aiContent = `Error: ${errorToUserMessage(dispatchResult.error)}`;
           } else {
-            setThinkingLabel('Awaiting AI result...');
-            const pollResult = await AiService.pollForResult(null, pollingStart);
+            setThinkingLabel('Polling AI result');
+            const pollResult = await AiService.pollForResult(null, pollingStart, (progress) => {
+              if (progress.status === 'retrying') {
+                setThinkingLabel('Retrying after transient error');
+              } else {
+                setThinkingLabel('Polling AI result');
+              }
+            });
             if (!pollResult.ok) {
               aiContent = `Error: ${errorToUserMessage(pollResult.error)}`;
             } else {

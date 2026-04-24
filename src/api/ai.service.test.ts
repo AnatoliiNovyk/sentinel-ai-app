@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorCode } from '../lib/errors';
-import { AiService } from './ai.service';
+import { AiService, getPollingPolicy } from './ai.service';
 import { supabase } from '../lib/supabase';
 
 vi.mock('../lib/supabase', () => ({
@@ -41,9 +41,63 @@ function makeQuery(
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('AiService', () => {
+  it('uses default polling policy when env is not provided', () => {
+    const policy = getPollingPolicy();
+
+    expect(policy).toEqual({
+      maxAttempts: 40,
+      baseDelayMs: 1500,
+      maxDelayMs: 8000,
+      jitterRatio: 0.2,
+    });
+  });
+
+  it('uses custom polling policy from valid env values', () => {
+    vi.stubEnv('VITE_AI_POLL_MAX_ATTEMPTS', '7');
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '1200');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', '3000');
+    vi.stubEnv('VITE_AI_POLL_JITTER_RATIO', '0.5');
+
+    const policy = getPollingPolicy();
+
+    expect(policy).toEqual({
+      maxAttempts: 7,
+      baseDelayMs: 1200,
+      maxDelayMs: 3000,
+      jitterRatio: 0.5,
+    });
+  });
+
+  it('falls back to defaults for invalid env values', () => {
+    vi.stubEnv('VITE_AI_POLL_MAX_ATTEMPTS', '0');
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '-10');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', 'abc');
+    vi.stubEnv('VITE_AI_POLL_JITTER_RATIO', '2');
+
+    const policy = getPollingPolicy();
+
+    expect(policy).toEqual({
+      maxAttempts: 40,
+      baseDelayMs: 1500,
+      maxDelayMs: 8000,
+      jitterRatio: 0.2,
+    });
+  });
+
+  it('normalizes max delay to be at least base delay', () => {
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '5000');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', '1500');
+
+    const policy = getPollingPolicy();
+
+    expect(policy.baseDelayMs).toBe(5000);
+    expect(policy.maxDelayMs).toBe(5000);
+  });
+
   it('returns AI_RPC_FAILED when generateFix rpc call fails', async () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: null,
@@ -142,5 +196,33 @@ describe('AiService', () => {
       expect(res.error.code).toBe(ErrorCode.AI_POLLING_FAILED);
       expect(res.error.cause).toEqual(nonRetryableError);
     }
+  });
+
+  it('invokes polling progress callback with retrying status', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.stubEnv('VITE_AI_POLL_MAX_ATTEMPTS', '2');
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_JITTER_RATIO', '0');
+
+    const transientError = { code: 'ETIMEDOUT', message: 'temporary db timeout' };
+    const query = makeQuery(null);
+    query.maybeSingle
+      .mockResolvedValueOnce({ data: null, error: transientError })
+      .mockResolvedValueOnce({ data: { id: 'vuln-callback' }, error: null });
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const onProgress = vi.fn();
+    await AiService.pollForResult('scan-callback', Date.now() - 1000, onProgress);
+
+    expect(onProgress).toHaveBeenCalled();
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'retrying',
+        attempt: 1,
+        maxAttempts: expect.any(Number),
+        errorCode: 'ETIMEDOUT',
+      }),
+    );
   });
 });

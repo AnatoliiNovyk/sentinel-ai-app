@@ -1,0 +1,35 @@
+
+> vite-react-typescript-starter@0.0.0 test:run
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+
+ [32m✓[39m src/lib/__tests__/errors.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/result-contract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/ai-gateway-rate-limit.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/ai-gateway-contract.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScan[2m > [22m[2mfalls back to MOCK mode when edge is unavailable
+[22m[39m[scanDispatch] Running in MOCK mode (no real agent)
+
+ [32m✓[39m src/api/ai.service.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScan[2m > [22m[2mreturns REAL mode when edge dispatch succeeds
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-1
+
+ [32m✓[39m src/lib/__tests__/scanDispatch.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 124[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/schedulerDispatch.test.ts[2m > [22m[2mdispatchDueSchedules[2m > [22m[2mdispatches due schedules and counts successful launches only
+[22m[39m[scanDispatch] Running in MOCK mode (no real agent)
+[scanDispatch] Running in MOCK mode (no real agent)
+
+ [32m✓[39m src/lib/__tests__/schedulerDispatch.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 192[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/ai-gateway-admin-metrics.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 74[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/ai-gateway-handler.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 93[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/ai-gateway-telemetry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 143[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/Scans.integration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 367[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/Chat.integration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 431[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m12 passed[39m[22m[90m (12)[39m
+[2m      Tests [22m [1m[32m58 passed[39m[22m[90m (58)[39m
+[2m   Start at [22m 14:15:33
+[2m   Duration [22m 5.10s[2m (transform 1.59s, setup 3.39s, collect 3.62s, tests 1.50s, environment 31.61s, prepare 7.45s)[22m
+
