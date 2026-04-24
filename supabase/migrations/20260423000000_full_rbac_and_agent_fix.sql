@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: CONDITIONAL
+-- REASON: Adds org_id FK columns and rewrites RLS policies for team RBAC. Apps not sending org_id will receive empty result sets.
+-- ROLLBACK: Revert org_id columns and restore previous RLS policies. High effort — coordinate with team.
 -- PHASE 1: RBAC STRUCTURE
 -- 1. Create organizations table
 CREATE TABLE IF NOT EXISTS organizations (

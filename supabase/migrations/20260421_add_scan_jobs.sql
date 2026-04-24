@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds new table scan_jobs for VPS agent job queue. Existing tables unaffected.
+-- ROLLBACK: DROP TABLE IF EXISTS scan_jobs;
 -- Add scan_jobs table for real scan queue
 CREATE TABLE IF NOT EXISTS scan_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

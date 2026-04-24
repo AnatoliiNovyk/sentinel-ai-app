@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: N/A (initial schema)
+-- REASON: First migration — no prior schema exists.
+-- ROLLBACK: Drop all created tables. Data will be lost.
 /*
   # AI Cybersecurity Platform - Initial Schema
 

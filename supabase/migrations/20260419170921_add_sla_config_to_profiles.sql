@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds JSONB column sla_config with default value. Old profiles retain default.
+-- ROLLBACK: ALTER TABLE profiles DROP COLUMN IF EXISTS sla_config;
 /*
   # Add configurable SLA budgets per user
 

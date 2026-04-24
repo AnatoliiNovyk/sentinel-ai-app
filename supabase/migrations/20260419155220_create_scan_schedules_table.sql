@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds new table scan_schedules. Existing queries unaffected.
+-- ROLLBACK: DROP TABLE IF EXISTS scan_schedules;
 /*
   # Create scan_schedules table
 

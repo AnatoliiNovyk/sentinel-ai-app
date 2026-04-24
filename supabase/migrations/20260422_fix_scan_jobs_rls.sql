@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: CONDITIONAL
+-- REASON: Modifies RLS policies on scan_jobs. Clients relying on old policy behavior may see access changes.
+-- ROLLBACK: Revert RLS policies to previous state manually. Review audit_logs for access regressions.
 -- Fix RLS for scan_jobs to allow authenticated users to create and manage their jobs
 -- This resolves the 403 Forbidden errors in Chat and AI Remediation
 

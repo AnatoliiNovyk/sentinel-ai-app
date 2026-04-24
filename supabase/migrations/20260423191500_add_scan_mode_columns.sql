@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds is_mock (bool DEFAULT false) and detected_mode (text DEFAULT 'UNKNOWN') to scans.
+-- ROLLBACK: ALTER TABLE scans DROP COLUMN IF EXISTS is_mock, DROP COLUMN IF EXISTS detected_mode;
 -- Track whether a scan is executed by real backend pipeline or local mock fallback.
 alter table if exists public.scans
   add column if not exists is_mock boolean not null default false;

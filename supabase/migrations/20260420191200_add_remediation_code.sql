@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds optional emediation_code column to ulnerabilities.
+-- ROLLBACK: ALTER TABLE vulnerabilities DROP COLUMN IF EXISTS remediation_code;
 /*
   # Add remediation code to vulnerabilities
 

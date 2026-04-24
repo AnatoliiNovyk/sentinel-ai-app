@@ -1,3 +1,7 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds new table 
+otifications. Existing queries unaffected.
+-- ROLLBACK: DROP TABLE IF EXISTS notifications;
 /*
   # Create notifications table
 

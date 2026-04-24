@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds nullable column sla_warned_at. No constraint changes.
+-- ROLLBACK: ALTER TABLE vulnerabilities DROP COLUMN IF EXISTS sla_warned_at;
 /*
   # Track SLA pre-breach warnings
 

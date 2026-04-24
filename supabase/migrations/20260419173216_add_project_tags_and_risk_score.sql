@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds 	ags (text[] DEFAULT '{}') and isk_score (int DEFAULT 0) to projects.
+-- ROLLBACK: ALTER TABLE projects DROP COLUMN IF EXISTS tags, DROP COLUMN IF EXISTS risk_score;
 /*
   # Add tags and risk score to projects
 

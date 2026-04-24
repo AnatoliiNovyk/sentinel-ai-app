@@ -1,3 +1,6 @@
+-- BACKWARD_COMPATIBLE: YES
+-- REASON: Adds nullable columns share_token, is_public to eports. Old INSERT/SELECT unaffected.
+-- ROLLBACK: ALTER TABLE reports DROP COLUMN IF EXISTS share_token, DROP COLUMN IF EXISTS is_public;
 /*
   # Public sharing for reports
 
