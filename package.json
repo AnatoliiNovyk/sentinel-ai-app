@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "quality:check": "npm run check:no-js-duplicates && npm run lint -- --max-warnings=0 && npm run typecheck && npm run test:run && npm run build"
   },
@@ -27,11 +28,13 @@
   "devDependencies": {
     "@eslint/js": "^9.9.1",
     "@tailwindcss/typography": "^0.5.19",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "autoprefixer": "^10.4.18",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
