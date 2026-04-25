@@ -373,7 +373,10 @@ async function reportResult(
         metadata,
         error_message: error
       }, {
-        headers: { 'X-Agent-Secret': AGENT_SECRET }
+        headers: {
+          'X-Agent-Secret': AGENT_SECRET,
+          'Authorization': `Bearer ${SERVICE_KEY}`
+        }
       })
     );
     console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}`);
