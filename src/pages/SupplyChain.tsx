@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter, Search, ArrowUpDown, X } from 'lucide-react';
 import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
 import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
+import { useSearchShortcut } from '../lib/useSearchShortcut';
 
 interface ScanResultUI {
   dep: { name: string; version: string; type: 'prod' | 'dev' };
@@ -26,6 +27,8 @@ export default function SupplyChain() {
   const [typeFilter, setTypeFilter] = useState<'all' | 'prod' | 'dev'>('all');
   const [pkgSearch, setPkgSearch] = useState('');
   const [pkgSort, setPkgSort] = useState<'risk_desc' | 'risk_asc' | 'name' | 'vulns_desc'>('risk_desc');
+  const pkgSearchRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(pkgSearchRef, useCallback(() => setPkgSearch(''), []));
 
   useEffect(() => {
     // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
@@ -283,6 +286,7 @@ export default function SupplyChain() {
                 <div className="relative flex-1 min-w-48 max-w-xs">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
                   <input
+                    ref={pkgSearchRef}
                     value={pkgSearch}
                     onChange={e => setPkgSearch(e.target.value)}
                     placeholder="Search package name…"

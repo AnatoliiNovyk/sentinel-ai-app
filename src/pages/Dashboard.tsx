@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
   ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown,
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import Sparkline from '../components/Sparkline';
+import { useSearchShortcut } from '../lib/useSearchShortcut';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -19,6 +20,8 @@ export default function Dashboard() {
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [findingsSearch, setFindingsSearch] = useState('');
   const [findingsSort, setFindingsSort] = useState<'severity' | 'newest' | 'oldest' | 'title'>('severity');
+  const findingsSearchRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(findingsSearchRef, () => setFindingsSearch(''));
 
   useEffect(() => {
     if (!user) return;
@@ -413,6 +416,7 @@ export default function Dashboard() {
             <div className="relative flex-1 min-w-48 max-w-sm">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
               <input
+                ref={findingsSearchRef}
                 value={findingsSearch}
                 onChange={e => setFindingsSearch(e.target.value)}
                 placeholder="Search findings…"

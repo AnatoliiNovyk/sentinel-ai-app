@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Clock, Plus, Trash2, Power, PowerOff, Calendar,
   Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown, Search,
@@ -7,6 +7,7 @@ import { supabase, ScanSchedule, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
+import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { errorToUserMessage } from '../lib/errors';
 
 const CADENCES = [
@@ -42,6 +43,8 @@ export default function SchedulerPage() {
   const [running, setRunning] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'nearest' | 'latest' | 'enabled' | 'disabled'>('nearest');
   const [schedSearch, setSchedSearch] = useState('');
+  const schedSearchRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(schedSearchRef, () => setSchedSearch(''));
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
@@ -266,6 +269,7 @@ export default function SchedulerPage() {
             <div className="relative min-w-48">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
               <input
+                ref={schedSearchRef}
                 value={schedSearch}
                 onChange={e => setSchedSearch(e.target.value)}
                 placeholder="Search project or scanner…"

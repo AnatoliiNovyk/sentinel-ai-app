@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
 import { downloadFile } from '../lib/exporters';
+import { useSearchShortcut } from '../lib/useSearchShortcut';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ export default function Reports() {
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | 'executive' | 'technical'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc' | 'title-desc'>('date-desc');
+  const searchRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(searchRef, () => setSearch(''));
 
   const remove = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -85,6 +88,7 @@ export default function Reports() {
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
               <input
+                ref={searchRef}
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}

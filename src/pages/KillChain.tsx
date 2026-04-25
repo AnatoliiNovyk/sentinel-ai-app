@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown, X } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
+import { useSearchShortcut } from '../lib/useSearchShortcut';
 
 type KillChainStep = {
   phase: string;
@@ -22,6 +23,8 @@ export default function KillChain() {
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   const [stepSearch, setStepSearch] = useState('');
   const [stepSort, setStepSort] = useState<'original' | 'phase' | 'asset'>('original');
+  const stepSearchRef = useRef<HTMLInputElement>(null);
+  useSearchShortcut(stepSearchRef, () => setStepSearch(''));
 
   const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
 
@@ -238,6 +241,7 @@ export default function KillChain() {
             <div className="relative flex-1 min-w-48 max-w-xs">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
               <input
+                ref={stepSearchRef}
                 value={stepSearch}
                 onChange={e => setStepSearch(e.target.value)}
                 placeholder="Search tactic, asset, CVE…"
