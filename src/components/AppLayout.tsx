@@ -2,6 +2,78 @@ import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogO
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
+import { useEffect, useState } from 'react';
+
+const AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
+  ?? 'http://95.67.75.146:9090/health';
+
+type AgentHealth = {
+  status: 'starting' | 'ok' | 'error';
+  uptime: number;
+  jobsProcessed: number;
+  jobsFailed: number;
+  lastJobAt: string | null;
+  lastError: string | null;
+};
+
+function AgentStatus() {
+  const [health, setHealth] = useState<AgentHealth | null>(null);
+  const [reachable, setReachable] = useState<boolean | null>(null);
+
+  const poll = async () => {
+    try {
+      const res = await fetch(AGENT_HEALTH_URL, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data: AgentHealth = await res.json();
+        setHealth(data);
+        setReachable(true);
+      } else {
+        setReachable(false);
+      }
+    } catch {
+      setReachable(false);
+      setHealth(null);
+    }
+  };
+
+  useEffect(() => {
+    poll();
+    const id = setInterval(poll, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dotColor =
+    reachable === null ? 'bg-slate-600' :
+    !reachable ? 'bg-red-500' :
+    health?.status === 'ok' ? 'bg-emerald-400' : 'bg-amber-400';
+
+  const label =
+    reachable === null ? 'Checking agent…' :
+    !reachable ? 'Agent offline' :
+    `Agent online · ${health?.jobsProcessed ?? 0} jobs`;
+
+  const uptime = health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : '';
+
+  return (
+    <div className="relative group flex items-center gap-1.5 cursor-default">
+      <span className={`w-2 h-2 rounded-full ${dotColor} ${reachable ? 'animate-pulse' : ''}`} />
+      <span className="text-xs text-slate-500 hidden sm:block">{label}</span>
+      {reachable && health && (
+        <div className="absolute top-6 right-0 hidden group-hover:block z-50 w-56 rounded-lg border border-slate-700 bg-slate-900 shadow-xl p-3 text-xs">
+          <div className="font-semibold text-emerald-400 mb-2">Sentinel Agent</div>
+          <div className="space-y-1 text-slate-400">
+            <div className="flex justify-between"><span>Status</span><span className="text-white capitalize">{health.status}</span></div>
+            <div className="flex justify-between"><span>Uptime</span><span className="text-white">{uptime}</span></div>
+            <div className="flex justify-between"><span>Jobs processed</span><span className="text-white">{health.jobsProcessed}</span></div>
+            <div className="flex justify-between"><span>Jobs failed</span><span className="text-red-400">{health.jobsFailed}</span></div>
+            {health.lastJobAt && <div className="flex justify-between"><span>Last job</span><span className="text-white">{new Date(health.lastJobAt).toLocaleTimeString()}</span></div>}
+            {health.lastError && <div className="mt-1 text-red-400 truncate" title={health.lastError}>⚠ {health.lastError}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export type AppPage = 'dashboard' | 'chat' | 'scans' | 'projects' | 'reports' | 'settings';
 
@@ -106,6 +178,7 @@ export default function AppLayout() {
             {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
           </div>
           <div className="flex items-center gap-2">
+            <AgentStatus />
             <NotificationBell />
           </div>
         </header>

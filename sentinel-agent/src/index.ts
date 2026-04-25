@@ -3,6 +3,7 @@ import * as dotenv from 'dotenv';
 import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as http from 'http';
 dotenv.config();
 
 const execFileAsync = promisify(execFile);
@@ -498,16 +499,63 @@ async function sendWebhookAlert(
   }
 }
 
-async function fetchPendingJob(): Promise<ScanJob | null> {
+// ---------------------------------------------------------------------------
+// Health state (updated by main loop)
+// ---------------------------------------------------------------------------
+const health = {
+  status: 'starting' as 'starting' | 'ok' | 'error',
+  startedAt: new Date().toISOString(),
+  jobsProcessed: 0,
+  jobsFailed: 0,
+  lastJobAt: null as string | null,
+  lastError: null as string | null,
+};
+
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
+
+function startHealthServer() {
+  const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
+      const body = JSON.stringify({
+        ...health,
+        uptime: Math.floor((Date.now() - new Date(health.startedAt).getTime()) / 1000),
+        timestamp: new Date().toISOString(),
+      });
+      res.writeHead(health.status === 'ok' ? 200 : 503, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(body);
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+  });
+  server.listen(HEALTH_PORT, () => {
+    console.log(`🌐 Health endpoint listening on :${HEALTH_PORT}/health`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+async function main() {
+  startHealthServer();
+  health.status = 'ok';
   console.log('🚀 Agent loop started (3s interval)');
   while (true) {
     try {
       const job = await fetchPendingJob();
       if (job) {
+        health.lastJobAt = new Date().toISOString();
         await runJob(job);
+        health.jobsProcessed++;
       }
     } catch (err: unknown) {
-      console.error('⚠️ Loop Error:', getErrorMessage(err));
+      const msg = getErrorMessage(err);
+      console.error('⚠️ Loop Error:', msg);
+      health.jobsFailed++;
+      health.lastError = msg;
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
