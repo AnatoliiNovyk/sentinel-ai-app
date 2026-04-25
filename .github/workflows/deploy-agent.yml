@@ -26,25 +26,28 @@ jobs:
           script: |
             set -e
 
+            echo "🔐 Checking passwordless sudo..."
+            sudo -n true
+
             echo "📥 Pulling latest code..."
-            git config --global --add safe.directory /opt/sentinel-agent-repo
-            cd /opt/sentinel-agent-repo && git pull
+            sudo git config --global --add safe.directory /opt/sentinel-agent-repo
+            cd /opt/sentinel-agent-repo && sudo git pull
 
             echo "📂 Syncing files..."
-            cp -r /opt/sentinel-agent-repo/sentinel-agent/src /opt/sentinel-agent/
-            cp /opt/sentinel-agent-repo/sentinel-agent/package.json /opt/sentinel-agent/package.json
-            cp /opt/sentinel-agent-repo/sentinel-agent/tsconfig.json /opt/sentinel-agent/tsconfig.json
+            sudo cp -r /opt/sentinel-agent-repo/sentinel-agent/src /opt/sentinel-agent/
+            sudo cp /opt/sentinel-agent-repo/sentinel-agent/package.json /opt/sentinel-agent/package.json
+            sudo cp /opt/sentinel-agent-repo/sentinel-agent/tsconfig.json /opt/sentinel-agent/tsconfig.json
 
             echo "📦 Installing dependencies..."
             cd /opt/sentinel-agent
-            rm -rf node_modules
-            npm install
+            sudo rm -rf node_modules
+            sudo npm install
 
             echo "🔨 Building..."
-            npm run build
+            sudo npm run build
 
             echo "🔄 Restarting service..."
-            systemctl restart sentinel-agent
+            sudo systemctl restart sentinel-agent
 
             echo "✅ Deploy complete."
-            systemctl status sentinel-agent --no-pager
+            sudo systemctl status sentinel-agent --no-pager
