@@ -20,6 +20,7 @@ export default function Projects() {
   const [selected, setSelected] = useState<Project | null>(null);
   const [search, setSearch] = useState('');
   const [envFilter, setEnvFilter] = useState<'all' | 'external' | 'cloud' | 'internal' | 'iac'>('all');
+  const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'risk_desc' | 'risk_asc' | 'name'>('newest');
 
   const load = useCallback(async () => {
@@ -46,6 +47,11 @@ export default function Projects() {
     const q = search.trim().toLowerCase();
     return [...projects]
       .filter(p => envFilter === 'all' || p.environment === envFilter)
+      .filter(p => {
+        if (riskFilter === 'all') return true;
+        const band = riskBand(p.risk_score ?? 0);
+        return band === riskFilter;
+      })
       .filter(p => !q || p.name.toLowerCase().includes(q) || (p.target ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q))
       .sort((a, b) => {
         if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -55,7 +61,7 @@ export default function Projects() {
         if (sort === 'name') return a.name.localeCompare(b.name);
         return 0;
       });
-  }, [projects, search, envFilter, sort]);
+  }, [projects, search, envFilter, riskFilter, sort]);
 
   if (selected) {
     const fresh = projects.find((p) => p.id === selected.id) ?? selected;
@@ -110,6 +116,24 @@ export default function Projects() {
                 }`}
               >
                 {env === 'all' ? 'All' : ENV_META[env]?.label ?? env}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {(['all', 'critical', 'high', 'medium', 'low'] as const).map(risk => (
+              <button
+                key={risk}
+                onClick={() => setRiskFilter(risk)}
+                className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                  riskFilter === risk
+                    ? risk === 'critical' ? 'border-red-500/50 bg-red-500/10 text-red-300' :
+                      risk === 'high' ? 'border-orange-500/50 bg-orange-500/10 text-orange-300' :
+                      risk === 'medium' ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300' :
+                      'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                {risk === 'all' ? 'All Risks' : risk}
               </button>
             ))}
           </div>
