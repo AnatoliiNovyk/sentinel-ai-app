@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter } from 'lucide-react';
+import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
@@ -20,6 +20,8 @@ export default function KillChain() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
+  const [stepSearch, setStepSearch] = useState('');
+  const [stepSort, setStepSort] = useState<'original' | 'phase' | 'asset'>('original');
 
   const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
 
@@ -27,9 +29,26 @@ export default function KillChain() {
 
   const filteredChain = useMemo(() => {
     if (!chain) return null;
-    if (phaseFilter === 'all') return chain;
-    return chain.filter(step => step.phase.toLowerCase().includes(phaseFilter.toLowerCase()));
-  }, [chain, phaseFilter]);
+    const q = stepSearch.trim().toLowerCase();
+    let result = phaseFilter === 'all' ? chain : chain.filter(step => step.phase.toLowerCase().includes(phaseFilter.toLowerCase()));
+    if (q) result = result.filter(s =>
+      s.tactic.toLowerCase().includes(q) ||
+      s.asset.toLowerCase().includes(q) ||
+      s.exploited_vuln.toLowerCase().includes(q) ||
+      s.description.toLowerCase().includes(q)
+    );
+    if (stepSort === 'phase') {
+      const order = PHASES.map(p => p.toLowerCase());
+      result = [...result].sort((a, b) => {
+        const ai = order.findIndex(p => a.phase.toLowerCase().includes(p));
+        const bi = order.findIndex(p => b.phase.toLowerCase().includes(p));
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+    } else if (stepSort === 'asset') {
+      result = [...result].sort((a, b) => a.asset.localeCompare(b.asset));
+    }
+    return result;
+  }, [chain, phaseFilter, stepSearch, stepSort]);
 
   const buildMarkdown = useCallback((steps: KillChainStep[], name: string) => {
     const lines = [
@@ -214,7 +233,44 @@ export default function KillChain() {
             })}
           </div>
 
+          {/* Step search + sort */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-48 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <input
+                value={stepSearch}
+                onChange={e => setStepSearch(e.target.value)}
+                placeholder="Search tactic, asset, CVE…"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+              {([['original', 'Original'], ['phase', 'Phase order'], ['asset', 'Asset A→Z']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setStepSort(val)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition ${
+                    stepSort === val
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                      : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {stepSearch && (
+              <span className="text-xs text-slate-500">{filteredChain?.length ?? 0} result{filteredChain?.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+
           <div className="relative pl-6 md:pl-8 space-y-8 before:absolute before:inset-0 before:ml-[1.4rem] md:before:ml-[1.9rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-slate-800 before:via-red-500/50 before:to-slate-800">
+            {filteredChain && filteredChain.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center text-sm text-slate-500">
+                No steps match the current filters.
+              </div>
+            )}
             {filteredChain && filteredChain.map((step, idx) => (
               <div key={idx} className="relative">
                 <div className="md:flex items-center justify-between md:space-x-8">
