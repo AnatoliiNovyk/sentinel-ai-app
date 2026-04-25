@@ -1,9 +1,39 @@
 import { Link } from 'react-router-dom';
-import { Shield, Zap, Lock, Globe, ChevronRight, Activity, Server, FileCode, CheckCircle2 } from 'lucide-react';
+import { Shield, Zap, Lock, Globe, ChevronRight, Activity, Server, FileCode, CheckCircle2, Mail, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 
 export default function Landing() {
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 overflow-x-hidden selection:bg-emerald-500/30">
+  const [email, setEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSubscribed(true);
+      setEmail('');
+      setTimeout(() => setSubscribed(false), 3000);
+    }
+  };
+
+  const faqs = [
+    {
+      q: 'What is Sentinel AI?',
+      a: 'Sentinel AI is an autonomous threat exposure management platform that discovers assets, detects vulnerabilities across multi-cloud environments, and generates AI-powered remediation code automatically.',
+    },
+    {
+      q: 'Can I use Sentinel AI for free?',
+      a: 'Yes! Our Developer plan is free forever with 3 projects and core scanners. You can upgrade anytime to unlock unlimited projects and AI auto-remediation features.',
+    },
+    {
+      q: 'How often are scans performed?',
+      a: 'You can run scans on-demand or schedule them hourly, daily, or weekly. Live jobs show real-time progress, and results are updated instantly to your dashboard.',
+    },
+    {
+      q: 'Does Sentinel AI support our compliance framework?',
+      a: 'Yes! We provide one-click evidence export for SOC2, CIS Controls, NIST CSF, and MITRE ATT&CK. Perfect for audit preparation and compliance reporting.',
+    },
+  ];
       
       {/* Header */}
       <header className="fixed top-0 w-full border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md z-50">
@@ -109,6 +139,64 @@ export default function Landing() {
               <Link to="/auth?signup=true" className="block w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-center font-bold rounded-lg transition shadow-lg shadow-emerald-500/20">Upgrade to Pro</Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-24 border-t border-slate-800/50 bg-slate-950 px-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-white mb-4">Frequently Asked Questions</h2>
+            <p className="text-slate-400">Common questions about Sentinel AI and how to get started.</p>
+          </div>
+          
+          <div className="space-y-4">
+            {faqs.map((faq, i) => (
+              <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
+                <button
+                  onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-900/50 transition text-left"
+                >
+                  <span className="font-semibold text-white">{faq.q}</span>
+                  <ChevronDown className={`w-5 h-5 text-emerald-400 transition-transform ${expandedFaq === i ? 'rotate-180' : ''}`} />
+                </button>
+                {expandedFaq === i && (
+                  <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/20">
+                    <p className="text-slate-400 text-sm leading-relaxed">{faq.a}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Newsletter CTA */}
+      <section className="py-24 border-t border-slate-800/50 bg-slate-900/40 px-6">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-4">Stay Updated</h2>
+          <p className="text-slate-400 mb-8">Get the latest security insights, feature releases, and threat intelligence delivered to your inbox.</p>
+          
+          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row items-center gap-3 bg-slate-950/50 border border-slate-800 rounded-lg p-1.5">
+            <Mail className="w-4 h-4 text-emerald-400 ml-3 shrink-0" />
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Enter your email…"
+              className="flex-1 bg-transparent text-white placeholder-slate-600 outline-none text-sm"
+            />
+            <button
+              type="submit"
+              className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-6 py-2 rounded-md text-sm transition"
+            >
+              Subscribe
+            </button>
+          </form>
+          {subscribed && (
+            <p className="mt-3 text-sm text-emerald-400">✓ Thanks for subscribing!</p>
+          )}
+          <p className="text-xs text-slate-600 mt-3">No spam, ever. Unsubscribe anytime.</p>
         </div>
       </section>
 
