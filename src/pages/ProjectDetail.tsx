@@ -17,6 +17,7 @@ import {
   Network,
   Zap,
   RotateCcw,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -25,6 +26,7 @@ import { dispatchScan } from '../lib/scanDispatch';
 import { errorToUserMessage } from '../lib/errors';
 import { buildReport } from '../lib/reportBuilder';
 import { toJsonExport, downloadFile } from '../lib/exporters';
+import { useRef } from 'react';
 import FindingsTab from '../components/FindingsTab';
 import AssetGraph from '../components/AssetGraph';
 import ReportViewer from '../components/ReportViewer';
@@ -59,6 +61,8 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [generating, setGenerating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const meta = ENV_META[project.environment] ?? ENV_META.external;
   const EnvIcon = meta.icon;
@@ -117,6 +121,16 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   }, [project.id, user]);
 
   useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    if (exportOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [exportOpen]);
+
+  useEffect(() => {
     load();
     const channel = supabase
       .channel(`project-detail-${project.id}`)
@@ -154,6 +168,86 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     } finally {
       setLaunching(false);
     }
+  };
+
+  const exportFindings = (fmt: 'csv' | 'json') => {
+    const date = new Date().toISOString().split('T')[0];
+    if (fmt === 'csv') {
+      const rows = ['ID,Title,Severity,Status,Asset,CVE,CVSS'];
+      for (const v of vulns) {
+        rows.push(`${v.id},"${v.title}",${v.severity},${v.status},${v.asset},${v.cve ?? ''},${v.cvss ?? ''}`);
+      }
+      downloadFile(`${project.name}-findings-${date}.csv`, rows.join('\n'), 'text/csv');
+    } else {
+      const payload = vulns.map(v => ({
+        id: v.id,
+        title: v.title,
+        severity: v.severity,
+        status: v.status,
+        asset: v.asset,
+        description: v.description,
+        remediation: v.remediation,
+        cve: v.cve,
+        cvss: v.cvss,
+      }));
+      downloadFile(`${project.name}-findings-${date}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    }
+    setExportOpen(false);
+  };
+
+  const exportScans = () => {
+    const date = new Date().toISOString().split('T')[0];
+    const payload = scans.map(s => ({
+      id: s.id,
+      scanner: s.scanner,
+      target: s.target,
+      status: s.status,
+      findingsCount: vulns.filter(v => v.scan_id === s.id).length,
+      createdAt: s.created_at,
+      completedAt: s.completed_at,
+    }));
+    downloadFile(`${project.name}-scans-${date}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    setExportOpen(false);
+  };
+
+  const exportAll = () => {
+    const date = new Date().toISOString().split('T')[0];
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      project: {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        environment: project.environment,
+        target: project.target,
+        riskScore: project.risk_score,
+      },
+      summary: {
+        scanCount: scans.length,
+        findingsCount: vulns.length,
+        criticalCount: vulns.filter(v => v.severity === 'critical').length,
+        highCount: vulns.filter(v => v.severity === 'high').length,
+      },
+      scans: scans.map(s => ({
+        id: s.id,
+        scanner: s.scanner,
+        target: s.target,
+        status: s.status,
+        createdAt: s.created_at,
+        completedAt: s.completed_at,
+      })),
+      findings: vulns.map(v => ({
+        id: v.id,
+        title: v.title,
+        severity: v.severity,
+        status: v.status,
+        asset: v.asset,
+        cve: v.cve,
+        cvss: v.cvss,
+      })),
+    };
+    downloadFile(`${project.name}-all-data-${date}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    setExportOpen(false);
   };
 
   const quickReport = async (kind: 'executive' | 'technical' = 'technical') => {
@@ -247,6 +341,46 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
           >
             <FileJson className="w-4 h-4" /> {generating ? 'Generating...' : 'Technical'}
           </button>
+          <div className="relative" ref={exportRef}>
+            <button
+              onClick={() => setExportOpen(!exportOpen)}
+              className="inline-flex items-center gap-1.5 border border-slate-700 hover:border-slate-500 text-slate-300 px-3.5 py-2 rounded-md text-sm transition"
+            >
+              <Download className="w-4 h-4" /> Export <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
+                <div className="p-1">
+                  <button
+                    onClick={() => exportFindings('csv')}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded transition flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Findings as CSV
+                  </button>
+                  <button
+                    onClick={() => exportFindings('json')}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded transition flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Findings as JSON
+                  </button>
+                  <div className="my-1 border-t border-slate-700" />
+                  <button
+                    onClick={exportScans}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded transition flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Scans History
+                  </button>
+                  <div className="my-1 border-t border-slate-700" />
+                  <button
+                    onClick={exportAll}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded transition flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" /> All Project Data
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
