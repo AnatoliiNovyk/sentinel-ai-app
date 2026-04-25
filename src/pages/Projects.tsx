@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
@@ -18,6 +18,9 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<Project | null>(null);
+  const [search, setSearch] = useState('');
+  const [envFilter, setEnvFilter] = useState<'all' | 'external' | 'cloud' | 'internal' | 'iac'>('all');
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'risk_desc' | 'risk_asc' | 'name'>('newest');
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -39,6 +42,21 @@ export default function Projects() {
     load();
   };
 
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...projects]
+      .filter(p => envFilter === 'all' || p.environment === envFilter)
+      .filter(p => !q || p.name.toLowerCase().includes(q) || (p.target ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (sort === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        if (sort === 'risk_desc') return (b.risk_score ?? 0) - (a.risk_score ?? 0);
+        if (sort === 'risk_asc') return (a.risk_score ?? 0) - (b.risk_score ?? 0);
+        if (sort === 'name') return a.name.localeCompare(b.name);
+        return 0;
+      });
+  }, [projects, search, envFilter, sort]);
+
   if (selected) {
     const fresh = projects.find((p) => p.id === selected.id) ?? selected;
     return <ProjectDetail project={fresh} onBack={() => setSelected(null)} />;
@@ -46,7 +64,7 @@ export default function Projects() {
 
   return (
     <div className="p-8 max-w-7xl">
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex items-end justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Projects</h1>
           <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>
@@ -60,6 +78,57 @@ export default function Projects() {
           </button>
         </div>
       </div>
+
+      {/* Search + filter bar */}
+      {!loading && projects.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search projects…"
+              className="w-full bg-slate-900 border border-slate-800 rounded-md pl-8 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+            {(['all', 'external', 'cloud', 'internal', 'iac'] as const).map(env => (
+              <button
+                key={env}
+                onClick={() => setEnvFilter(env)}
+                className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                  envFilter === env
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                {env === 'all' ? 'All' : ENV_META[env]?.label ?? env}
+              </button>
+            ))}
+          </div>
+          <select
+            value={sort}
+            onChange={e => setSort(e.target.value as typeof sort)}
+            className="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-slate-300 focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="risk_desc">Risk ↓ high→low</option>
+            <option value="risk_asc">Risk ↑ low→high</option>
+            <option value="name">Name A–Z</option>
+          </select>
+          {(search || envFilter !== 'all') && (
+            <span className="text-xs text-slate-500">{visible.length} of {projects.length}</span>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-slate-500 text-sm">Loading projects...</div>
@@ -77,7 +146,14 @@ export default function Projects() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((p) => {
+          {visible.length === 0 ? (
+            <div className="col-span-3 rounded-xl border border-dashed border-slate-800 p-12 text-center">
+              <Search className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+              <div className="text-sm text-slate-400">No projects match your filters.</div>
+              <button onClick={() => { setSearch(''); setEnvFilter('all'); }} className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 transition">Clear filters</button>
+            </div>
+          ) : (
+            visible.map((p) => {
             const meta = ENV_META[p.environment] ?? ENV_META.external;
             const Icon = meta.icon;
             const band = riskBand(p.risk_score ?? 0);
@@ -115,8 +191,8 @@ export default function Projects() {
                 <p className="mt-1 text-sm text-slate-400 line-clamp-2">{p.description || 'No description'}</p>
                 <div className="mt-4 text-xs text-slate-500 font-mono truncate">{p.target}</div>
               </button>
-            );
-          })}
+            );})}
+          )}
         </div>
       )}
 
