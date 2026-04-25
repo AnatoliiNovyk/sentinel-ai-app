@@ -34,5 +34,9 @@ CREATE INDEX IF NOT EXISTS idx_scan_jobs_status_org
   ON scan_jobs (status, org_id);
 
 -- notifications: user inbox queries
-CREATE INDEX IF NOT EXISTS idx_notifications_user_read
-  ON notifications (user_id, is_read, created_at DESC);
+-- Wrapped in DO block: is_read column may not exist in all schema versions
+DO $$ BEGIN
+  CREATE INDEX IF NOT EXISTS idx_notifications_user_read
+    ON notifications (user_id, is_read, created_at DESC);
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
