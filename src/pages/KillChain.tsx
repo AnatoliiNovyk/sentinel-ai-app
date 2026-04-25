@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown } from 'lucide-react';
+import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown, X } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
@@ -262,6 +262,14 @@ export default function KillChain() {
             </div>
             {stepSearch && (
               <span className="text-xs text-slate-500">{filteredChain?.length ?? 0} result{filteredChain?.length !== 1 ? 's' : ''}</span>
+            )}
+            {(phaseFilter !== 'all' || stepSearch || stepSort !== 'original') && (
+              <button
+                onClick={() => { setPhaseFilter('all'); setStepSearch(''); setStepSort('original'); }}
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+              >
+                <X className="w-3.5 h-3.5" /> Clear filters
+              </button>
             )}
           </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2 } from 'lucide-react';
+import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -182,6 +182,14 @@ export default function OsintAnalyzer() {
               >
                 <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
+              {(sevFilter !== 'all' || sortBy !== 'newest') && (
+                <button
+                  onClick={() => { setSevFilter('all'); setSortBy('newest'); }}
+                  className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+                >
+                  <X className="w-3.5 h-3.5" /> Clear filters
+                </button>
+              )}
               <button
                 onClick={() => { setResults([]); setSevFilter('all'); }}
                 aria-label="Clear history"

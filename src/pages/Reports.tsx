@@ -141,6 +141,14 @@ export default function Reports() {
                 <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
             )}
+            {(search || kindFilter !== 'all' || sortBy !== 'date-desc') && (
+              <button
+                onClick={() => { setSearch(''); setKindFilter('all'); setSortBy('date-desc'); }}
+                className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-amber-300 hover:border-amber-500/40 transition"
+              >
+                <X className="w-3.5 h-3.5" /> Clear filters
+              </button>
+            )}
           </div>
         </div>
       )}

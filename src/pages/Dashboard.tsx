@@ -435,6 +435,14 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+            {(findingsSearch || findingsSort !== 'severity') && (
+              <button
+                onClick={() => { setFindingsSearch(''); setFindingsSort('severity'); }}
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+              >
+                ✕ Clear
+              </button>
+            )}
           </div>
           <div className="divide-y divide-slate-800/50">
             {(() => {

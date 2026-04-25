@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter, Search, ArrowUpDown } from 'lucide-react';
+import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter, Search, ArrowUpDown, X } from 'lucide-react';
 import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
 import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -307,6 +307,14 @@ export default function SupplyChain() {
                 </div>
                 {pkgSearch && (
                   <span className="text-xs text-slate-500">{displayedDeps.length} result{displayedDeps.length !== 1 ? 's' : ''}</span>
+                )}
+                {(sevFilter !== 'all' || typeFilter !== 'all' || pkgSearch || pkgSort !== 'risk_desc') && (
+                  <button
+                    onClick={() => { setSevFilter('all'); setTypeFilter('all'); setPkgSearch(''); setPkgSort('risk_desc'); }}
+                    className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+                  >
+                    <X className="w-3.5 h-3.5" /> Clear filters
+                  </button>
                 )}
               </div>
               <div className="grid grid-cols-1 gap-4">

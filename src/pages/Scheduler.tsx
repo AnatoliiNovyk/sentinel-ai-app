@@ -299,6 +299,14 @@ export default function SchedulerPage() {
                 </button>
               ))}
               {schedSearch && <span className="text-xs text-slate-500">{sortedSchedules.length} result{sortedSchedules.length !== 1 ? 's' : ''}</span>}
+              {(schedSearch || sortBy !== 'nearest') && (
+                <button
+                  onClick={() => { setSchedSearch(''); setSortBy('nearest'); }}
+                  className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+                >
+                  ✕ Clear
+                </button>
+              )}
             </div>
           </div>
           {/* Table rows */}
