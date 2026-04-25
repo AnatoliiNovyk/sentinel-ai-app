@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2 } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -11,6 +11,21 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<Report | null>(null);
+  const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<'all' | 'executive' | 'technical'>('all');
+
+  const remove = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await supabase.from('reports').delete().eq('id', id);
+    setReports(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return reports
+      .filter(r => kindFilter === 'all' || r.kind === kindFilter)
+      .filter(r => !q || r.title.toLowerCase().includes(q) || (projects.find(p => p.id === r.project_id)?.name ?? '').toLowerCase().includes(q));
+  }, [reports, kindFilter, search, projects]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -31,7 +46,7 @@ export default function Reports() {
 
   return (
     <div className="p-8 max-w-7xl">
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex items-end justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
           <p className="mt-1 text-sm text-slate-500">AI-generated audit summaries and technical deep dives.</p>
@@ -45,6 +60,42 @@ export default function Reports() {
         </button>
       </div>
 
+      {!loading && reports.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search reports…"
+              className="w-full bg-slate-900 border border-slate-800 rounded-md pl-8 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {(['all', 'executive', 'technical'] as const).map(k => (
+            <button
+              key={k}
+              onClick={() => setKindFilter(k)}
+              className={`text-xs px-3 py-2 rounded-md border transition capitalize ${
+                kindFilter === k
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+              }`}
+            >
+              {k === 'all' ? 'All types' : k}
+            </button>
+          ))}
+          {(search || kindFilter !== 'all') && (
+            <span className="text-xs text-slate-500">{visible.length} of {reports.length}</span>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-slate-500 text-sm">Loading...</div>
       ) : reports.length === 0 ? (
@@ -55,29 +106,43 @@ export default function Reports() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {reports.map((r) => {
+          {visible.length === 0 ? (
+            <div className="col-span-2 rounded-xl border border-dashed border-slate-800 p-12 text-center">
+              <Search className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+              <div className="text-sm text-slate-400">No reports match your filters.</div>
+              <button onClick={() => { setSearch(''); setKindFilter('all'); }} className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 transition">Clear filters</button>
+            </div>
+          ) : visible.map((r) => {
             const project = projects.find((p) => p.id === r.project_id);
             return (
-              <button
-                key={r.id}
-                onClick={() => setSelected(r)}
-                className="text-left rounded-xl border border-slate-800 bg-slate-900/30 p-5 hover:border-emerald-500/50 hover:bg-slate-900/60 transition"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <span
-                    className={`inline-flex items-center text-xs px-2 py-0.5 rounded-md border capitalize ${
-                      r.kind === 'executive'
-                        ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                        : 'text-sky-300 border-sky-500/30 bg-sky-500/10'
-                    }`}
-                  >
-                    {r.kind}
-                  </span>
-                  <span className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
-                </div>
-                <h3 className="font-semibold text-white">{r.title}</h3>
-                <p className="mt-1 text-sm text-slate-500">{project?.name ?? 'Project'}</p>
-              </button>
+              <div key={r.id} className="group relative">
+                <button
+                  onClick={() => setSelected(r)}
+                  className="w-full text-left rounded-xl border border-slate-800 bg-slate-900/30 p-5 hover:border-emerald-500/50 hover:bg-slate-900/60 transition"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span
+                      className={`inline-flex items-center text-xs px-2 py-0.5 rounded-md border capitalize ${
+                        r.kind === 'executive'
+                          ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                          : 'text-sky-300 border-sky-500/30 bg-sky-500/10'
+                      }`}
+                    >
+                      {r.kind}
+                    </span>
+                    <span className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <h3 className="font-semibold text-white pr-8">{r.title}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{project?.name ?? 'Project'}</p>
+                </button>
+                <button
+                  onClick={e => remove(r.id, e)}
+                  title="Delete report"
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>
