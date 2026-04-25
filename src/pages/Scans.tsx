@@ -3,6 +3,7 @@ import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search } from 
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { callAiGateway } from '../lib/aiGateway';
+import { useToast } from '../lib/toastContext';
 import { supabase } from '../api/client';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
@@ -13,6 +14,7 @@ const Scans = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [scans, setScans] = useState<Scan[]>([]);
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
+  const toast = useToast();
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -146,10 +148,12 @@ const Scans = () => {
         project.org_id
       );
       setShowNewScanModal(false);
+      toast.success('Scan started successfully.');
       // Reload scans for the project
       await loadScans(project.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to start scan: ' + message);
       setAiGenError('Failed to start scan: ' + message);
     } finally {
       setIsDispatching(false);

@@ -3,6 +3,7 @@ import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronR
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
+import { useToast } from '../lib/toastContext';
 import { riskBand } from '../lib/riskScore';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
@@ -40,6 +41,7 @@ export default function Projects() {
   const remove = async (id: string) => {
     await supabase.from('projects').delete().eq('id', id);
     if (selected?.id === id) setSelected(null);
+    toast.success('Project deleted.');
     load();
   };
 
@@ -237,7 +239,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || organizations.length === 0) {
-      alert('You must be a member of an organization to create a project.');
+      toast.warning('You must be a member of an organization to create a project.');
       return;
     }
     setSaving(true);
@@ -255,8 +257,9 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     });
 
     if (error) {
-      alert(`Error creating project: ${error.message}`);
+      toast.error(`Error creating project: ${error.message}`);
     } else {
+      toast.success(`Project "${name}" created.`);
       onCreated();
       onClose();
     }

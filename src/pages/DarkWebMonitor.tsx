@@ -3,6 +3,7 @@ import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, Refr
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
+import { useToast } from '../lib/toastContext';
 
 interface ScanHistory {
   query: string;
@@ -17,6 +18,7 @@ export default function OsintAnalyzer() {
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
+  const toast = useToast();
 
   const RISK_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
 
@@ -77,8 +79,11 @@ export default function OsintAnalyzer() {
           { query: query.trim(), result: {} as LeakScanResult, error: result.error.message },
           ...prev
         ]);
+        toast.error(`Scan failed: ${result.error.message}`);
       } else {
         setResults(prev => [{ query: query.trim(), result: result.data }, ...prev]);
+        const leakCount = Object.keys(result.data).filter(k => result.data[k as keyof LeakScanResult]).length;
+        toast.info(`Scan complete for "${query.trim()}"${leakCount ? ` — ${leakCount} source${leakCount !== 1 ? 's' : ''} with findings` : ' — no leaks found'}.`);
       }
 
       setQuery('');

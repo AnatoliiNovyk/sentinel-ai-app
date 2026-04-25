@@ -4,6 +4,7 @@ import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
 import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
+import { useToast } from '../lib/toastContext';
 
 interface ScanResultUI {
   dep: { name: string; version: string; type: 'prod' | 'dev' };
@@ -29,6 +30,7 @@ export default function SupplyChain() {
   const [pkgSort, setPkgSort] = useState<'risk_desc' | 'risk_asc' | 'name' | 'vulns_desc'>('risk_desc');
   const pkgSearchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(pkgSearchRef, useCallback(() => setPkgSearch(''), []));
+  const toast = useToast();
 
   useEffect(() => {
     // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
@@ -82,9 +84,16 @@ export default function SupplyChain() {
       }));
 
       setResults(uiResults);
+      const vulnCount = uiResults.filter(r => r.vulns.length > 0).length;
+      if (vulnCount > 0) {
+        toast.warning(`Scan complete — ${vulnCount} vulnerable package${vulnCount !== 1 ? 's' : ''} found.`);
+      } else {
+        toast.success('Scan complete — no vulnerabilities found.');
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to parse package.json. Ensure it is valid JSON.';
       setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setScanning(false);
     }
