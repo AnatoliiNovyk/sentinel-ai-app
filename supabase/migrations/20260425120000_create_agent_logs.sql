@@ -12,17 +12,26 @@ CREATE TABLE IF NOT EXISTS agent_logs (
 -- RLS
 ALTER TABLE agent_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read logs for their projects"
-  ON agent_logs FOR SELECT
-  USING (
-    project_id IN (
-      SELECT id FROM projects WHERE user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can read logs for their projects"
+    ON agent_logs FOR SELECT
+    USING (
+      project_id IN (
+        SELECT id FROM projects WHERE user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Service role can insert agent_logs"
-  ON agent_logs FOR INSERT
-  WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "Service role can insert agent_logs"
+    ON agent_logs FOR INSERT
+    WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE agent_logs;
+-- Enable Realtime (safe to run multiple times)
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE agent_logs;
+EXCEPTION WHEN others THEN NULL;
+END $$;

@@ -20,11 +20,14 @@ CREATE INDEX IF NOT EXISTS idx_scans_org_id
   ON scans (org_id);
 
 -- audit_logs: compliance queries filter by org + action + timestamp
-CREATE INDEX IF NOT EXISTS idx_audit_logs_org_action
-  ON audit_logs (org_id, action);
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_org_timestamp
-  ON audit_logs (org_id, timestamp DESC);
+-- Wrapped in DO block: table may not exist in all environments
+DO $$ BEGIN
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_org_action
+    ON audit_logs (org_id, action);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_org_timestamp
+    ON audit_logs (org_id, timestamp DESC);
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- scan_jobs: agent polls pending jobs per org
 CREATE INDEX IF NOT EXISTS idx_scan_jobs_status_org
