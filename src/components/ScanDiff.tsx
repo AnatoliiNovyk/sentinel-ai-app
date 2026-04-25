@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { TrendingDown, TrendingUp, Minus, GitCompare } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { TrendingDown, TrendingUp, Minus, GitCompare, Search } from 'lucide-react';
 import { Scan, Vulnerability } from '../lib/supabase';
 
 type DiffEntry = {
@@ -96,6 +96,18 @@ export default function ScanDiff({
   const persistedCount = diff.filter(d => d.status === 'persisted').length;
   const trend          = newCount - fixedCount;
 
+  const [diffSearch, setDiffSearch] = useState('');
+  const [diffStatus, setDiffStatus] = useState<'all' | 'new' | 'fixed' | 'persisted'>('all');
+
+  const visibleDiff = useMemo(() => {
+    const q = diffSearch.trim().toLowerCase();
+    return diff.filter(d => {
+      if (diffStatus !== 'all' && d.status !== diffStatus) return false;
+      if (q && !d.title.toLowerCase().includes(q) && !d.asset.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [diff, diffSearch, diffStatus]);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -128,9 +140,40 @@ export default function ScanDiff({
         </span>
       </div>
 
+      {/* Search + status filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-40">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+          <input
+            value={diffSearch}
+            onChange={e => setDiffSearch(e.target.value)}
+            placeholder="Search title or asset…"
+            className="w-full pl-7 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex gap-1">
+          {([['all', 'All'], ['new', 'New'], ['fixed', 'Fixed'], ['persisted', 'Persisted']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setDiffStatus(val)}
+              className={`text-[10px] px-2 py-1 rounded border transition ${
+                diffStatus === val
+                  ? val === 'new' ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                  : val === 'fixed' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                  : val === 'persisted' ? 'border-slate-600 bg-slate-800 text-slate-300'
+                  : 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                  : 'border-slate-800 text-slate-500 hover:border-slate-600 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Diff list */}
       <div className="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden max-h-80 overflow-y-auto">
-        {diff.map((d, i) => (
+        {visibleDiff.map((d, i) => (
           <div
             key={i}
             className={`flex items-center gap-3 px-4 py-2.5 text-sm transition ${
@@ -153,8 +196,10 @@ export default function ScanDiff({
             <span className="text-slate-500 font-mono text-xs truncate max-w-[120px]">{d.asset}</span>
           </div>
         ))}
-        {diff.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-slate-500">No findings to diff.</div>
+        {visibleDiff.length === 0 && (
+          <div className="px-4 py-8 text-center text-sm text-slate-500">
+            {diff.length === 0 ? 'No findings to diff.' : 'No entries match the current filters.'}
+          </div>
         )}
       </div>
     </div>
