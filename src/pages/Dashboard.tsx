@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
+  const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
 
   useEffect(() => {
     if (!user) return;
@@ -228,30 +229,58 @@ export default function Dashboard() {
 
         {/* Project health — 1 col */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Project risk</h2>
             <Radar className="w-4 h-4 text-emerald-400" />
           </div>
+          {projects.length > 0 && (
+            <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+              {(['all', 'critical', 'high', 'medium', 'low'] as const).map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRiskFilter(r)}
+                  className={`text-xs px-2 py-1 rounded-md border transition capitalize ${
+                    riskFilter === r
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                      : 'border-slate-700 text-slate-400 hover:text-slate-300 hover:border-slate-600'
+                  }`}
+                >
+                  {r === 'all' ? 'All' : r}
+                </button>
+              ))}
+            </div>
+          )}
           {projects.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">No projects</div>
           ) : (
             <div className="flex-1 space-y-4 overflow-auto scrollbar-thin">
-              {[...projects].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0)).map(p => {
-                const score = p.risk_score || 0;
-                const barColor = score >= 70 ? 'bg-red-500' : score >= 40 ? 'bg-orange-500' : score >= 15 ? 'bg-amber-400' : 'bg-emerald-500';
-                const textColor = score >= 70 ? 'text-red-400' : score >= 40 ? 'text-orange-400' : score >= 15 ? 'text-amber-400' : 'text-emerald-400';
-                return (
-                  <div key={p.id} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm text-slate-300 truncate pr-2 group-hover:text-white transition" title={p.name}>{p.name}</span>
-                      <span className={`text-[10px] font-bold tabular-nums ${textColor}`}>{score}</span>
+              {[...projects]
+                .sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0))
+                .filter(p => {
+                  const score = p.risk_score || 0;
+                  if (riskFilter === 'all') return true;
+                  if (riskFilter === 'critical') return score >= 70;
+                  if (riskFilter === 'high') return score >= 40 && score < 70;
+                  if (riskFilter === 'medium') return score >= 15 && score < 40;
+                  if (riskFilter === 'low') return score < 15;
+                  return true;
+                })
+                .map(p => {
+                  const score = p.risk_score || 0;
+                  const barColor = score >= 70 ? 'bg-red-500' : score >= 40 ? 'bg-orange-500' : score >= 15 ? 'bg-amber-400' : 'bg-emerald-500';
+                  const textColor = score >= 70 ? 'text-red-400' : score >= 40 ? 'text-orange-400' : score >= 15 ? 'text-amber-400' : 'text-emerald-400';
+                  return (
+                    <div key={p.id} className="group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm text-slate-300 truncate pr-2 group-hover:text-white transition" title={p.name}>{p.name}</span>
+                        <span className={`text-[10px] font-bold tabular-nums ${textColor}`}>{score}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} style={{ width: `${score}%` }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                      <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} style={{ width: `${score}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
           <button onClick={() => navigate('/projects')} className="mt-5 text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition">
