@@ -7,19 +7,34 @@ const {
   mockGetProjectScans,
   mockGetScanVulnerabilities,
   mockDispatchScan,
-  mockGenerateFix,
-  mockPollForResult,
+  mockCallAiGateway,
+  mockVulnUpdate,
 } = vi.hoisted(() => ({
   mockGetProjects: vi.fn(),
   mockGetProjectScans: vi.fn(),
   mockGetScanVulnerabilities: vi.fn(),
   mockDispatchScan: vi.fn(),
-  mockGenerateFix: vi.fn(),
-  mockPollForResult: vi.fn(),
+  mockCallAiGateway: vi.fn(),
+  mockVulnUpdate: vi.fn(),
 }));
 
 vi.mock('../../context/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
+}));
+
+vi.mock('../../lib/aiGateway', () => ({
+  callAiGateway: mockCallAiGateway,
+}));
+
+vi.mock('../../api/client', () => ({
+  supabase: {
+    from: (table: string) => {
+      if (table === 'vulnerabilities') {
+        return { update: mockVulnUpdate };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    },
+  },
 }));
 
 vi.mock('../../api/scans.service', () => ({
@@ -31,12 +46,6 @@ vi.mock('../../api/scans.service', () => ({
   },
 }));
 
-vi.mock('../../api/ai.service', () => ({
-  AiService: {
-    generateFix: mockGenerateFix,
-    pollForResult: mockPollForResult,
-  },
-}));
 
 vi.mock('../../components/scans/ScanHeader', () => ({
   ScanHeader: ({ onNewScan, currentMode }: { onNewScan: () => void; currentMode?: string }) => (
@@ -106,8 +115,14 @@ describe('Scans integration flow', () => {
     ]);
 
     mockDispatchScan.mockResolvedValue({});
-    mockGenerateFix.mockResolvedValue({ ok: true, data: 'job-1' });
-    mockPollForResult.mockResolvedValue({ ok: true, data: { id: 'ai-vuln' } });
+    mockCallAiGateway.mockResolvedValue({
+      content: JSON.stringify({ explanation: 'Fix it', remediation: 'Update package', code: 'npm update' }),
+      provider: 'mock',
+      isMock: true,
+    });
+    mockVulnUpdate.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
   });
 
   it('loads initial data and shows mode and vulnerabilities', async () => {
@@ -124,7 +139,7 @@ describe('Scans integration flow', () => {
   it('dispatches new scan from modal with project fallback target', async () => {
     render(<Scans />);
 
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalled());
+    await waitFor(() => screen.getByText('open-new-scan'));
 
     fireEvent.click(screen.getByText('open-new-scan'));
     fireEvent.click(screen.getByRole('button', { name: 'Launch scan' }));
@@ -141,8 +156,7 @@ describe('Scans integration flow', () => {
 
     fireEvent.click(screen.getByText('generate-ai-fix'));
 
-    await waitFor(() => expect(mockGenerateFix).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockPollForResult).toHaveBeenCalledWith('scan-1', expect.any(Number)));
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1));
 
     await waitFor(() => {
       expect(mockGetScanVulnerabilities).toHaveBeenCalledTimes(2);

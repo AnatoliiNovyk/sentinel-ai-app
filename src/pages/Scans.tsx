@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
-import { AiService } from '../api/ai.service';
-import { errorToUserMessage } from '../lib/errors';
+import { callAiGateway } from '../lib/aiGateway';
+import { supabase } from '../api/client';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
-import { useAuth } from '../context/useAuth';
 
 const Scans = () => {
-  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [scans, setScans] = useState<Scan[]>([]);
@@ -18,6 +16,7 @@ const Scans = () => {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [aiGenError, setAiGenError] = useState<string | null>(null);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
   
   // New Scan Modal state
@@ -142,38 +141,54 @@ const Scans = () => {
   };
 
   const handleAiGeneration = async (v: Vulnerability) => {
-    if (!selectedProjectId) {
-      alert('Error: No project selected.');
-      return;
-    }
-    
+    if (!selectedProjectId) return;
+
     setGeneratingId(v.id);
-    const startTime = Date.now();
-    
+    setAiGenError(null);
+
     try {
-      const dispatchResult = await AiService.generateFix({
-        title: v.title,
-        description: v.description,
-        severity: v.severity,
-        asset: v.asset,
-        cve_id: v.cve_id,
-        project_id: selectedProjectId,
-        scan_id: v.scan_id,
-        user_id: user?.id || ''
-      });
+      const prompt = `You are a security engineer. Analyze this vulnerability and provide a remediation plan.
 
-      if (!dispatchResult.ok) {
-        throw new Error(errorToUserMessage(dispatchResult.error));
+Vulnerability: ${v.title}
+Severity: ${v.severity}
+Asset: ${v.asset}
+CVE: ${v.cve_id || 'N/A'}
+Description: ${v.description}
+
+Respond ONLY with valid JSON in this exact format:
+{"explanation":"...","remediation":"...","code":"..."}`; 
+
+      const gatewayResult = await callAiGateway([{ role: 'user', content: prompt }]);
+
+      // Parse JSON from response; fall back to using raw content as explanation
+      let explanation = gatewayResult.content;
+      let remediation = '';
+      let code = '';
+      try {
+        const jsonMatch = gatewayResult.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+          explanation = typeof parsed.explanation === 'string' ? parsed.explanation : explanation;
+          remediation = typeof parsed.remediation === 'string' ? parsed.remediation : '';
+          code       = typeof parsed.code === 'string' ? parsed.code : '';
+        }
+      } catch {
+        // non-JSON response — use raw content as explanation
       }
 
-      const pollResult = await AiService.pollForResult(v.scan_id, startTime);
-      if (!pollResult.ok) {
-        throw new Error(errorToUserMessage(pollResult.error));
-      }
+      await supabase
+        .from('vulnerabilities')
+        .update({
+          description: explanation || v.description,
+          remediation: remediation || v.remediation,
+          remediation_code: code || v.remediation_code,
+        })
+        .eq('id', v.id);
+
       await loadVulnerabilities(v.scan_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert('AI Generation failed: ' + message);
+      setAiGenError(`AI Generation failed: ${message}`);
     } finally {
       setGeneratingId(null);
     }
@@ -210,6 +225,20 @@ const Scans = () => {
             onClick={() => setShowMockWarning(false)}
             aria-label="Dismiss mock warning"
             className="ml-2 text-amber-400 hover:text-amber-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {/* AI Generation Error Toast */}
+      {aiGenError && (
+        <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span className="flex-1">{aiGenError}</span>
+          <button
+            onClick={() => setAiGenError(null)}
+            aria-label="Dismiss error"
+            className="ml-2 text-red-400 hover:text-red-200 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

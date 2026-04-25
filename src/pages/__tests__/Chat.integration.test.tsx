@@ -1,13 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ErrorCode } from '../../lib/errors';
+import type { GatewayResponse } from '../../lib/aiGateway';
 import Chat from '../Chat';
 
-const { mockRunAgent, mockGetProjects, mockDispatchChatTask, mockPollForResult, authValue } = vi.hoisted(() => ({
+const { mockRunAgent, mockCallAiGateway, authValue } = vi.hoisted(() => ({
   mockRunAgent: vi.fn(),
-  mockGetProjects: vi.fn(),
-  mockDispatchChatTask: vi.fn(),
-  mockPollForResult: vi.fn(),
+  mockCallAiGateway: vi.fn(),
   authValue: {
     user: { id: 'user-1' },
     organizations: [{ id: 'org-1' }],
@@ -33,23 +31,14 @@ vi.mock('../../context/useAuth', () => ({
   useAuth: () => authValue,
 }));
 
-vi.mock('../../api/scans.service', () => ({
-  ScansService: {
-    getProjects: mockGetProjects,
-  },
+vi.mock('../../lib/aiGateway', () => ({
+  callAiGateway: mockCallAiGateway,
 }));
 
 vi.mock('../../lib/agentTools', () => ({
   runAgent: mockRunAgent,
   TOOL_LABELS: {
     list_projects: 'Listed projects',
-  },
-}));
-
-vi.mock('../../api/ai.service', () => ({
-  AiService: {
-    dispatchChatTask: mockDispatchChatTask,
-    pollForResult: mockPollForResult,
   },
 }));
 
@@ -136,19 +125,15 @@ describe('Chat integration flow', () => {
     convoIdCounter = 1;
     msgIdCounter = 1;
 
-    mockGetProjects.mockResolvedValue([{ id: 'project-1', name: 'Main project' }]);
     mockRunAgent.mockResolvedValue({
       content: 'Agent response ready',
       toolCalls: [{ name: 'list_projects', ok: true, summary: 'ok' }],
     });
-    mockDispatchChatTask.mockResolvedValue({ ok: true, data: 'job-1' });
-    mockPollForResult.mockResolvedValue({ ok: true, data: { description: 'AI polling response' } });
+    mockCallAiGateway.mockResolvedValue({ content: 'Gateway response', provider: 'mock', isMock: true } satisfies GatewayResponse);
   });
 
   it('sends suggestion and persists user+assistant messages via agent path', async () => {
     render(<Chat />);
-
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'List my open findings' }));
 
@@ -158,72 +143,53 @@ describe('Chat integration flow', () => {
     expect(screen.getAllByText('List my open findings').length).toBeGreaterThan(0);
   });
 
-  it('renders assistant response from polling after dispatch success', async () => {
+  it('renders assistant response from gateway when agent returns null', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
-    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-2' });
-    mockPollForResult.mockResolvedValueOnce({
-      ok: true,
-      data: { description: 'Recovered answer after retry' },
-    });
+    mockCallAiGateway.mockResolvedValueOnce({
+      content: 'Recovered answer after retry',
+      provider: 'mock',
+      isMock: true,
+    } satisfies GatewayResponse);
 
     render(<Chat />);
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Check compliance status' }));
 
-    await waitFor(() => expect(mockDispatchChatTask).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockPollForResult).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText('Recovered answer after retry')).toBeInTheDocument());
   });
 
-  it('renders timeout error message when polling times out', async () => {
+  it('renders error message when gateway throws', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
-    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-timeout' });
-    mockPollForResult.mockResolvedValueOnce({
-      ok: false,
-      error: {
-        code: ErrorCode.AI_PROCESSING_TIMEOUT,
-        message: 'timed out',
-        timestamp: new Date().toISOString(),
-      },
-    });
+    mockCallAiGateway.mockRejectedValueOnce(new Error('AI processing timed out. Please try again.'));
 
     render(<Chat />);
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate an executive summary' }));
 
-    await waitFor(() => expect(mockDispatchChatTask).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockPollForResult).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
     );
   });
 
-  it('shows retrying label while polling reports transient retry', async () => {
+  it('shows thinking label while gateway is processing', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
-    mockDispatchChatTask.mockResolvedValueOnce({ ok: true, data: 'job-retry-ui' });
 
-    let releasePoll!: () => void;
-    const pollPromise = new Promise<void>((resolve) => {
-      releasePoll = () => resolve();
+    let releaseGateway!: () => void;
+    const gatewayPromise = new Promise<GatewayResponse>((resolve) => {
+      releaseGateway = () => resolve({ content: 'Recovered after wait', provider: 'mock', isMock: true });
     });
-
-    mockPollForResult.mockImplementationOnce(
-      async (_scanId, _startTime, onProgress?: (p: { status: string }) => void) => {
-        onProgress?.({ status: 'retrying' });
-        await pollPromise;
-        return { ok: true, data: { description: 'Recovered after retry loop' } };
-      },
-    );
+    mockCallAiGateway.mockReturnValueOnce(gatewayPromise);
 
     render(<Chat />);
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'SLA status — what is overdue?' }));
 
-    await waitFor(() => expect(screen.getByText(/Retrying after transient error/)).toBeInTheDocument());
-    releasePoll();
-    await waitFor(() => expect(screen.getByText('Recovered after retry loop')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Analyzing|Querying|Computing|Checking|Generating|Calling/i)).toBeInTheDocument(),
+    );
+
+    releaseGateway();
+    await waitFor(() => expect(screen.getByText('Recovered after wait')).toBeInTheDocument());
   });
 });

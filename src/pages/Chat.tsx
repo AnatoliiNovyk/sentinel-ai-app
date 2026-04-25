@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap } from 'lucide-react';
 import { marked } from 'marked';
 import { supabase } from '../api/client';
-import type { AiConversation, AiMessage, Project } from '../lib/supabase';
+import type { AiConversation, AiMessage } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
-import { ScansService } from '../api/scans.service';
-import { AiService } from '../api/ai.service';
+import { callAiGateway, type ChatMessage } from '../lib/aiGateway';
 import { runAgent, TOOL_LABELS } from '../lib/agentTools';
-import { errorToUserMessage } from '../lib/errors';
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -36,43 +34,28 @@ const PROVIDER_META: Record<string, { label: string; color: string }> = {
   mock:             { label: 'Local AI',        color: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
 };
 
-function extractAssistantText(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') return null;
-
-  const record = payload as Record<string, unknown>;
-  const direct = ['content', 'description', 'remediation', 'explanation'];
-  for (const key of direct) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-
-  return null;
-}
-
 export default function Chat() {
   const { user, organizations } = useAuth();
   const [conversations, setConversations] = useState<AiConversation[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
+  const [activeProvider, setActiveProvider] = useState<string>('mock');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       try {
-        const [convs, projs] = await Promise.all([
-          supabase.from('ai_conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-          ScansService.getProjects()
-        ]);
+        const convs = await supabase
+          .from('ai_conversations')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
         setConversations(convs.data ?? []);
-        setProjects(projs);
         if (convs.data && convs.data.length > 0) setActiveId(convs.data[0].id);
       } catch (err) {
         console.error('Failed to load chat data:', err);
@@ -154,34 +137,17 @@ export default function Chat() {
         setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
         aiContent = agentTurn.content;
       } else {
-        const projId = projects[0]?.id;
-        if (!projId) {
-          aiContent = "Error: No project found. Please create a project to use the AI Assistant.";
-        } else if (!convoId) {
-          aiContent = "Error: Please select or create a conversation.";
-        } else {
-          clearInterval(phaseTimer);
-          setThinkingLabel('Dispatching AI task');
-          const pollingStart = Date.now();
-          const dispatchResult = await AiService.dispatchChatTask(projId, convoId, user.id, text);
-          if (!dispatchResult.ok) {
-            aiContent = `Error: ${errorToUserMessage(dispatchResult.error)}`;
-          } else {
-            setThinkingLabel('Polling AI result');
-            const pollResult = await AiService.pollForResult(null, pollingStart, (progress) => {
-              if (progress.status === 'retrying') {
-                setThinkingLabel('Retrying after transient error');
-              } else {
-                setThinkingLabel('Polling AI result');
-              }
-            });
-            if (!pollResult.ok) {
-              aiContent = `Error: ${errorToUserMessage(pollResult.error)}`;
-            } else {
-              aiContent = extractAssistantText(pollResult.data) ?? '(AI is responding...)';
-            }
-          }
-        }
+        clearInterval(phaseTimer);
+        setThinkingLabel('Calling AI gateway');
+        // Build conversation history for the gateway (last 10 messages)
+        const history: ChatMessage[] = messages.slice(-10).map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
+        history.push({ role: 'user', content: text });
+        const gatewayResult = await callAiGateway(history);
+        aiContent = gatewayResult.content || '(No response from AI)';
+        setActiveProvider(gatewayResult.provider);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -208,7 +174,7 @@ export default function Chat() {
     sendMessage(input);
   };
 
-  const providerMeta = PROVIDER_META.ollama;
+  const providerMeta = PROVIDER_META[activeProvider] ?? PROVIDER_META.mock;
 
   return (
     <div className="h-screen flex">
