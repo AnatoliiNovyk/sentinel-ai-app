@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { riskBand } from '../lib/riskScore';
-import { ShieldAlert, RefreshCw, Info, Download } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Info, Download, Search, SlidersHorizontal } from 'lucide-react';
 import { downloadFile } from '../lib/exporters';
 
 // ─── Physics types ────────────────────────────────────────────────────────────
@@ -152,6 +152,8 @@ export default function AttackSurfaceMap() {
   const [hovered, setHovered] = useState<SimNode | null>(null);
   const [selected, setSelected] = useState<SimNode | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [nodeFilter, setNodeFilter] = useState<'all' | 'project' | 'vuln'>('all');
   const animRef = useRef<number>(0);
   const nodesRef = useRef<SimNode[]>([]);
   const edgesRef = useRef<SimEdge[]>([]);
@@ -272,6 +274,35 @@ export default function AttackSurfaceMap() {
         ))}
       </div>
 
+      {/* Search + node type filter bar */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search nodes..."
+            className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+          {(['all', 'project', 'vuln'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setNodeFilter(t)}
+              className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                nodeFilter === t
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+              }`}
+            >
+              {t === 'all' ? 'All nodes' : t === 'project' ? 'Projects' : 'Findings'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Graph canvas */}
       <div className="relative rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
         {loading ? (
@@ -323,6 +354,11 @@ export default function AttackSurfaceMap() {
             {nodes.map(n => {
               const isHov = hovered?.id === n.id;
               const isSel = selected?.id === n.id;
+              const q = searchQuery.trim().toLowerCase();
+              const matchesSearch = !q || n.label.toLowerCase().includes(q);
+              const matchesType = nodeFilter === 'all' || n.type === nodeFilter || n.type === 'hub';
+              const dimmed = (!matchesSearch || !matchesType) && n.type !== 'hub';
+              const nodeOpacity = dimmed ? 0.15 : 1;
               if (n.type === 'hub') {
                 return (
                   <g key={n.id} transform={`translate(${n.x},${n.y})`}>
@@ -342,6 +378,7 @@ export default function AttackSurfaceMap() {
                     key={n.id}
                     transform={`translate(${n.x},${n.y})`}
                     className="cursor-pointer"
+                    opacity={nodeOpacity}
                     onMouseEnter={() => setHovered(n)}
                     onClick={() => setSelected(isSel ? null : n)}
                   >
@@ -362,6 +399,7 @@ export default function AttackSurfaceMap() {
                   key={n.id}
                   transform={`translate(${n.x},${n.y})`}
                   className="cursor-pointer"
+                  opacity={nodeOpacity}
                   onMouseEnter={() => setHovered(n)}
                   onClick={() => setSelected(isSel ? null : n)}
                 >
@@ -425,7 +463,9 @@ export default function AttackSurfaceMap() {
       {/* Project list */}
       {projects.length > 0 && (
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {projects.map(p => {
+          {projects
+            .filter(p => !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()) || (p.target ?? '').toLowerCase().includes(searchQuery.trim().toLowerCase()))
+            .map(p => {
             const band = riskBand(p.risk_score ?? 0);
             return (
               <div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900/20 p-4 flex items-center justify-between">
