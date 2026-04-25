@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
+import { downloadFile } from '../lib/exporters';
 
 type KillChainStep = {
   phase: string;
@@ -17,6 +18,45 @@ export default function KillChain() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [chain, setChain] = useState<KillChainStep[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
+
+  const buildMarkdown = useCallback((steps: KillChainStep[], name: string) => {
+    const lines = [
+      `# AI Red Team Kill Chain — ${name}`,
+      `> Generated: ${new Date().toLocaleString()}`,
+      '',
+    ];
+    steps.forEach((s, i) => {
+      lines.push(`## Step ${i + 1}: ${s.phase}`);
+      lines.push(`**MITRE Tactic:** ${s.tactic}  `);
+      lines.push(`**Asset:** ${s.asset}  `);
+      lines.push(`**Exploited:** ${s.exploited_vuln}`);
+      lines.push('');
+      lines.push(s.description);
+      lines.push('');
+    });
+    return lines.join('\n');
+  }, []);
+
+  const exportJson = useCallback(() => {
+    if (!chain) return;
+    const payload = { project: projectName, generatedAt: new Date().toISOString(), steps: chain };
+    downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  }, [chain, projectName]);
+
+  const exportMarkdown = useCallback(() => {
+    if (!chain) return;
+    downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.md`, buildMarkdown(chain, projectName), 'text/markdown');
+  }, [chain, projectName, buildMarkdown]);
+
+  const copyToClipboard = useCallback(async () => {
+    if (!chain) return;
+    await navigator.clipboard.writeText(buildMarkdown(chain, projectName));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [chain, projectName, buildMarkdown]);
 
   useEffect(() => {
     supabase.from('projects').select('*').order('name').then(({ data }) => {
@@ -91,7 +131,31 @@ export default function KillChain() {
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Zap className="w-5 h-5 text-red-400" /> Attack Vector Generated
             </h2>
-            <div className="text-sm text-slate-400">Based on {vulns.length} open vulnerabilities</div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-400 mr-2">Based on {vulns.length} open vulnerabilities</span>
+              <button
+                onClick={copyToClipboard}
+                title="Copy as Markdown"
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+              <button
+                onClick={exportMarkdown}
+                title="Download Markdown"
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                <FileText className="w-3.5 h-3.5" /> .md
+              </button>
+              <button
+                onClick={exportJson}
+                title="Download JSON"
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                <Download className="w-3.5 h-3.5" /> JSON
+              </button>
+            </div>
           </div>
 
           <div className="relative pl-6 md:pl-8 space-y-8 before:absolute before:inset-0 before:ml-[1.4rem] md:before:ml-[1.9rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-slate-800 before:via-red-500/50 before:to-slate-800">
