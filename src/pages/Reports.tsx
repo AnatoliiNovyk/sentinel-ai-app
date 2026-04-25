@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2 } from 'lucide-react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
+import { downloadFile } from '../lib/exporters';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -13,6 +14,7 @@ export default function Reports() {
   const [selected, setSelected] = useState<Report | null>(null);
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | 'executive' | 'technical'>('all');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc' | 'title-desc'>('date-desc');
 
   const remove = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -20,12 +22,29 @@ export default function Reports() {
     setReports(prev => prev.filter(r => r.id !== id));
   }, []);
 
+  const exportReportsList = useCallback(() => {
+    const date = new Date().toISOString().split('T')[0];
+    const rows = ['Title,Project,Type,Created Date'];
+    for (const r of visible) {
+      const projectName = projects.find(p => p.id === r.project_id)?.name ?? 'Unknown';
+      rows.push(`"${r.title}","${projectName}",${r.kind},"${new Date(r.created_at).toLocaleDateString()}"`);
+    }
+    downloadFile(`reports-list-${date}.csv`, rows.join('\n'), 'text/csv');
+  }, [visible, projects]);
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return reports
+    let filtered = reports
       .filter(r => kindFilter === 'all' || r.kind === kindFilter)
       .filter(r => !q || r.title.toLowerCase().includes(q) || (projects.find(p => p.id === r.project_id)?.name ?? '').toLowerCase().includes(q));
-  }, [reports, kindFilter, search, projects]);
+    
+    if (sortBy === 'date-desc') filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    if (sortBy === 'date-asc') filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (sortBy === 'title-asc') filtered.sort((a, b) => a.title.localeCompare(b.title));
+    if (sortBy === 'title-desc') filtered.sort((a, b) => b.title.localeCompare(a.title));
+    
+    return filtered;
+  }, [reports, kindFilter, search, projects, sortBy]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -61,38 +80,68 @@ export default function Reports() {
       </div>
 
       {!loading && reports.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-6">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search reports…"
-              className="w-full bg-slate-900 border border-slate-800 rounded-md pl-8 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
-                <X className="w-3.5 h-3.5" />
+        <div className="space-y-3 mb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search reports…"
+                className="w-full bg-slate-900 border border-slate-800 rounded-md pl-8 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {(['all', 'executive', 'technical'] as const).map(k => (
+              <button
+                key={k}
+                onClick={() => setKindFilter(k)}
+                className={`text-xs px-3 py-2 rounded-md border transition capitalize ${
+                  kindFilter === k
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                {k === 'all' ? 'All types' : k}
+              </button>
+            ))}
+            {(search || kindFilter !== 'all') && (
+              <span className="text-xs text-slate-500">{visible.length} of {reports.length}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 border border-slate-800 rounded-lg p-1 bg-slate-900/40">
+              {(['date-desc', 'date-asc', 'title-asc', 'title-desc'] as const).map(s => {
+                const labels: Record<typeof s, string> = { 'date-desc': 'Newest', 'date-asc': 'Oldest', 'title-asc': 'A–Z', 'title-desc': 'Z–A' };
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setSortBy(s)}
+                    className={`text-xs px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                      sortBy === s
+                        ? 'bg-slate-800 text-white shadow'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    <ArrowUpDown className="w-3 h-3" /> {labels[s]}
+                  </button>
+                );
+              })}
+            </div>
+            {visible.length > 0 && (
+              <button
+                onClick={exportReportsList}
+                className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:border-slate-600 transition"
+              >
+                <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
             )}
           </div>
-          {(['all', 'executive', 'technical'] as const).map(k => (
-            <button
-              key={k}
-              onClick={() => setKindFilter(k)}
-              className={`text-xs px-3 py-2 rounded-md border transition capitalize ${
-                kindFilter === k
-                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                  : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
-              }`}
-            >
-              {k === 'all' ? 'All types' : k}
-            </button>
-          ))}
-          {(search || kindFilter !== 'all') && (
-            <span className="text-xs text-slate-500">{visible.length} of {reports.length}</span>
-          )}
         </div>
       )}
 
