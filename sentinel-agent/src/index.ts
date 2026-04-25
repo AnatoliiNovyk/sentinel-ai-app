@@ -448,6 +448,7 @@ async function runJob(job: ScanJob) {
     );
     await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
     await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
+    await sendWebhookAlert(job.project_id, job.target, findings);
   } catch (err: unknown) {
     const message = getErrorMessage(err);
     console.error(`❌ Job ${job.id} crashed:`, message);
@@ -456,8 +457,48 @@ async function runJob(job: ScanJob) {
   }
 }
 
-// --- Main Loop ---
-async function main() {
+// ---------------------------------------------------------------------------
+// Webhook alerting — fires when critical/high findings detected
+// ---------------------------------------------------------------------------
+async function sendWebhookAlert(
+  projectId: string,
+  target: string,
+  findings: Finding[]
+): Promise<void> {
+  const criticals = findings.filter(f => f.severity === 'critical' || f.severity === 'high');
+  if (criticals.length === 0) return;
+
+  try {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('webhook_url, name')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    const webhookUrl = project?.webhook_url as string | null;
+    if (!webhookUrl) return;
+
+    const payload = {
+      event: 'critical_findings',
+      project_id: projectId,
+      project_name: project?.name ?? projectId,
+      target,
+      findings_count: criticals.length,
+      findings: criticals.map(f => ({ title: f.title, severity: f.severity, asset: f.asset })),
+      timestamp: new Date().toISOString(),
+    };
+
+    await axios.post(webhookUrl, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10_000,
+    });
+    console.log(`📣 Webhook alert sent to ${webhookUrl} (${criticals.length} critical/high findings)`);
+  } catch (err: unknown) {
+    console.warn(`⚠️ Webhook alert failed: ${getErrorMessage(err)}`);
+  }
+}
+
+async function fetchPendingJob(): Promise<ScanJob | null> {
   console.log('🚀 Agent loop started (3s interval)');
   while (true) {
     try {

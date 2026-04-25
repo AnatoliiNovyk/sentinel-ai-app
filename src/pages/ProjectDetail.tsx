@@ -15,6 +15,7 @@ import {
   FileJson,
   ShieldCheck,
   Network,
+  Zap,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -270,7 +271,8 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
           vulns={vulns} 
           totals={totals} 
           projectName={project.name} 
-          onGoToTopology={() => setTab('topology')} 
+          onGoToTopology={() => setTab('topology')}
+          project={project}
         />
       )}
       {tab === 'topology' && (
@@ -301,12 +303,14 @@ function OverviewTab({
   totals,
   projectName,
   onGoToTopology,
+  project,
 }: {
   scans: Scan[];
   vulns: Vulnerability[];
   totals: Record<string, number>;
   projectName: string;
   onGoToTopology: () => void;
+  project: Project;
 }) {
   const lastScan = scans[0];
   const topFindings = [...vulns]
@@ -409,7 +413,55 @@ function OverviewTab({
             <div className="text-sm text-slate-500 italic">No scans performed yet.</div>
           )}
         </div>
+
+        <WebhookPanel project={project} />
       </div>
+    </div>
+  );
+}
+
+// ─── Webhook Panel ────────────────────────────────────────────────────────────
+function WebhookPanel({ project }: { project: Project }) {
+  const [url, setUrl] = useState(project.webhook_url ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const clean = url.trim();
+    await supabase.from('projects').update({ webhook_url: clean || null }).eq('id', project.id);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+      <h3 className="font-semibold mb-1 flex items-center gap-2 text-sm">
+        <Zap className="w-4 h-4 text-amber-400" /> Webhook alerts
+      </h3>
+      <p className="text-xs text-slate-500 mb-4">
+        Receive a POST request when critical or high findings are detected.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://hooks.slack.com/services/…"
+          className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 transition"
+        />
+        <button
+          onClick={save}
+          disabled={saving}
+          className="px-4 py-2 rounded-md bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-sm font-medium transition"
+        >
+          {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      <p className="text-[11px] text-slate-600 mt-2">
+        Payload: <code className="text-slate-500">event, project_id, target, findings_count, findings[]</code>
+      </p>
     </div>
   );
 }

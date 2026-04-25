@@ -51,6 +51,7 @@ export type Project = {
   created_at: string;
   tags: string[];
   risk_score: number;
+  webhook_url?: string | null;
 };
 
 export type Scan = {
