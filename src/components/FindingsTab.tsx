@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, ShieldOff, Sparkles, Timer, X } from 'lucide-react';
+import { useMemo, useState, useCallback } from 'react';
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
 import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
@@ -57,6 +57,8 @@ export default function FindingsTab({
   const [severityFilter, setSeverityFilter] = useState<'all' | Vulnerability['severity']>('all');
   const [slaFilter, setSlaFilter] = useState<SlaFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const slaConfig = useMemo(
     () => ({ ...DEFAULT_SLA_CONFIG, ...(profile?.sla_config ?? {}) }),
@@ -100,6 +102,44 @@ export default function FindingsTab({
         return SEVERITY_WEIGHT[b.severity] - SEVERITY_WEIGHT[a.severity];
       });
   }, [vulns, statusFilter, severityFilter, slaFilter, slaConfig, now]);
+
+  const allFilteredIds = useMemo(() => filtered.map(v => v.id), [filtered]);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selected.has(id));
+  const someSelected = selected.size > 0;
+
+  const toggleAll = useCallback(() => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allFilteredIds));
+    }
+  }, [allSelected, allFilteredIds]);
+
+  const toggleOne = useCallback((id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const bulkChangeStatus = useCallback(async (status: StatusValue) => {
+    if (!someSelected) return;
+    setBulkSaving(true);
+    const ids = [...selected];
+    const { data } = await supabase
+      .from('vulnerabilities')
+      .update({ status, status_updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .select();
+    if (data) {
+      for (const v of data as Vulnerability[]) onUpdated(v);
+      const scanIds = [...new Set((data as Vulnerability[]).map(v => v.scan_id))];
+      scanIds.forEach(sid => recomputeRiskScoreFromScanId(sid).catch(() => {}));
+    }
+    setSelected(new Set());
+    setBulkSaving(false);
+  }, [selected, someSelected, onUpdated]);
 
   if (vulns.length === 0) {
     return (
@@ -168,6 +208,37 @@ export default function FindingsTab({
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {someSelected && (
+        <div className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/5 px-4 py-2.5">
+          <span className="text-xs text-sky-300 font-semibold mr-2">
+            {selected.size} selected
+          </span>
+          {([
+            { status: 'resolved' as StatusValue, label: 'Resolve', color: 'bg-emerald-600 hover:bg-emerald-500 text-white' },
+            { status: 'false_positive' as StatusValue, label: 'False positive', color: 'bg-slate-700 hover:bg-slate-600 text-slate-200' },
+            { status: 'accepted' as StatusValue, label: 'Accept risk', color: 'bg-amber-700 hover:bg-amber-600 text-amber-100' },
+            { status: 'in_progress' as StatusValue, label: 'In progress', color: 'bg-sky-700 hover:bg-sky-600 text-sky-100' },
+          ]).map(({ status, label, color }) => (
+            <button
+              key={status}
+              onClick={() => bulkChangeStatus(status)}
+              disabled={bulkSaving}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition disabled:opacity-50 ${color}`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-auto text-slate-500 hover:text-white transition"
+            aria-label="Clear selection"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-800 bg-slate-900/30 divide-y divide-slate-800 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="p-10 text-center">
@@ -175,16 +246,32 @@ export default function FindingsTab({
             <div className="text-sm text-slate-400">No findings match the current filters.</div>
           </div>
         ) : (
-          filtered.map((v) => (
-            <FindingRow
-              key={v.id}
-              vuln={v}
-              slaState={slaStateFor(v, slaConfig, now)}
-              expanded={expanded === v.id}
-              onToggle={() => setExpanded(expanded === v.id ? null : v.id)}
-              onUpdated={onUpdated}
-            />
-          ))
+          <>
+            <div className="flex items-center gap-3 px-5 py-2 bg-slate-900/50">
+              <button
+                onClick={toggleAll}
+                className="text-slate-500 hover:text-emerald-400 transition shrink-0"
+                aria-label={allSelected ? 'Deselect all' : 'Select all'}
+              >
+                {allSelected ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4" />}
+              </button>
+              <span className="text-[11px] text-slate-600">
+                {allSelected ? 'Deselect all' : `Select all (${filtered.length})`}
+              </span>
+            </div>
+            {filtered.map((v) => (
+              <FindingRow
+                key={v.id}
+                vuln={v}
+                slaState={slaStateFor(v, slaConfig, now)}
+                expanded={expanded === v.id}
+                selected={selected.has(v.id)}
+                onToggle={() => setExpanded(expanded === v.id ? null : v.id)}
+                onSelect={() => toggleOne(v.id)}
+                onUpdated={onUpdated}
+              />
+            ))}
+          </>
         )}
       </div>
     </div>
@@ -218,13 +305,17 @@ function FindingRow({
   vuln,
   slaState,
   expanded,
+  selected,
   onToggle,
+  onSelect,
   onUpdated,
 }: {
   vuln: Vulnerability;
   slaState: 'overdue' | 'at_risk' | 'healthy' | 'na';
   expanded: boolean;
+  selected: boolean;
   onToggle: () => void;
+  onSelect: () => void;
   onUpdated: (next: Vulnerability) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -267,8 +358,15 @@ function FindingRow({
   const statusMeta = STATUS_META[vuln.status];
 
   return (
-    <div className="px-5 py-3">
+    <div className={`px-5 py-3 transition-colors ${selected ? 'bg-sky-500/5' : ''}`}>
       <div className="flex items-start gap-3">
+        <button
+          onClick={onSelect}
+          className="mt-1 text-slate-500 hover:text-emerald-400 transition shrink-0"
+          aria-label="Select finding"
+        >
+          {selected ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4" />}
+        </button>
         <button
           onClick={onToggle}
           className="mt-1 text-slate-500 hover:text-white transition shrink-0"
