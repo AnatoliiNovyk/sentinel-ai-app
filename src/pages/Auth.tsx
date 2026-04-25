@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, ArrowLeft, Loader2 } from 'lucide-react';
+import { Shield, ArrowLeft, Loader2, Check, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
@@ -14,6 +14,22 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
 
   const isSignup = mode === 'signup';
+
+  const getPasswordStrength = (pwd: string): { level: 'weak' | 'fair' | 'strong'; score: number } => {
+    if (!pwd) return { level: 'weak', score: 0 };
+    let score = 0;
+    if (pwd.length >= 8) score += 1;
+    if (pwd.length >= 12) score += 1;
+    if (/[A-Z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[!@#$%^&*]/.test(pwd)) score += 1;
+    
+    if (score <= 1) return { level: 'weak', score };
+    if (score <= 3) return { level: 'fair', score };
+    return { level: 'strong', score };
+  };
+
+  const pwdStrength = isSignup ? getPasswordStrength(password) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +104,42 @@ export default function Auth() {
                 className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
                 placeholder="Minimum 6 characters"
               />
+              {isSignup && password && pwdStrength && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          pwdStrength.level === 'weak' ? 'w-1/3 bg-red-500' :
+                          pwdStrength.level === 'fair' ? 'w-2/3 bg-amber-500' :
+                          'w-full bg-emerald-500'
+                        }`}
+                      />
+                    </div>
+                    <span className={`text-xs font-medium capitalize ${
+                      pwdStrength.level === 'weak' ? 'text-red-400' :
+                      pwdStrength.level === 'fair' ? 'text-amber-400' :
+                      'text-emerald-400'
+                    }`}>
+                      {pwdStrength.level}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      {password.length >= 8 ? <Check className="w-3 h-3 text-emerald-400" /> : <X className="w-3 h-3 text-slate-600" />}
+                      At least 8 characters
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/[A-Z]/.test(password) ? <Check className="w-3 h-3 text-emerald-400" /> : <X className="w-3 h-3 text-slate-600" />}
+                      Uppercase letter
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/[0-9]/.test(password) ? <Check className="w-3 h-3 text-emerald-400" /> : <X className="w-3 h-3 text-slate-600" />}
+                      Number
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && (
