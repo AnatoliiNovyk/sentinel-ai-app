@@ -1,8 +1,8 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
   ?? 'http://95.67.75.146:9090/health';
@@ -116,6 +116,23 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
 export default function AppLayout() {
   const location = useLocation();
   const { profile, signOut } = useAuth();
+  const mainRef = useRef<HTMLElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 300);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+    setShowScrollTop(false);
+  }, [location.pathname]);
+
+  const scrollToTop = () => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   const initials =
     (profile?.full_name || profile?.email || 'U')
       .split(' ')
@@ -172,7 +189,7 @@ export default function AppLayout() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto flex flex-col">
+      <main ref={mainRef} className="flex-1 overflow-auto flex flex-col relative">
         <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-8">
           <div className="text-sm font-medium text-slate-300">
             {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
@@ -185,6 +202,16 @@ export default function AppLayout() {
         <div className="flex-1">
           <Outlet />
         </div>
+        {/* Scroll to top button */}
+        {showScrollTop && (
+          <button
+            onClick={scrollToTop}
+            aria-label="Back to top"
+            className="fixed bottom-8 right-8 z-50 w-10 h-10 rounded-full bg-slate-800 border border-slate-700 hover:border-emerald-500/50 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 flex items-center justify-center shadow-lg transition-all duration-200"
+          >
+            <ArrowUp className="w-4 h-4" />
+          </button>
+        )}
       </main>
     </div>
   );
