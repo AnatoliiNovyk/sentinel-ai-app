@@ -23,6 +23,7 @@ export default function SupplyChain() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'prod' | 'dev'>('all');
 
   useEffect(() => {
     // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
@@ -99,6 +100,10 @@ export default function SupplyChain() {
   const filteredVulnDeps = sevFilter === 'all'
     ? vulnerableDeps
     : vulnerableDeps.filter(r => r.vulns.some(v => v.severity === sevFilter));
+
+  const filteredByType = typeFilter === 'all'
+    ? filteredVulnDeps
+    : filteredVulnDeps.filter(r => r.dep.type === typeFilter);
 
   const exportCsv = () => {
     if (!results) return;
@@ -200,7 +205,7 @@ export default function SupplyChain() {
                   <Download className="w-3.5 h-3.5" /> Export CSV
                 </button>
               )}
-              <button onClick={() => { setResults(null); setFileName(null); setSevFilter('all'); }} className="text-sm text-slate-400 hover:text-white flex items-center gap-2">
+              <button onClick={() => { setResults(null); setFileName(null); setSevFilter('all'); setTypeFilter('all'); }} className="text-sm text-slate-400 hover:text-white flex items-center gap-2">
                 <Upload className="w-4 h-4" /> Scan another file
               </button>
             </div>
@@ -223,12 +228,12 @@ export default function SupplyChain() {
 
           {vulnerableDeps.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-lg text-red-400 flex items-center gap-2 mt-8">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <h3 className="font-semibold text-lg text-red-400 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" /> Vulnerable Dependencies
                 </h3>
-                <div className="flex items-center gap-1.5 mt-8">
-                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-slate-500 font-medium">Severity:</span>
                   {(['all', 'critical', 'high', 'medium', 'low'] as const).map(s => (
                     <button
                       key={s}
@@ -242,10 +247,24 @@ export default function SupplyChain() {
                       {s === 'all' ? 'All' : s}
                     </button>
                   ))}
+                  <span className="text-xs text-slate-500 font-medium ml-2">Type:</span>
+                  {(['all', 'prod', 'dev'] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setTypeFilter(t)}
+                      className={`text-xs px-2.5 py-1 rounded-md border capitalize transition ${
+                        typeFilter === t
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                      }`}
+                    >
+                      {t === 'all' ? 'All' : t === 'prod' ? 'Production' : 'Development'}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4">
-                {filteredVulnDeps
+                {filteredByType
                   .sort((a, b) => {
                     const maxSev = (r: typeof a) => Math.max(...r.vulns.map(v => SEV_WEIGHT[v.severity] ?? 0));
                     return maxSev(b) - maxSev(a);
