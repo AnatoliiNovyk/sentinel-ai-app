@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
@@ -19,8 +19,17 @@ export default function KillChain() {
   const [chain, setChain] = useState<KillChainStep[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [phaseFilter, setPhaseFilter] = useState<string>('all');
 
   const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
+
+  const PHASES = ['Recon', 'Weaponize', 'Delivery', 'Exploitation', 'Installation', 'Command & Control', 'Exfiltration'];
+
+  const filteredChain = useMemo(() => {
+    if (!chain) return null;
+    if (phaseFilter === 'all') return chain;
+    return chain.filter(step => step.phase.toLowerCase().includes(phaseFilter.toLowerCase()));
+  }, [chain, phaseFilter]);
 
   const buildMarkdown = useCallback((steps: KillChainStep[], name: string) => {
     const lines = [
@@ -41,22 +50,30 @@ export default function KillChain() {
   }, []);
 
   const exportJson = useCallback(() => {
-    if (!chain) return;
-    const payload = { project: projectName, generatedAt: new Date().toISOString(), steps: chain };
+    if (!filteredChain) return;
+    const payload = { project: projectName, phase_filter: phaseFilter, generatedAt: new Date().toISOString(), steps: filteredChain };
     downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.json`, JSON.stringify(payload, null, 2), 'application/json');
-  }, [chain, projectName]);
+  }, [filteredChain, projectName, phaseFilter]);
 
   const exportMarkdown = useCallback(() => {
-    if (!chain) return;
-    downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.md`, buildMarkdown(chain, projectName), 'text/markdown');
-  }, [chain, projectName, buildMarkdown]);
+    if (!filteredChain) return;
+    downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.md`, buildMarkdown(filteredChain, projectName), 'text/markdown');
+  }, [filteredChain, projectName, buildMarkdown]);
+
+  const exportCsv = useCallback(() => {
+    if (!filteredChain) return;
+    const headers = ['Step', 'Phase', 'MITRE Tactic', 'Asset', 'Exploited Vulnerability'];
+    const rows = filteredChain.map((s, i) => [i + 1, s.phase, s.tactic, s.asset, s.exploited_vuln]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    downloadFile(`killchain-${projectName.replace(/\s+/g, '-').toLowerCase()}.csv`, csv, 'text/csv');
+  }, [filteredChain, projectName]);
 
   const copyToClipboard = useCallback(async () => {
-    if (!chain) return;
-    await navigator.clipboard.writeText(buildMarkdown(chain, projectName));
+    if (!filteredChain) return;
+    await navigator.clipboard.writeText(buildMarkdown(filteredChain, projectName));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [chain, projectName, buildMarkdown]);
+  }, [filteredChain, projectName, buildMarkdown]);
 
   useEffect(() => {
     supabase.from('projects').select('*').order('name').then(({ data }) => {
@@ -127,12 +144,12 @@ export default function KillChain() {
 
       {chain && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Zap className="w-5 h-5 text-red-400" /> Attack Vector Generated
             </h2>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400 mr-2">Based on {vulns.length} open vulnerabilities</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-slate-400">Based on {vulns.length} open vulnerabilities</span>
               <button
                 onClick={copyToClipboard}
                 title="Copy as Markdown"
@@ -149,6 +166,13 @@ export default function KillChain() {
                 <FileText className="w-3.5 h-3.5" /> .md
               </button>
               <button
+                onClick={exportCsv}
+                title="Download CSV"
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+              <button
                 onClick={exportJson}
                 title="Download JSON"
                 className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
@@ -158,8 +182,40 @@ export default function KillChain() {
             </div>
           </div>
 
+          {/* Phase filter */}
+          <div className="flex items-center gap-2 flex-wrap p-3 rounded-lg border border-slate-800 bg-slate-900/50">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-xs text-slate-400 font-medium">Filter by phase:</span>
+            <button
+              onClick={() => setPhaseFilter('all')}
+              className={`text-xs px-2.5 py-1 rounded-md transition ${
+                phaseFilter === 'all'
+                  ? 'bg-emerald-500 text-slate-950 font-semibold'
+                  : 'border border-slate-700 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              All ({chain.length})
+            </button>
+            {PHASES.map((phase) => {
+              const count = chain.filter(s => s.phase.toLowerCase().includes(phase.toLowerCase())).length;
+              return (
+                <button
+                  key={phase}
+                  onClick={() => setPhaseFilter(phase)}
+                  className={`text-xs px-2.5 py-1 rounded-md transition ${
+                    phaseFilter === phase
+                      ? 'bg-red-500 text-white font-semibold'
+                      : 'border border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {phase} ({count})
+                </button>
+              );
+            })}
+          </div>
+
           <div className="relative pl-6 md:pl-8 space-y-8 before:absolute before:inset-0 before:ml-[1.4rem] md:before:ml-[1.9rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-slate-800 before:via-red-500/50 before:to-slate-800">
-            {chain.map((step, idx) => (
+            {filteredChain && filteredChain.map((step, idx) => (
               <div key={idx} className="relative">
                 <div className="md:flex items-center justify-between md:space-x-8">
                   
