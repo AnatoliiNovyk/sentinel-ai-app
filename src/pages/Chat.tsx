@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2, Search, Filter } from 'lucide-react';
 import { marked } from 'marked';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage } from '../lib/supabase';
@@ -44,6 +44,8 @@ export default function Chat() {
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
   const [activeProvider, setActiveProvider] = useState<string>('mock');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +65,25 @@ export default function Chat() {
       }
     })();
   }, [user]);
+
+  const filteredConversations = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    return conversations.filter(conv => {
+      const convDate = new Date(conv.created_at);
+      const matchesSearch = conv.title.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      let matchesDate = true;
+      if (dateFilter === 'today') matchesDate = convDate >= today;
+      if (dateFilter === 'week') matchesDate = convDate >= weekAgo;
+      if (dateFilter === 'month') matchesDate = convDate >= monthAgo;
+
+      return matchesSearch && matchesDate;
+    });
+  }, [conversations, searchQuery, dateFilter]);
 
   useEffect(() => {
     if (!activeId) {
@@ -203,16 +224,41 @@ export default function Chat() {
   return (
     <div className="h-screen flex">
       <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col">
-        <div className="p-3 border-b border-slate-800">
+        <div className="p-3 border-b border-slate-800 space-y-2">
           <button
             onClick={newConversation}
             className="w-full inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900 text-sm text-slate-300 transition"
           >
             <Plus className="w-4 h-4" /> New chat
           </button>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-300 placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          {/* Date filter */}
+          <div className="flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
+              className="w-full px-2 py-1 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-300 focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 days</option>
+              <option value="month">Last 30 days</option>
+            </select>
+          </div>
         </div>
         <div className="flex-1 overflow-auto p-2 space-y-1">
-          {conversations.map((c) => (
+          {filteredConversations.map((c) => (
             <div
               key={c.id}
               className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition cursor-pointer ${
