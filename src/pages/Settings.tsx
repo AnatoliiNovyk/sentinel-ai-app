@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
-  Webhook, Users, Plus, Trash2, Server, RefreshCw, WifiOff
+  Webhook, Users, Plus, Trash2, Server, RefreshCw, WifiOff,
+  Eye, EyeOff, Key
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -110,6 +111,46 @@ const PLANS = [
 const STRIPE_PORTAL_URL = import.meta.env.VITE_STRIPE_PORTAL_URL ?? null;
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? null;
 
+function ApiKeyRow({ label, value }: { label: string; value: string }) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const masked = value ? value.slice(0, 8) + '•'.repeat(Math.max(0, value.length - 8)) : '(not set)';
+  const copy = async () => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-0.5">{label}</div>
+        <div className="text-xs font-mono text-slate-300 truncate">{visible ? (value || '(not set)') : masked}</div>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {value && (
+          <>
+            <button
+              onClick={() => setVisible(v => !v)}
+              aria-label={visible ? 'Hide key' : 'Show key'}
+              className="text-slate-500 hover:text-slate-300 transition p-1 rounded"
+            >
+              {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={copy}
+              aria-label="Copy key"
+              className="text-slate-500 hover:text-slate-300 transition p-1 rounded"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Key className="w-3.5 h-3.5" />}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { user, profile } = useAuth();
   const [fullName, setFullName] = useState('');
@@ -153,6 +194,8 @@ export default function Settings() {
 
 
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [showWebhook, setShowWebhook] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [teamEmails, setTeamEmails] = useState<{email: string, role: string}[]>([
     { email: profile?.email || '', role: 'Owner' }
   ]);
@@ -375,13 +418,25 @@ export default function Settings() {
         <div>
           <label className="block text-sm text-slate-300 mb-1.5">Notification Webhook URL</label>
           <div className="flex gap-2">
-            <input
-              type="url"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://hooks.slack.com/services/..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
+            <div className="relative flex-1">
+              <input
+                type={showWebhook ? 'text' : 'password'}
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://hooks.slack.com/services/..."
+                className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 pr-10 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+              {webhookUrl && (
+                <button
+                  type="button"
+                  onClick={() => setShowWebhook(v => !v)}
+                  aria-label={showWebhook ? 'Hide URL' : 'Show URL'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                >
+                  {showWebhook ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
             <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-md text-sm font-medium transition">
               Test
             </button>
@@ -419,16 +474,21 @@ export default function Settings() {
             <input
               type="email"
               value={newInvite}
-              onChange={(e) => setNewInvite(e.target.value)}
+              onChange={(e) => { setNewInvite(e.target.value); setInviteError(null); }}
               placeholder="colleague@company.com"
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className={`flex-1 bg-slate-900 border rounded-md px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 ${
+                inviteError ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-800 focus:border-emerald-500 focus:ring-emerald-500/20'
+              }`}
             />
             <button
               onClick={() => {
-                if (newInvite) {
-                  setTeamEmails([...teamEmails, { email: newInvite, role: 'Member' }]);
-                  setNewInvite('');
-                }
+                if (!newInvite) return;
+                const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newInvite);
+                if (!valid) { setInviteError('Please enter a valid email address.'); return; }
+                if (teamEmails.some(m => m.email === newInvite)) { setInviteError('This email is already in the team.'); return; }
+                setTeamEmails([...teamEmails, { email: newInvite, role: 'Member' }]);
+                setNewInvite('');
+                setInviteError(null);
               }}
               disabled={!newInvite}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 disabled:opacity-50 rounded-md text-sm font-semibold transition"
@@ -436,6 +496,7 @@ export default function Settings() {
               <Plus className="w-4 h-4" /> Invite
             </button>
           </div>
+          {inviteError && <p className="text-xs text-red-400 mt-1.5">{inviteError}</p>}
         </div>
       </section>
 
@@ -506,6 +567,24 @@ export default function Settings() {
             )}
           </div>
         )}
+      </section>
+
+      {/* Save */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Key className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">API Keys</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">Read-only view of your configured environment keys. Manage secrets in your deployment environment.</p>
+        <div className="space-y-3">
+          {([
+            { label: 'Supabase URL', envKey: 'VITE_SUPABASE_URL' },
+            { label: 'Supabase Anon Key', envKey: 'VITE_SUPABASE_ANON_KEY' },
+            { label: 'AI Gateway URL', envKey: 'VITE_AI_GATEWAY_URL' },
+          ] as const).map(({ label, envKey }) => (
+            <ApiKeyRow key={envKey} label={label} value={(import.meta.env as Record<string, string | undefined>)[envKey] ?? ''} />
+          ))}
+        </div>
       </section>
 
       {/* Save */}
