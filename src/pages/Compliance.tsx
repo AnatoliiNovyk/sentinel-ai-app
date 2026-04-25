@@ -29,6 +29,18 @@ export default function Compliance() {
   }, [user]);
 
   const result = useMemo(() => computeCompliance(vulns), [vulns]);
+  const [cisSort, setCisSort] = useState<'score_desc' | 'score_asc' | 'name'>('score_desc');
+  const [cisStatus, setCisStatus] = useState<'all' | 'passing' | 'failing'>('all');
+
+  const sortedCisRows = useMemo(() => {
+    return [...result.cisRows]
+      .filter(r => cisStatus === 'all' ? true : cisStatus === 'passing' ? r.score >= 60 : r.score < 60)
+      .sort((a, b) =>
+        cisSort === 'score_desc' ? b.score - a.score :
+        cisSort === 'score_asc' ? a.score - b.score :
+        a.label.localeCompare(b.label)
+      );
+  }, [result.cisRows, cisSort, cisStatus]);
 
   if (loading) {
     return (
@@ -201,7 +213,43 @@ export default function Compliance() {
       {/* ── CIS Controls ── */}
       {(framework === 'all' || framework === 'cis') && (
       <section>
-        <SectionHeader icon={TrendingUp} title="CIS Controls v8" color="text-amber-400" />
+        <div className="flex items-center justify-between">
+          <SectionHeader icon={TrendingUp} title="CIS Controls v8" color="text-amber-400" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {(['all', 'passing', 'failing'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setCisStatus(s)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                    cisStatus === s
+                      ? s === 'passing' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                        : s === 'failing' ? 'border-red-500/50 bg-red-500/10 text-red-300'
+                        : 'border-slate-600 bg-slate-800 text-white'
+                      : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {s === 'all' ? 'All' : s === 'passing' ? '≥60% Passing' : '<60% Failing'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              {([['score_desc', 'Score ↓'], ['score_asc', 'Score ↑'], ['name', 'A→Z']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setCisSort(val)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition ${
+                    cisSort === val
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                      : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
           <div className="grid grid-cols-[1fr_80px_80px_120px] px-4 py-2 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
             <span>Control</span>
@@ -210,7 +258,7 @@ export default function Compliance() {
             <span className="pr-2">Score</span>
           </div>
           <div className="divide-y divide-slate-800/50">
-            {result.cisRows.map(row => <CisRowItem key={row.id} row={row} />)}
+            {sortedCisRows.map(row => <CisRowItem key={row.id} row={row} />)}
           </div>
         </div>
       </section>
