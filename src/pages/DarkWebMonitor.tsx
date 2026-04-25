@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2 } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
+import { downloadFile } from '../lib/exporters';
 
 interface ScanHistory {
   query: string;
@@ -14,6 +15,29 @@ export default function OsintAnalyzer() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScanHistory[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+
+  const visibleResults = useMemo(() => {
+    if (sevFilter === 'all') return results;
+    return results.filter(r =>
+      !r.error && r.result.riskLevel === sevFilter
+    );
+  }, [results, sevFilter]);
+
+  const exportCsv = useCallback(() => {
+    const rows = ['Query,BreachCount,RiskScore,RiskLevel,ScannedAt'];
+    for (const r of results) {
+      if (r.error) continue;
+      rows.push([
+        `"${r.query}"`,
+        r.result.breachCount ?? 0,
+        r.result.riskScore ?? 0,
+        r.result.riskLevel ?? 'none',
+        r.result.scannedAt ?? '',
+      ].join(','));
+    }
+    downloadFile(`osint-results-${new Date().toISOString().split('T')[0]}.csv`, rows.join('\n'), 'text/csv');
+  }, [results]);
 
   useEffect(() => {
     // Initialize rate limiter for DarkWebMonitor (10 scans per minute per session)
@@ -110,8 +134,44 @@ export default function OsintAnalyzer() {
 
       {results.length > 0 && (
         <div className="space-y-4">
-          <h2 className="font-semibold text-white">Analysis Results</h2>
-          {results.map((r, idx) => (
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-white">Analysis Results</h2>
+            <div className="flex items-center gap-2">
+              {/* Severity filter */}
+              <div className="flex items-center gap-1">
+                {(['all', 'critical', 'high', 'medium', 'low'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSevFilter(s)}
+                    className={`text-[10px] px-2 py-1 rounded border capitalize transition ${
+                      sevFilter === s
+                        ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                        : 'border-slate-800 text-slate-500 hover:border-slate-600 hover:text-white'
+                    }`}
+                  >
+                    {s === 'all' ? 'All' : s}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={exportCsv}
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+              <button
+                onClick={() => { setResults([]); setSevFilter('all'); }}
+                aria-label="Clear history"
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-red-500/40 hover:text-red-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear
+              </button>
+            </div>
+          </div>
+          {visibleResults.length === 0 && (
+            <div className="text-center text-sm text-slate-500 py-8">No results match the selected filter.</div>
+          )}
+          {visibleResults.map((r, idx) => (
             <div
               key={idx}
               className={`rounded-xl border overflow-hidden ${
@@ -134,16 +194,25 @@ export default function OsintAnalyzer() {
                     </div>
                   </div>
                 </div>
-                <div
-                  className={`text-sm font-bold ${
-                    r.error
-                      ? 'text-amber-400'
-                      : r.result.breachCount > 0
-                        ? 'text-red-400'
-                        : 'text-emerald-400'
-                  }`}
-                >
-                  {r.error ? 'Error' : r.result.breachCount > 0 ? `${r.result.breachCount} Breach${r.result.breachCount !== 1 ? 'es' : ''} Found` : 'No Leaks Detected'}
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`text-sm font-bold ${
+                      r.error
+                        ? 'text-amber-400'
+                        : r.result.breachCount > 0
+                          ? 'text-red-400'
+                          : 'text-emerald-400'
+                    }`}
+                  >
+                    {r.error ? 'Error' : r.result.breachCount > 0 ? `${r.result.breachCount} Breach${r.result.breachCount !== 1 ? 'es' : ''} Found` : 'No Leaks Detected'}
+                  </div>
+                  <button
+                    onClick={() => setResults(prev => prev.filter((_, i) => i !== idx))}
+                    aria-label="Remove result"
+                    className="text-slate-600 hover:text-red-400 transition p-1 rounded"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
