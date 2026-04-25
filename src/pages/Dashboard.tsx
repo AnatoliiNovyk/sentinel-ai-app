@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
-  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap,
+  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
@@ -17,6 +17,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+  const [findingsSearch, setFindingsSearch] = useState('');
+  const [findingsSort, setFindingsSort] = useState<'severity' | 'newest' | 'oldest' | 'title'>('severity');
 
   useEffect(() => {
     if (!user) return;
@@ -406,16 +408,56 @@ export default function Dashboard() {
               View all <ArrowRight className="w-3 h-3" />
             </button>
           </div>
+          {/* Search + sort controls */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <div className="relative flex-1 min-w-48 max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <input
+                value={findingsSearch}
+                onChange={e => setFindingsSearch(e.target.value)}
+                placeholder="Search findings…"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+              {([['severity', 'Severity'], ['newest', 'Newest'], ['oldest', 'Oldest'], ['title', 'A→Z']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setFindingsSort(val)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition ${
+                    findingsSort === val
+                      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                      : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="divide-y divide-slate-800/50">
-            {[...openVulns]
-              .sort((a, b) => {
-                const sev: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-                const sd = (sev[b.severity] ?? 0) - (sev[a.severity] ?? 0);
-                if (sd !== 0) return sd;
-                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-              })
-              .slice(0, 8)
-              .map(v => {
+            {(() => {
+              const SEV_W: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+              const q = findingsSearch.trim().toLowerCase();
+              const filtered = openVulns.filter(v =>
+                !q || v.title.toLowerCase().includes(q) || (v.asset ?? '').toLowerCase().includes(q) || (v.cve_id ?? '').toLowerCase().includes(q)
+              );
+              const sorted = [...filtered].sort((a, b) => {
+                if (findingsSort === 'severity') {
+                  const sd = (SEV_W[b.severity] ?? 0) - (SEV_W[a.severity] ?? 0);
+                  return sd !== 0 ? sd : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                }
+                if (findingsSort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (findingsSort === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                if (findingsSort === 'title') return a.title.localeCompare(b.title);
+                return 0;
+              });
+              const displayed = sorted.slice(0, 10);
+              if (displayed.length === 0) return (
+                <div className="py-8 text-center text-sm text-slate-500">No findings match the search.</div>
+              );
+              return displayed.map(v => {
                 const proj = projects.find(p => p.id === v.project_id);
                 const ageDays = Math.floor((Date.now() - new Date(v.created_at).getTime()) / 86_400_000);
                 const sevColors: Record<string, string> = {
@@ -450,7 +492,8 @@ export default function Dashboard() {
                     <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">{ageDays}d</span>
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
         </div>
       )}
