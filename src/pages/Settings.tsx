@@ -3,7 +3,7 @@ import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
   Webhook, Users, Plus, Trash2, Server, RefreshCw, WifiOff,
-  Eye, EyeOff, Key
+  Eye, EyeOff, Key, Lock, Moon, Sun
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -161,6 +161,10 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
+  // Security settings
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+
   // Agent health
   const [agentUrl, setAgentUrl] = useState(() => localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_URL);
   const [agentHealth, setAgentHealth] = useState<AgentHealthData | null>(null);
@@ -219,6 +223,7 @@ export default function Settings() {
     if (!user) return;
     setSaving(true);
     setSaved(false);
+    localStorage.setItem('darkMode', String(darkMode));
     await supabase.from('profiles').update({ full_name: fullName, company, sla_config: sla }).eq('id', user.id);
     setSaving(false);
     setSaved(true);
@@ -289,6 +294,59 @@ export default function Settings() {
           <div>
             <label htmlFor="company" className="block text-sm text-slate-300 mb-1.5">Company</label>
             <input id="company" value={company} onChange={(e) => setCompany(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+          </div>
+        </div>
+      </section>
+
+      {/* Security & Preferences */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <h2 className="font-semibold mb-1 flex items-center gap-2"><Lock className="w-4 h-4 text-emerald-400" /> Security & Preferences</h2>
+        <p className="text-sm text-slate-500 mb-5">Manage your security settings and UI preferences.</p>
+        <div className="space-y-4">
+          {/* Two-Factor Authentication */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-slate-800 hover:border-slate-700 transition">
+            <div className="flex items-center gap-3">
+              <Lock className="w-5 h-5 text-amber-500" />
+              <div>
+                <div className="text-sm font-medium text-white">Two-Factor Authentication</div>
+                <div className="text-xs text-slate-500">Add an extra layer of security to your account</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  twoFactorEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Dark Mode */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-slate-800 hover:border-slate-700 transition">
+            <div className="flex items-center gap-3">
+              {darkMode ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-yellow-500" />}
+              <div>
+                <div className="text-sm font-medium text-white">Dark Mode</div>
+                <div className="text-xs text-slate-500">Use dark theme throughout the application</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                darkMode ? 'bg-emerald-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  darkMode ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </div>
       </section>
