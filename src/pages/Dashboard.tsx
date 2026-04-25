@@ -364,6 +364,67 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── Top open findings ──────────────────────────────────────────── */}
+      {openVulns.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold">Top open findings</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Highest-severity unresolved vulnerabilities across all projects</p>
+            </div>
+            <button onClick={() => navigate('/projects')} className="text-xs text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1">
+              View all <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-800/50">
+            {[...openVulns]
+              .sort((a, b) => {
+                const sev: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+                const sd = (sev[b.severity] ?? 0) - (sev[a.severity] ?? 0);
+                if (sd !== 0) return sd;
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+              })
+              .slice(0, 8)
+              .map(v => {
+                const proj = projects.find(p => p.id === v.project_id);
+                const ageDays = Math.floor((Date.now() - new Date(v.created_at).getTime()) / 86_400_000);
+                const sevColors: Record<string, string> = {
+                  critical: 'text-red-300 bg-red-500/10 border-red-500/20',
+                  high:     'text-orange-300 bg-orange-500/10 border-orange-500/20',
+                  medium:   'text-yellow-300 bg-yellow-500/10 border-yellow-500/20',
+                  low:      'text-slate-300 bg-slate-500/10 border-slate-500/20',
+                  info:     'text-sky-300 bg-sky-500/10 border-sky-500/20',
+                };
+                return (
+                  <div key={v.id} className="py-3 flex items-center gap-3 min-w-0">
+                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border capitalize ${sevColors[v.severity] ?? sevColors.info}`}>
+                      {v.severity}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-slate-200 truncate">{v.title}</div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                        {proj && <span className="truncate">{proj.name}</span>}
+                        {v.cve_id && (
+                          <a
+                            href={`https://nvd.nist.gov/vuln/detail/${v.cve_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sky-400 hover:text-sky-300 hover:underline font-mono shrink-0"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {v.cve_id}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">{ageDays}d</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
