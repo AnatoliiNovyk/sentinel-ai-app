@@ -18,10 +18,6 @@ const {
   mockVulnUpdate: vi.fn(),
 }));
 
-vi.mock('../../context/useAuth', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-
 vi.mock('../../lib/aiGateway', () => ({
   callAiGateway: mockCallAiGateway,
 }));
@@ -157,6 +153,12 @@ describe('Scans integration flow', () => {
     fireEvent.click(screen.getByText('generate-ai-fix'));
 
     await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1));
+    expect(mockCallAiGateway).toHaveBeenCalledWith([
+      expect.objectContaining({ role: 'user', content: expect.stringContaining('Outdated package') }),
+    ]);
+    expect(mockVulnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Fix it', remediation: 'Update package', remediation_code: 'npm update' }),
+    );
 
     await waitFor(() => {
       expect(mockGetScanVulnerabilities).toHaveBeenCalledTimes(2);

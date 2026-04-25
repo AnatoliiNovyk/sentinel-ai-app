@@ -134,7 +134,7 @@ const Scans = () => {
       await loadScans(project.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      alert('Failed to start scan: ' + message);
+      setAiGenError('Failed to start scan: ' + message);
     } finally {
       setIsDispatching(false);
     }
@@ -176,7 +176,7 @@ Respond ONLY with valid JSON in this exact format:
         // non-JSON response — use raw content as explanation
       }
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('vulnerabilities')
         .update({
           description: explanation || v.description,
@@ -184,6 +184,7 @@ Respond ONLY with valid JSON in this exact format:
           remediation_code: code || v.remediation_code,
         })
         .eq('id', v.id);
+      if (updateError) throw new Error(updateError.message);
 
       await loadVulnerabilities(v.scan_id);
     } catch (err) {

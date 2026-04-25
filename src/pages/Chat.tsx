@@ -137,7 +137,6 @@ export default function Chat() {
         setThinkingLabel(`Running ${TOOL_LABELS[agentTurn.toolCalls[0]?.name] ?? 'tool'}`);
         aiContent = agentTurn.content;
       } else {
-        clearInterval(phaseTimer);
         setThinkingLabel('Calling AI gateway');
         // Build conversation history for the gateway (last 10 messages)
         const history: ChatMessage[] = messages.slice(-10).map((m) => ({
@@ -156,17 +155,18 @@ export default function Chat() {
       clearInterval(phaseTimer);
     }
 
-    const { data: aiMsg } = await supabase
-      .from('ai_messages')
-      .insert({ conversation_id: convoId, user_id: user.id, role: 'assistant', content: aiContent })
-      .select()
-      .maybeSingle();
-
-    if (aiMsg) {
-      setMessages((p) => [...p, aiMsg]);
+    try {
+      const { data: aiMsg } = await supabase
+        .from('ai_messages')
+        .insert({ conversation_id: convoId, user_id: user.id, role: 'assistant', content: aiContent })
+        .select()
+        .maybeSingle();
+      if (aiMsg) {
+        setMessages((p) => [...p, aiMsg]);
+      }
+    } finally {
+      setSending(false);
     }
-
-    setSending(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
