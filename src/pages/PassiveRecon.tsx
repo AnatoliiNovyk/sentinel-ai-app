@@ -1,6 +1,13 @@
-import { useState } from 'react';
-import { Search, Globe, AlertTriangle, Loader2, Info, Terminal } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Search, Globe, AlertTriangle, Loader2, Info, Terminal, Copy, Check, Download } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { downloadFile } from '../lib/exporters';
+
+const MOCK_PORTS = [
+  { port: '22/tcp',  state: 'open', service: 'ssh',      version: 'OpenSSH 8.2p1 Ubuntu 4ubuntu0.5' },
+  { port: '80/tcp',  state: 'open', service: 'http',     version: 'nginx 1.18.0' },
+  { port: '443/tcp', state: 'open', service: 'ssl/http', version: 'nginx 1.18.0' },
+];
 
 export default function ActiveRecon() {
   const { user } = useAuth();
@@ -8,6 +15,26 @@ export default function ActiveRecon() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'queued' | 'running' | 'done'>('idle');
+  const [copied, setCopied] = useState(false);
+
+  const copyOutput = useCallback(async () => {
+    const text = MOCK_PORTS.map(p => `${p.port.padEnd(10)} ${p.state.padEnd(6)} ${p.service.padEnd(10)} ${p.version}`).join('\n');
+    await navigator.clipboard.writeText(`nmap -sV -sC -T4 --open ${target}\n\nPORT       STATE  SERVICE    VERSION\n${text}\n\nScan complete.`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [target]);
+
+  const exportResults = useCallback((fmt: 'csv' | 'json') => {
+    const date = new Date().toISOString().split('T')[0];
+    const slug = target.replace(/[^a-z0-9]/gi, '_');
+    if (fmt === 'csv') {
+      const rows = ['Port,State,Service,Version', ...MOCK_PORTS.map(p => `${p.port},${p.state},${p.service},"${p.version}"`)].join('\n');
+      downloadFile(`recon-${slug}-${date}.csv`, rows, 'text/csv');
+    } else {
+      const payload = { target, scannedAt: new Date().toISOString(), ports: MOCK_PORTS };
+      downloadFile(`recon-${slug}-${date}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    }
+  }, [target]);
 
   const handleScan = async () => {
     if (!target.trim() || !user) return;
@@ -77,9 +104,35 @@ export default function ActiveRecon() {
 
         {status !== 'idle' && (
           <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs">
-            <div className="flex items-center gap-2 mb-2">
-              <Terminal className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-slate-400">sentinel-agent@node-1:~$</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-slate-400">sentinel-agent@node-1:~$</span>
+              </div>
+              {status === 'done' && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={copyOutput}
+                    aria-label="Copy output"
+                    className="inline-flex items-center gap-1 text-[10px] border border-slate-700 hover:border-slate-500 px-2 py-1 rounded text-slate-400 hover:text-white transition"
+                  >
+                    {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => exportResults('csv')}
+                    className="inline-flex items-center gap-1 text-[10px] border border-slate-700 hover:border-slate-500 px-2 py-1 rounded text-slate-400 hover:text-white transition"
+                  >
+                    <Download className="w-3 h-3" /> CSV
+                  </button>
+                  <button
+                    onClick={() => exportResults('json')}
+                    className="inline-flex items-center gap-1 text-[10px] border border-slate-700 hover:border-slate-500 px-2 py-1 rounded text-slate-400 hover:text-white transition"
+                  >
+                    <Download className="w-3 h-3" /> JSON
+                  </button>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <div className="text-emerald-400">nmap -sV -sC -T4 --open {target}</div>
@@ -93,10 +146,10 @@ export default function ActiveRecon() {
               )}
               {status === 'done' && (
                 <>
-                  <div className="text-emerald-300">PORT     STATE SERVICE VERSION</div>
-                  <div className="text-slate-300">22/tcp   open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.5</div>
-                  <div className="text-slate-300">80/tcp   open  http    nginx 1.18.0</div>
-                  <div className="text-slate-300">443/tcp  open  ssl/http nginx 1.18.0</div>
+                  <div className="text-emerald-300">PORT       STATE  SERVICE    VERSION</div>
+                  {MOCK_PORTS.map(p => (
+                    <div key={p.port} className="text-slate-300">{p.port.padEnd(10)} {p.state.padEnd(6)} {p.service.padEnd(10)} {p.version}</div>
+                  ))}
                   <div className="text-emerald-500 mt-2 font-bold">Scan complete. Results added to Scans dashboard.</div>
                 </>
               )}
