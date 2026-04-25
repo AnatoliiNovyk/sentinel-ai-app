@@ -223,7 +223,8 @@ function parseNmapXml(xml: string, target: string): Finding[] {
   return findings;
 }
 
-const NMAP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const NMAP_TIMEOUT_MS   = 5 * 60 * 1000; // 5 minutes
+const NUCLEI_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 
 async function runNmap(target: string): Promise<Finding[]> {
   const safeTarget = sanitizeTarget(target);
@@ -252,6 +253,102 @@ async function runNmap(target: string): Promise<Finding[]> {
       throw new Error('nmap is not installed. Run: apt-get install -y nmap');
     }
     throw new Error(`nmap failed: ${message}`);
+  }
+}
+
+// Maps nuclei severity string to Finding severity
+function nucleiSeverityMap(raw: string): Finding['severity'] {
+  switch (raw.toLowerCase()) {
+    case 'critical': return 'critical';
+    case 'high':     return 'high';
+    case 'medium':   return 'medium';
+    case 'low':      return 'low';
+    default:         return 'info';
+  }
+}
+
+/**
+ * Parses nuclei JSONL output (one JSON object per line).
+ * Each line is a nuclei finding with id, info.name, info.severity, matched-at, etc.
+ */
+function parseNucleiOutput(output: string, target: string): Finding[] {
+  const findings: Finding[] = [];
+
+  for (const line of output.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || !trimmed.startsWith('{')) continue;
+
+    try {
+      const entry = JSON.parse(trimmed) as {
+        'template-id'?: string;
+        info?: { name?: string; severity?: string; description?: string; reference?: string[] };
+        'matched-at'?: string;
+        host?: string;
+        type?: string;
+      };
+
+      const name        = entry.info?.name        ?? entry['template-id'] ?? 'Unknown finding';
+      const severity    = nucleiSeverityMap(entry.info?.severity ?? 'info');
+      const description = entry.info?.description ?? `Nuclei template matched on ${entry['matched-at'] ?? target}`;
+      const matchedAt   = entry['matched-at'] ?? target;
+      const reference   = entry.info?.reference?.[0];
+
+      findings.push({
+        title: name,
+        description: `${description}\nMatched at: ${matchedAt}`,
+        severity,
+        asset: target,
+        remediation: reference
+          ? `See: ${reference}`
+          : 'Review and patch the identified vulnerability based on template guidance.',
+        remediation_type: 'patch',
+        status: 'open',
+      });
+    } catch {
+      // skip malformed lines
+    }
+  }
+
+  if (findings.length === 0) {
+    findings.push({
+      title: 'No vulnerabilities detected by Nuclei',
+      description: `Nuclei scan of ${target} completed. No template matches found.`,
+      severity: 'info',
+      asset: target,
+      status: 'open',
+    });
+  }
+
+  return findings;
+}
+
+async function runNuclei(target: string): Promise<Finding[]> {
+  const safeTarget = sanitizeTarget(target);
+  console.log(`🔬 Running nuclei on ${safeTarget}...`);
+
+  try {
+    // -u: target URL/host, -j: JSONL output, -silent: no banner
+    // -severity: critical,high,medium,low — skip info to reduce noise
+    // -nc: no colour, -timeout 10: per-request timeout
+    const { stdout, stderr } = await execFileAsync(
+      'nuclei',
+      ['-u', safeTarget, '-j', '-silent', '-nc', '-severity', 'critical,high,medium,low', '-timeout', '10'],
+      { timeout: NUCLEI_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }
+    );
+
+    if (stderr && !stdout) {
+      throw new Error(`nuclei stderr: ${stderr.slice(0, 500)}`);
+    }
+
+    const findings = parseNucleiOutput(stdout, safeTarget);
+    console.log(`✅ nuclei found ${findings.length} finding(s) on ${safeTarget}`);
+    return findings;
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
+      throw new Error('nuclei is not installed. Run: apt-get install -y nuclei or install from https://github.com/projectdiscovery/nuclei');
+    }
+    throw new Error(`nuclei failed: ${message}`);
   }
 }
 
@@ -310,7 +407,10 @@ async function runJob(job: ScanJob) {
         remediation_type: 'manual',
         status: 'open'
       }];
+    } else if (job.scanner === 'nuclei' || job.scanner === 'nuclei-scan') {
+      findings = await runNuclei(job.target);
     } else {
+      // default: nmap port scan
       findings = await runNmap(job.target);
     }
 
