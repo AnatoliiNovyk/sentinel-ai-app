@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, Search, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
 import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
@@ -59,6 +59,7 @@ export default function FindingsTab({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   const slaConfig = useMemo(
     () => ({ ...DEFAULT_SLA_CONFIG, ...(profile?.sla_config ?? {}) }),
@@ -85,6 +86,7 @@ export default function FindingsTab({
   }, [vulns, slaConfig, now]);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return [...vulns]
       .filter((v) => (statusFilter === 'all' ? true : v.status === statusFilter))
       .filter((v) => (severityFilter === 'all' ? true : v.severity === severityFilter))
@@ -93,6 +95,11 @@ export default function FindingsTab({
         const s = slaStateFor(v, slaConfig, now);
         return slaFilter === 'overdue' ? s === 'overdue' : s === 'at_risk';
       })
+      .filter((v) => !q ||
+        v.title.toLowerCase().includes(q) ||
+        (v.cve_id ?? '').toLowerCase().includes(q) ||
+        (v.description ?? '').toLowerCase().includes(q)
+      )
       .sort((a, b) => {
         if (a.status !== b.status) {
           const aOpen = a.status === 'open' || a.status === 'in_progress' ? 0 : 1;
@@ -101,7 +108,7 @@ export default function FindingsTab({
         }
         return SEVERITY_WEIGHT[b.severity] - SEVERITY_WEIGHT[a.severity];
       });
-  }, [vulns, statusFilter, severityFilter, slaFilter, slaConfig, now]);
+  }, [vulns, statusFilter, severityFilter, slaFilter, slaConfig, now, search]);
 
   const allFilteredIds = useMemo(() => filtered.map(v => v.id), [filtered]);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selected.has(id));
@@ -152,6 +159,26 @@ export default function FindingsTab({
 
   return (
     <div className="space-y-4">
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search findings by title, CVE, or description…"
+          className="w-full bg-slate-900 border border-slate-800 rounded-md pl-9 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition"
+            aria-label="Clear search"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 pr-2">
           <Filter className="w-3.5 h-3.5" /> Status
