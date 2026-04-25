@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter, Search, ArrowUpDown } from 'lucide-react';
 import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
 import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -24,6 +24,8 @@ export default function SupplyChain() {
   const [error, setError] = useState<string | null>(null);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'prod' | 'dev'>('all');
+  const [pkgSearch, setPkgSearch] = useState('');
+  const [pkgSort, setPkgSort] = useState<'risk_desc' | 'risk_asc' | 'name' | 'vulns_desc'>('risk_desc');
 
   useEffect(() => {
     // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
@@ -104,6 +106,19 @@ export default function SupplyChain() {
   const filteredByType = typeFilter === 'all'
     ? filteredVulnDeps
     : filteredVulnDeps.filter(r => r.dep.type === typeFilter);
+
+  const displayedDeps = useMemo(() => {
+    const q = pkgSearch.trim().toLowerCase();
+    const searched = q ? filteredByType.filter(r => r.dep.name.toLowerCase().includes(q)) : filteredByType;
+    return [...searched].sort((a, b) => {
+      const maxSev = (r: typeof a) => Math.max(...r.vulns.map(v => SEV_WEIGHT[v.severity] ?? 0));
+      if (pkgSort === 'risk_desc') return maxSev(b) - maxSev(a);
+      if (pkgSort === 'risk_asc') return maxSev(a) - maxSev(b);
+      if (pkgSort === 'name') return a.dep.name.localeCompare(b.dep.name);
+      if (pkgSort === 'vulns_desc') return b.vulns.length - a.vulns.length;
+      return 0;
+    });
+  }, [filteredByType, pkgSearch, pkgSort]);
 
   const exportCsv = () => {
     if (!results) return;
@@ -263,13 +278,43 @@ export default function SupplyChain() {
                   ))}
                 </div>
               </div>
+              {/* Package search + sort */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-48 max-w-xs">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+                  <input
+                    value={pkgSearch}
+                    onChange={e => setPkgSearch(e.target.value)}
+                    placeholder="Search package name…"
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+                  {([['risk_desc', 'Risk ↓'], ['risk_asc', 'Risk ↑'], ['name', 'A→Z'], ['vulns_desc', 'Vulns ↓']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setPkgSort(val)}
+                      className={`text-xs px-2.5 py-1.5 rounded-md border transition ${
+                        pkgSort === val
+                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                          : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {pkgSearch && (
+                  <span className="text-xs text-slate-500">{displayedDeps.length} result{displayedDeps.length !== 1 ? 's' : ''}</span>
+                )}
+              </div>
               <div className="grid grid-cols-1 gap-4">
-                {filteredByType
-                  .sort((a, b) => {
-                    const maxSev = (r: typeof a) => Math.max(...r.vulns.map(v => SEV_WEIGHT[v.severity] ?? 0));
-                    return maxSev(b) - maxSev(a);
-                  })
-                  .map((r, i) => (
+                {displayedDeps.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center text-sm text-slate-500">
+                    No packages match the current filters.
+                  </div>
+                ) : displayedDeps.map((r, i) => (
                   <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div>
