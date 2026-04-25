@@ -14,6 +14,7 @@ export default function Compliance() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [framework, setFramework] = useState<'all' | 'soc2' | 'nist' | 'cis' | 'mitre'>('all');
 
   useEffect(() => {
     if (!user) return;
@@ -58,10 +59,19 @@ export default function Compliance() {
   const circumference = 2 * Math.PI * 52;
   const dash = (result.soc2Overall / 100) * circumference;
 
-  const exportEvidence = async (format: 'json' | 'markdown' | 'pdf') => {
+  const exportEvidence = async (format: 'json' | 'markdown' | 'pdf' | 'csv') => {
     setExporting(true);
     try {
       const org = profile?.company || profile?.email || 'My Organization';
+      if (format === 'csv') {
+        const rows = ['Framework,Control,Score,OpenFindings,CriticalFindings'];
+        for (const r of result.soc2Rows) rows.push(`SOC2,"${r.id} — ${r.label}",${r.score},${r.openCount},${r.criticalCount}`);
+        for (const r of result.nistRows) rows.push(`NIST,"${r.id} — ${r.label}",${r.score},${r.openCount},0`);
+        for (const r of result.cisRows) rows.push(`CIS,"${r.id} — ${r.label}",${r.score},${r.openCount},${r.criticalCount}`);
+        for (const r of result.mitreRows) rows.push(`MITRE,"${r.id} — ${r.label}",${r.score},${r.openCount},0`);
+        downloadFile(`compliance-${new Date().toISOString().split('T')[0]}.csv`, rows.join('\n'), 'text/csv');
+        return;
+      }
       const pkg = buildEvidencePackage(vulns, org);
       if (format === 'json') {
         downloadFile(`sentinel-evidence-${new Date().toISOString().split('T')[0]}.json`, JSON.stringify(pkg, null, 2), 'application/json');
@@ -87,6 +97,7 @@ export default function Compliance() {
           </p>
         </div>
         {/* F-15 + F-23: Evidence export & PDF */}
+      {/* ── Export menu ── */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="relative group">
             <button
@@ -96,6 +107,9 @@ export default function Compliance() {
               <Download className="w-3.5 h-3.5" /> Export evidence
             </button>
             <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-10 hidden group-hover:block group-focus-within:block">
+              <button onClick={() => exportEvidence('csv')} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 rounded-t-xl transition">
+                <FileText className="w-3.5 h-3.5 text-amber-400" /> CSV report
+              </button>
               <button onClick={() => exportEvidence('json')} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition">
                 <FileText className="w-3.5 h-3.5 text-sky-400" /> JSON package
               </button>
@@ -110,7 +124,7 @@ export default function Compliance() {
         </div>
       </div>
 
-      {/* ── Top KPIs ─────────────────────────────────────────────────────── */}
+      {/* ── KPIs ── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* SOC2 Gauge */}
         <div className={`md:col-span-1 rounded-xl border border-slate-800 bg-gradient-to-b ${soc2BgColor} bg-slate-900/30 p-6 flex flex-col items-center justify-center gap-3`}>
@@ -144,23 +158,48 @@ export default function Compliance() {
         <StatCard label="Total assessed" value={result.totalVulns} icon={Activity} accent="sky" />
       </div>
 
-      {/* ── SOC 2 Criteria breakdown ──────────────────────────────────────── */}
+      {/* ── Framework filter tabs ── */}
+      <div className="flex items-center gap-1.5 border border-slate-800 rounded-lg p-1 w-fit bg-slate-900/40">
+        {(['all', 'soc2', 'nist', 'cis', 'mitre'] as const).map((f) => {
+          const labels: Record<typeof f, string> = { all: 'All frameworks', soc2: 'SOC 2', nist: 'NIST CSF', cis: 'CIS Controls', mitre: 'MITRE ATT\u0026CK' };
+          return (
+            <button
+              key={f}
+              onClick={() => setFramework(f)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                framework === f
+                  ? 'bg-slate-800 text-white shadow'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {labels[f]}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── SOC 2 Criteria breakdown ── */}
+      {(framework === 'all' || framework === 'soc2') && (
       <section>
         <SectionHeader icon={BookOpen} title="SOC 2 Trust Services Criteria" color="text-sky-400" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-4">
           {result.soc2Rows.map(row => <Soc2Card key={row.id} row={row} />)}
         </div>
       </section>
+      )}
 
-      {/* ── NIST CSF ─────────────────────────────────────────────────────── */}
+      {/* ── NIST CSF ── */}
+      {(framework === 'all' || framework === 'nist') && (
       <section>
         <SectionHeader icon={ShieldCheck} title="NIST Cybersecurity Framework (CSF)" color="text-emerald-400" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
           {result.nistRows.map(row => <NistCard key={row.id} row={row} />)}
         </div>
       </section>
+      )}
 
-      {/* ── CIS Controls ─────────────────────────────────────────────────── */}
+      {/* ── CIS Controls ── */}
+      {(framework === 'all' || framework === 'cis') && (
       <section>
         <SectionHeader icon={TrendingUp} title="CIS Controls v8" color="text-amber-400" />
         <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
@@ -175,14 +214,17 @@ export default function Compliance() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── MITRE ATT&CK Heatmap ─────────────────────────────────────────── */}
+      {/* ── MITRE ATT&CK Heatmap ── */}
+      {(framework === 'all' || framework === 'mitre') && (
       <section>
         <SectionHeader icon={Zap} title="MITRE ATT&CK Tactics" color="text-red-400" />
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {result.mitreRows.map(row => <MitreCard key={row.id} row={row} />)}
         </div>
       </section>
+      )}
     </div>
   );
 }
