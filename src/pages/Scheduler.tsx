@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Clock, Plus, Trash2, Power, PowerOff, Calendar,
-  Loader2, ChevronDown, Radar, Check,
+  Loader2, ChevronDown, Radar, Check, Play,
 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
+import { dispatchScan } from '../lib/scanDispatch';
+import { errorToUserMessage } from '../lib/errors';
 
 const CADENCES = [
   { hours: 6,   label: 'Every 6 h' },
@@ -37,6 +39,7 @@ export default function SchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [running, setRunning] = useState<string | null>(null);
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
@@ -90,6 +93,16 @@ export default function SchedulerPage() {
 
   const projectName = (id: string) => projects.find(p => p.id === id)?.name ?? id.slice(0, 8);
   const scannerLabel = (id: string) => AVAILABLE_SCANNERS.find(s => s.id === id)?.label ?? id;
+
+  const runNow = async (s: ScanSchedule) => {
+    if (!user || running) return;
+    const project = projects.find(p => p.id === s.project_id);
+    if (!project) return;
+    setRunning(s.id);
+    const result = await dispatchScan(user.id, s.project_id, s.scanner, project.target ?? '');
+    if (!result.ok) alert(errorToUserMessage(result.error));
+    setRunning(null);
+  };
 
   const active  = schedules.filter(s => s.enabled).length;
   const overdue = schedules.filter(s => s.enabled && s.next_run_at && new Date(s.next_run_at) < new Date()).length;
@@ -245,6 +258,16 @@ export default function SchedulerPage() {
                   </div>
                   {/* Actions */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      onClick={() => runNow(s)}
+                      title="Run now"
+                      disabled={running === s.id}
+                      className="p-1.5 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition disabled:opacity-40"
+                    >
+                      {running === s.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Play className="w-3.5 h-3.5" />}
+                    </button>
                     <button
                       onClick={() => toggle(s)}
                       title={s.enabled ? 'Disable' : 'Enable'}
