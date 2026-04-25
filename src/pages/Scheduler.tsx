@@ -8,6 +8,7 @@ import { useAuth } from '../context/useAuth';
 import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
+import { useToast } from '../lib/toastContext';
 import { errorToUserMessage } from '../lib/errors';
 
 const CADENCES = [
@@ -45,6 +46,7 @@ export default function SchedulerPage() {
   const [schedSearch, setSchedSearch] = useState('');
   const schedSearchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(schedSearchRef, () => setSchedSearch(''));
+  const toast = useToast();
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
@@ -111,6 +113,7 @@ export default function SchedulerPage() {
   const remove = async (id: string) => {
     await supabase.from('scan_schedules').delete().eq('id', id);
     setSchedules(prev => prev.filter(x => x.id !== id));
+    toast.success('Schedule deleted.');
   };
 
   const create = async () => {
@@ -129,7 +132,10 @@ export default function SchedulerPage() {
       })
       .select()
       .maybeSingle();
-    if (data) setSchedules(prev => [data as ScanSchedule, ...prev]);
+    if (data) {
+      setSchedules(prev => [data as ScanSchedule, ...prev]);
+      toast.success('Schedule created.');
+    }
     setShowForm(false);
     setSaving(false);
   };
@@ -143,7 +149,11 @@ export default function SchedulerPage() {
     if (!project) return;
     setRunning(s.id);
     const result = await dispatchScan(user.id, s.project_id, s.scanner, project.target ?? '');
-    if (!result.ok) alert(errorToUserMessage(result.error));
+    if (result.ok) {
+      toast.success(`Scan dispatched for ${project.name ?? 'project'}.`);
+    } else {
+      toast.error(errorToUserMessage(result.error));
+    }
     setRunning(null);
   };
 

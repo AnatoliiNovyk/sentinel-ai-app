@@ -22,6 +22,8 @@ import KillChain from './pages/KillChain';
 import Integrations from './pages/Integrations';
 import ApiDocs from './pages/ApiDocs';
 import { Shield } from 'lucide-react';
+import { ToastProvider } from './lib/toastContext';
+import ToastContainer from './components/ToastContainer';
 
 function useShareToken(): string | null {
   return new URLSearchParams(window.location.search).get('share');
@@ -87,7 +89,10 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Shell />
+        <ToastProvider>
+          <Shell />
+          <ToastContainer />
+        </ToastProvider>
       </BrowserRouter>
     </AuthProvider>
   );

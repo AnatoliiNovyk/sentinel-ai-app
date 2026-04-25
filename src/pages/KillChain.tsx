@@ -4,6 +4,7 @@ import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
+import { useToast } from '../lib/toastContext';
 
 type KillChainStep = {
   phase: string;
@@ -25,6 +26,7 @@ export default function KillChain() {
   const [stepSort, setStepSort] = useState<'original' | 'phase' | 'asset'>('original');
   const stepSearchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(stepSearchRef, () => setStepSearch(''));
+  const toast = useToast();
 
   const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
 
@@ -94,6 +96,7 @@ export default function KillChain() {
     if (!filteredChain) return;
     await navigator.clipboard.writeText(buildMarkdown(filteredChain, projectName));
     setCopied(true);
+    toast.success('Kill chain copied to clipboard.');
     setTimeout(() => setCopied(false), 2000);
   }, [filteredChain, projectName, buildMarkdown]);
 

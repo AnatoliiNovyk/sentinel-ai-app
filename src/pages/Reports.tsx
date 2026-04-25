@@ -5,6 +5,7 @@ import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
 import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
+import { useToast } from '../lib/toastContext';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function Reports() {
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc' | 'title-desc'>('date-desc');
   const searchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(searchRef, () => setSearch(''));
+  const toast = useToast();
 
   const remove = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -596,6 +598,7 @@ function GenerateModal({
       await generateLocally();
     }
     setGenerating(false);
+    toast.success('Report generated successfully.');
     onCreated();
   };
 
