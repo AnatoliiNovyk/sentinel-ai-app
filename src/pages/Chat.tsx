@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2 } from 'lucide-react';
 import { marked } from 'marked';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage } from '../lib/supabase';
@@ -43,6 +43,7 @@ export default function Chat() {
   const [sending, setSending] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState('Analyzing');
   const [activeProvider, setActiveProvider] = useState<string>('mock');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -174,6 +175,29 @@ export default function Chat() {
     sendMessage(input);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
+
+  const copyMessage = useCallback(async (id: string, content: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
+  const deleteConversation = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await supabase.from('ai_conversations').delete().eq('id', id);
+    setConversations((p) => p.filter((c) => c.id !== id));
+    if (activeId === id) {
+      setActiveId(null);
+      setMessages([]);
+    }
+  }, [activeId]);
+
   const providerMeta = PROVIDER_META[activeProvider] ?? PROVIDER_META.mock;
 
   return (
@@ -189,16 +213,23 @@ export default function Chat() {
         </div>
         <div className="flex-1 overflow-auto p-2 space-y-1">
           {conversations.map((c) => (
-            <button
+            <div
               key={c.id}
-              onClick={() => setActiveId(c.id)}
-              className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
+              className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition cursor-pointer ${
                 activeId === c.id ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'
               }`}
+              onClick={() => setActiveId(c.id)}
             >
               <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{c.title}</span>
-            </button>
+              <span className="truncate flex-1">{c.title}</span>
+              <button
+                onClick={(e) => deleteConversation(c.id, e)}
+                aria-label="Delete conversation"
+                className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition p-0.5 rounded"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
           ))}
         </div>
       </aside>
@@ -238,12 +269,21 @@ export default function Chat() {
           ) : (
             <div className="max-w-3xl mx-auto space-y-6">
               {messages.map((m) => (
-                <div key={m.id} className="flex gap-4">
+                <div key={m.id} className="group flex gap-4">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${m.role === 'assistant' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800'}`}>
                     {m.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 relative">
                     <div className="text-sm text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: marked.parse(m.content) as string }} />
+                    {m.role === 'assistant' && (
+                      <button
+                        onClick={() => copyMessage(m.id, m.content)}
+                        aria-label="Copy message"
+                        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-300"
+                      >
+                        {copiedId === m.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -266,8 +306,9 @@ export default function Chat() {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              placeholder="Ask anything..."
+              onKeyDown={handleKeyDown}
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+              placeholder="Ask anything… (Enter to send, Shift+Enter for new line)"
               rows={1}
             />
             <button
