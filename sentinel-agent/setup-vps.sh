@@ -38,19 +38,25 @@ wait
 echo "✅ Scanner images ready"
 
 # ─── Clone / update agent code ────────────────────────────────────────────────
-if [ -d "/opt/sentinel-agent" ]; then
+if [ -d "/opt/sentinel-agent-repo" ]; then
   echo "Updating agent code..."
-  cd /opt/sentinel-agent
-  git pull
+  git config --global --add safe.directory /opt/sentinel-agent-repo
+  cd /opt/sentinel-agent-repo && git pull
 else
   echo "Cloning agent code..."
   git clone https://github.com/AnatoliiNovyk/sentinel-ai-app.git /opt/sentinel-agent-repo
-  cp -r /opt/sentinel-agent-repo/sentinel-agent /opt/sentinel-agent
 fi
 
+# Sync src/ and package.json from repo to agent directory
+mkdir -p /opt/sentinel-agent
+cp -r /opt/sentinel-agent-repo/sentinel-agent/src /opt/sentinel-agent/
+cp /opt/sentinel-agent-repo/sentinel-agent/package.json /opt/sentinel-agent/package.json
+cp /opt/sentinel-agent-repo/sentinel-agent/tsconfig.json /opt/sentinel-agent/tsconfig.json
+
 cd /opt/sentinel-agent
-npm ci --omit=dev
-npm run build 2>/dev/null || npx tsc 2>/dev/null || true
+rm -rf node_modules
+npm install
+npm run build
 
 # ─── Configure environment ────────────────────────────────────────────────────
 if [ ! -f "/opt/sentinel-agent/.env" ]; then
