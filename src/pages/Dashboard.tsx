@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
-  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus,
+  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
@@ -15,18 +15,21 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
-      const [scansRes, projectsRes, vulnsRes] = await Promise.all([
+      const [scansRes, projectsRes, vulnsRes, jobsRes] = await Promise.all([
         supabase.from('scans').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
         supabase.from('projects').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('vulnerabilities').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
+        supabase.from('scan_jobs').select('id,scanner,target,status,created_at,project_id').eq('user_id', user.id).in('status', ['pending','running']).order('created_at', { ascending: false }).limit(20),
       ]);
       setScans(scansRes.data ?? []);
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
+      setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
       setLoading(false);
     };
     fetchAll();
@@ -34,9 +37,10 @@ export default function Dashboard() {
       .channel('dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scans', filter: `user_id=eq.${user.id}` }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vulnerabilities', filter: `user_id=eq.${user.id}` }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scan_jobs', filter: `user_id=eq.${user.id}` }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const openVulns = vulns.filter(v => v.status === 'open' || v.status === 'in_progress');
@@ -116,7 +120,7 @@ export default function Dashboard() {
   }, [user, vulns]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const completedScans = scans.filter(s => s.status === 'completed').length;
-  const activeScans    = scans.filter(s => s.status === 'running' || s.status === 'queued').length;
+  const activeScans    = liveJobs.length + scans.filter(s => s.status === 'running' || s.status === 'queued').length;
 
   return (
     <div className="p-8 max-w-7xl space-y-8">
@@ -284,8 +288,33 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Recent activity */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        {/* Live jobs + Recent scans */}
+        <div className="lg:col-span-2 space-y-4">
+          {liveJobs.length > 0 && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-sky-400 animate-pulse" />
+                <span className="text-sm font-semibold text-sky-300">Live scans ({liveJobs.length})</span>
+              </div>
+              <div className="space-y-2">
+                {liveJobs.map(job => (
+                  <div key={job.id} className="flex items-center justify-between text-xs px-3 py-2 rounded-md bg-slate-900/60 border border-slate-800">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping shrink-0" />
+                      <span className="font-medium text-white">{job.scanner}</span>
+                      <span className="text-slate-400 truncate font-mono">{job.target}</span>
+                    </div>
+                    <span className={`shrink-0 px-2 py-0.5 rounded border text-[10px] font-semibold ${
+                      job.status === 'running'
+                        ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
+                        : 'text-slate-400 bg-slate-800 border-slate-700'
+                    }`}>{job.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-semibold">Recent scans</h2>
             <button onClick={() => navigate('/scans')} className="text-xs text-emerald-400 hover:text-emerald-300 transition">
@@ -332,6 +361,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
