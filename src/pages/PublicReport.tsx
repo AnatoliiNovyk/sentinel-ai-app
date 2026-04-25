@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Shield, AlertTriangle, Download } from 'lucide-react';
+import { Shield, AlertTriangle, Download, Moon, Sun, Copy, Check } from 'lucide-react';
 import { supabase, Report } from '../lib/supabase';
 
 export default function PublicReport({ token }: { token: string }) {
   const [report, setReport] = useState<Report | null>(null);
   const [status, setStatus] = useState<'loading' | 'notfound' | 'ok'>('loading');
+  const [darkMode, setDarkMode] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +34,13 @@ export default function PublicReport({ token }: { token: string }) {
     a.download = `${report.title.replace(/\s+/g, '_')}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const copyContent = () => {
+    if (!report) return;
+    navigator.clipboard.writeText(report.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (status === 'loading') {
@@ -62,36 +71,79 @@ export default function PublicReport({ token }: { token: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+    <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
+      <header className={`border-b ${darkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-white/80'} backdrop-blur`}>
         <div className="max-w-4xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className={`flex items-center gap-2 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
               <Shield className="w-4 h-4 text-slate-950" />
             </div>
-            <span className="font-semibold text-white">Sentinel AI</span>
-            <span className="text-slate-600">·</span>
+            <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Sentinel AI</span>
+            <span className={darkMode ? 'text-slate-600' : 'text-slate-300'}>·</span>
             <span>Shared report</span>
           </div>
-          <button
-            onClick={download}
-            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-md text-sm transition"
-          >
-            <Download className="w-4 h-4" /> Markdown
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyContent}
+              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                darkMode
+                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                darkMode
+                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={download}
+              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                darkMode
+                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Download className="w-4 h-4" /> Markdown
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-8 py-10">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">{report.kind} report</div>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">{report.title}</h1>
-        <p className="mt-1 text-sm text-slate-500">Generated {new Date(report.created_at).toLocaleString()}</p>
-
-        <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/30 p-8">
-          <pre className="whitespace-pre-wrap text-sm text-slate-200 font-sans leading-relaxed">{report.content}</pre>
+      <main className={`max-w-4xl mx-auto px-8 py-10`}>
+        <div className={`text-xs font-semibold uppercase tracking-wider ${darkMode ? 'text-slate-500' : 'text-slate-600'}`}>{report.kind} report</div>
+        <h1 className={`mt-1 text-3xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>{report.title}</h1>
+        <div className={`mt-3 flex flex-wrap items-center gap-4 text-sm ${darkMode ? 'text-slate-500' : 'text-slate-600'}`}>
+          <div>Generated {new Date(report.created_at).toLocaleString()}</div>
+          <span className={darkMode ? 'text-slate-700' : 'text-slate-300'}>·</span>
+          <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+            darkMode
+              ? 'bg-emerald-500/10 text-emerald-300'
+              : 'bg-emerald-100 text-emerald-700'
+          }`}>
+            Public Share
+          </div>
         </div>
 
-        <footer className="mt-8 text-center text-xs text-slate-600">
+        <div className={`mt-8 rounded-xl border p-8 ${
+          darkMode
+            ? 'border-slate-800 bg-slate-900/30'
+            : 'border-slate-200 bg-slate-50'
+        }`}>
+          <pre className={`whitespace-pre-wrap text-sm font-sans leading-relaxed ${
+            darkMode ? 'text-slate-200' : 'text-slate-700'
+          }`}>{report.content}</pre>
+        </div>
+
+        <footer className={`mt-8 text-center text-xs ${darkMode ? 'text-slate-600' : 'text-slate-500'}`}>
           Delivered by Sentinel AI · Read-only shared view
         </footer>
       </main>
