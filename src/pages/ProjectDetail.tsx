@@ -56,6 +56,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [launching, setLaunching] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[]>([]);
 
   const meta = ENV_META[project.environment] ?? ENV_META.external;
   const EnvIcon = meta.icon;
@@ -98,6 +99,16 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       } else {
         setVulns([]);
       }
+
+      // Live jobs for progress indicator
+      const { data: jobsData } = await supabase
+        .from('scan_jobs')
+        .select('id,scanner,target,status,started_at,created_at')
+        .eq('project_id', project.id)
+        .in('status', ['pending', 'running'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+      setLiveJobs((jobsData ?? []) as typeof liveJobs);
     } catch (err) {
       console.error('Failed to load project details:', err);
     }
@@ -273,7 +284,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
           onUpdated={(next) => setVulns((prev) => prev.map((v) => (v.id === next.id ? next : v)))}
         />
       )}
-      {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} />}
+      {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} liveJobs={liveJobs} />}
       {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}
       {tab === 'activity' && <ActivityTab items={activity} />}
 
@@ -403,7 +414,12 @@ function OverviewTab({
   );
 }
 
-function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerability[]; project: Project }) {
+function ScansTab({ scans, vulns, project, liveJobs }: {
+  scans: Scan[];
+  vulns: Vulnerability[];
+  project: Project;
+  liveJobs: {id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[];
+}) {
   const vulnsByScan = useMemo(() => {
     return vulns.reduce((acc, v) => {
       (acc[v.scan_id] ??= []).push(v);
@@ -415,6 +431,7 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
     return (
       <div className="space-y-6">
         <AgentLogsPanel projectId={project.id} />
+        {liveJobs.length > 0 && <ScanProgressBanner jobs={liveJobs} />}
         <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
           <Radar className="w-8 h-8 text-slate-600 mx-auto mb-2" />
           <div className="text-sm text-slate-400">No scans yet for this project.</div>
@@ -426,6 +443,7 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
   return (
     <div className="space-y-6">
       <AgentLogsPanel projectId={project.id} />
+      {liveJobs.length > 0 && <ScanProgressBanner jobs={liveJobs} />}
       {/* F-07: Continuous Monitoring Diff */}
       {scans.filter(s => s.status === 'completed').length >= 2 && (
         <ScanDiff scans={scans} vulns={vulns} />
@@ -460,6 +478,46 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
         );
       })}
       </div>
+    </div>
+  );
+}
+
+// ─── Scan Progress Banner ─────────────────────────────────────────────────────
+function ScanProgressBanner({ jobs }: {
+  jobs: {id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[];
+}) {
+  return (
+    <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 space-y-2">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+        <span className="text-sm font-semibold text-sky-300">
+          {jobs.length === 1 ? 'Scan in progress' : `${jobs.length} scans in progress`}
+        </span>
+      </div>
+      {jobs.map((job) => (
+        <div key={job.id} className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-medium text-white">{job.scanner}</span>
+              <span className="text-slate-400 font-mono truncate ml-2">{job.target}</span>
+              <span className={`ml-2 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                job.status === 'running'
+                  ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
+                  : 'text-slate-400 bg-slate-800 border-slate-700'
+              }`}>{job.status}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  job.status === 'running'
+                    ? 'bg-sky-500 w-3/4 animate-pulse'
+                    : 'bg-slate-600 w-1/6'
+                }`}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
