@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Clock, Plus, Trash2, Power, PowerOff, Calendar,
-  Loader2, ChevronDown, Radar, Check, Play,
+  Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown,
 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -40,11 +40,42 @@ export default function SchedulerPage() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'nearest' | 'latest' | 'enabled' | 'disabled'>('nearest');
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
   const [formScanner, setFormScanner] = useState(AVAILABLE_SCANNERS[0].id);
   const [formCadence, setFormCadence] = useState(24);
+
+  const sortedSchedules = useMemo(() => {
+    const schedulesCopy = [...schedules];
+    switch (sortBy) {
+      case 'nearest':
+        return schedulesCopy.sort((a, b) => {
+          const aNext = new Date(a.next_run_at || '').getTime();
+          const bNext = new Date(b.next_run_at || '').getTime();
+          return aNext - bNext;
+        });
+      case 'latest':
+        return schedulesCopy.sort((a, b) => {
+          const aNext = new Date(a.next_run_at || '').getTime();
+          const bNext = new Date(b.next_run_at || '').getTime();
+          return bNext - aNext;
+        });
+      case 'enabled':
+        return schedulesCopy.sort((a, b) => {
+          if (a.enabled === b.enabled) return 0;
+          return a.enabled ? -1 : 1;
+        });
+      case 'disabled':
+        return schedulesCopy.sort((a, b) => {
+          if (a.enabled === b.enabled) return 0;
+          return a.enabled ? 1 : -1;
+        });
+      default:
+        return schedulesCopy;
+    }
+  }, [schedules, sortBy]);
 
   const load = async () => {
     if (!user) return;
@@ -221,17 +252,39 @@ export default function SchedulerPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
-          {/* Table header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] px-5 py-3 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-            <span>Project</span>
-            <span>Scanner</span>
-            <span>Frequency</span>
-            <span>Last run</span>
-            <span>Next run</span>
-            <span />
+          {/* Table header with sort controls */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] flex-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              <span>Project</span>
+              <span>Scanner</span>
+              <span>Frequency</span>
+              <span>Last run</span>
+              <span>Next run</span>
+              <span />
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-xs text-slate-500 font-medium">Sort by:</span>
+              {(['nearest', 'latest', 'enabled', 'disabled'] as const).map(sort => (
+                <button
+                  key={sort}
+                  onClick={() => setSortBy(sort)}
+                  className={`text-xs px-2.5 py-1 rounded-md border capitalize transition ${
+                    sortBy === sort
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {sort === 'nearest' && 'Next run'}
+                  {sort === 'latest' && 'Latest'}
+                  {sort === 'enabled' && 'Enabled'}
+                  {sort === 'disabled' && 'Disabled'}
+                </button>
+              ))}
+            </div>
           </div>
+          {/* Table rows */}
           <div className="divide-y divide-slate-800/50">
-            {schedules.map(s => {
+            {sortedSchedules.map(s => {
               const cadenceLabel = CADENCES.find(c => c.hours === s.cadence_hours)?.label ?? `${s.cadence_hours}h`;
               return (
                 <div key={s.id} className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] px-5 py-4 items-center hover:bg-slate-900/50 transition group ${!s.enabled ? 'opacity-50' : ''}`}>
