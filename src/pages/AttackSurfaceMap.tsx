@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { riskBand } from '../lib/riskScore';
-import { ShieldAlert, RefreshCw, Info } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Info, Download } from 'lucide-react';
+import { downloadFile } from '../lib/exporters';
 
 // ─── Physics types ────────────────────────────────────────────────────────────
 type SimNode = {
@@ -203,6 +204,23 @@ export default function AttackSurfaceMap() {
   const totalCritical = vulns.filter(v => v.severity === 'critical' && v.status !== 'resolved').length;
   const totalHigh     = vulns.filter(v => v.severity === 'high'     && v.status !== 'resolved').length;
 
+  const exportNodes = useCallback((fmt: 'json' | 'csv') => {
+    const date = new Date().toISOString().split('T')[0];
+    if (fmt === 'json') {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        projects: projects.map(p => ({ id: p.id, name: p.name, target: p.target, riskScore: p.risk_score ?? 0 })),
+        findings: vulns.filter(v => v.status !== 'resolved').map(v => ({ id: v.id, title: v.title, severity: v.severity, status: v.status, asset: v.asset })),
+      };
+      downloadFile(`attack-surface-${date}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    } else {
+      const rows = ['Type,Name,Target/Asset,RiskScore/Severity,Status'];
+      for (const p of projects) rows.push(`Project,"${p.name}","${p.target ?? ''}",${p.risk_score ?? 0},active`);
+      for (const v of vulns.filter(x => x.status !== 'resolved')) rows.push(`Finding,"${v.title}","${v.asset}",${v.severity},${v.status}`);
+      downloadFile(`attack-surface-${date}.csv`, rows.join('\n'), 'text/csv');
+    }
+  }, [projects, vulns]);
+
   return (
     <div className="p-8 max-w-7xl">
       {/* Header */}
@@ -213,12 +231,30 @@ export default function AttackSurfaceMap() {
             Interactive visualization of your infrastructure risk exposure and vulnerability topology.
           </p>
         </div>
-        <button
-          onClick={restart}
-          className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-300 px-3 py-2 rounded-md text-sm transition"
-        >
-          <RefreshCw className="w-3.5 h-3.5" /> Re-layout
-        </button>
+        <div className="flex items-center gap-2">
+          {nodes.length > 1 && (
+            <>
+              <button
+                onClick={() => exportNodes('csv')}
+                className="inline-flex items-center gap-1.5 border border-slate-700 hover:border-slate-500 text-slate-300 px-3 py-2 rounded-md text-sm transition"
+              >
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+              <button
+                onClick={() => exportNodes('json')}
+                className="inline-flex items-center gap-1.5 border border-slate-700 hover:border-slate-500 text-slate-300 px-3 py-2 rounded-md text-sm transition"
+              >
+                <Download className="w-3.5 h-3.5" /> JSON
+              </button>
+            </>
+          )}
+          <button
+            onClick={restart}
+            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-300 px-3 py-2 rounded-md text-sm transition"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Re-layout
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}
