@@ -105,7 +105,14 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
 
   useEffect(() => {
     load();
-  }, [load]);
+    const channel = supabase
+      .channel(`project-detail-${project.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scans', filter: `project_id=eq.${project.id}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vulnerabilities' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scan_jobs', filter: `project_id=eq.${project.id}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [load, project.id]);
 
   const totals = useMemo(() => {
     return vulns.reduce(
