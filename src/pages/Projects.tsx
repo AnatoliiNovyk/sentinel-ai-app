@@ -168,7 +168,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold text-white">New project</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>

@@ -221,7 +221,7 @@ function ReportView({ report: initial, onBack }: { report: Report; onBack: () =>
           <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
               <h2 className="font-semibold">Share report</h2>
-              <button onClick={() => setShareOpen(false)} className="text-slate-500 hover:text-white">
+              <button onClick={() => setShareOpen(false)} aria-label="Close" className="text-slate-500 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -236,6 +236,7 @@ function ReportView({ report: initial, onBack }: { report: Report; onBack: () =>
                     <input
                       readOnly
                       value={shareUrl}
+                      aria-label="Share URL"
                       onFocus={(e) => e.currentTarget.select()}
                       className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs font-mono text-slate-200"
                     />
@@ -477,7 +478,7 @@ function GenerateModal({
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold">Generate report</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -486,6 +487,7 @@ function GenerateModal({
             <label className="block text-sm text-slate-300 mb-1.5">Project</label>
             <select
               value={projectId}
+              aria-label="Project"
               onChange={(e) => setProjectId(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
             >

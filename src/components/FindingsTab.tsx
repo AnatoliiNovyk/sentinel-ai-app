@@ -303,6 +303,7 @@ function FindingRow({
         </div>
         <select
           value={vuln.status}
+          aria-label="Vulnerability status"
           disabled={saving}
           onChange={(e) => changeStatus(e.target.value as StatusValue)}
           className="shrink-0 bg-slate-900 border border-slate-800 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none disabled:opacity-60"

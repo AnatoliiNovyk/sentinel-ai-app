@@ -179,7 +179,7 @@ function NewScheduleModal({
       <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold">New schedule</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -188,6 +188,7 @@ function NewScheduleModal({
             <label className="block text-sm text-slate-300 mb-1.5">Project</label>
             <select
               value={projectId}
+              aria-label="Project"
               onChange={(e) => setProjectId(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
             >
@@ -202,6 +203,7 @@ function NewScheduleModal({
             <label className="block text-sm text-slate-300 mb-1.5">Scanner</label>
             <select
               value={scanner}
+              aria-label="Scanner"
               onChange={(e) => setScanner(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
             >

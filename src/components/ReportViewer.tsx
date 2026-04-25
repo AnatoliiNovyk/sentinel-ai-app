@@ -153,6 +153,7 @@ export default function ReportViewer({ report, onClose }: ReportViewerProps) {
             </button>
             <button
               onClick={onClose}
+              aria-label="Close"
               className="ml-1 p-1.5 rounded-md text-slate-500 hover:text-white hover:bg-slate-800 transition"
             >
               <X className="w-4 h-4" />

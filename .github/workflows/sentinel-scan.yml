@@ -47,14 +47,20 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       # ─── Upload SARIF to GitHub Code Scanning ─────────────────────────────────
-      - name: Upload SARIF to GitHub Security tab
-        if: always()
+      - name: Upload tfsec SARIF to GitHub Security tab
+        if: always() && hashFiles('sentinel-tfsec.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: |
-            sentinel-tfsec.sarif
-            sentinel-trivy.sarif
-          category: sentinel-ai
+          sarif_file: sentinel-tfsec.sarif
+          category: sentinel-ai-tfsec
+        continue-on-error: true
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        if: always() && hashFiles('sentinel-trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sentinel-trivy.sarif
+          category: sentinel-ai-trivy
         continue-on-error: true
 
       # ─── Push findings to Sentinel AI ────────────────────────────────────────

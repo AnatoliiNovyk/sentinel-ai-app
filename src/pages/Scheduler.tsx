@@ -134,6 +134,7 @@ export default function SchedulerPage() {
                 <div className="relative">
                   <select
                     value={formProject}
+                    aria-label="Project"
                     onChange={e => setFormProject(e.target.value)}
                     className="w-full appearance-none bg-slate-900 border border-slate-700 rounded-md pl-3 pr-8 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
                   >
@@ -149,6 +150,7 @@ export default function SchedulerPage() {
               <div className="relative">
                 <select
                   value={formScanner}
+                  aria-label="Scanner"
                   onChange={e => setFormScanner(e.target.value)}
                   className="w-full appearance-none bg-slate-900 border border-slate-700 rounded-md pl-3 pr-8 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
                 >

@@ -1,6 +1,6 @@
 name: Quality Gate
 
-on:
+"on":
   push:
     branches: [main, master]
   pull_request:
