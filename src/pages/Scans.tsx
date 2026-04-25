@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { callAiGateway } from '../lib/aiGateway';
@@ -23,6 +23,9 @@ const Scans = () => {
   const [showNewScanModal, setShowNewScanModal] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [showMockWarning, setShowMockWarning] = useState(false);
+  const [scanSearch, setScanSearch] = useState('');
+  const [scannerFilter, setScannerFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [newScanConfig, setNewScanConfig] = useState({
     scanner: 'Nmap:Intense',
     target: ''
@@ -35,6 +38,19 @@ const Scans = () => {
     if (scan.is_mock) return 'MOCK';
     return 'REAL';
   })();
+
+  const uniqueScanners = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.scanner)))], [scans]);
+  const uniqueStatuses = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.status)))], [scans]);
+
+  const filteredScans = useMemo(() => {
+    const q = scanSearch.toLowerCase();
+    return scans.filter(s => {
+      const matchSearch = !q || s.scanner.toLowerCase().includes(q) || s.status.toLowerCase().includes(q);
+      const matchScanner = scannerFilter === 'all' || s.scanner === scannerFilter;
+      const matchStatus = statusFilter === 'all' || s.status === statusFilter;
+      return matchSearch && matchScanner && matchStatus;
+    });
+  }, [scans, scanSearch, scannerFilter, statusFilter]);
 
   // Show mock warning whenever the active scan is in MOCK mode
   useEffect(() => {
@@ -261,9 +277,52 @@ Respond ONLY with valid JSON in this exact format:
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Scans Sidebar */}
         <div className="lg:w-64 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Recent Scans</h2>
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Recent Scans</h2>
+
+          {/* Search */}
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+            <input
+              value={scanSearch}
+              onChange={(e) => setScanSearch(e.target.value)}
+              placeholder="Search scans…"
+              className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+
+          {/* Scanner filter */}
+          {uniqueScanners.length > 2 && (
+            <select
+              value={scannerFilter}
+              onChange={(e) => setScannerFilter(e.target.value)}
+              aria-label="Filter by scanner"
+              className="w-full mb-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50"
+            >
+              {uniqueScanners.map(s => (
+                <option key={s} value={s}>{s === 'all' ? 'All scanners' : s}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Status filter */}
+          {uniqueStatuses.length > 2 && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by status"
+              className="w-full mb-3 bg-slate-800/60 border border-slate-700/50 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500/50"
+            >
+              {uniqueStatuses.map(s => (
+                <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>
+              ))}
+            </select>
+          )}
+
           <div className="space-y-2">
-            {scans.map(scan => (
+            {filteredScans.length === 0 && (
+              <div className="text-xs text-slate-500 text-center py-4">No scans match filters.</div>
+            )}
+            {filteredScans.map(scan => (
               <button
                 key={scan.id}
                 onClick={() => setSelectedScanId(scan.id)}
