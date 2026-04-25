@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   Clock, Plus, Trash2, Power, PowerOff, Calendar,
-  Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown,
+  Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown, Search,
 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -41,6 +41,7 @@ export default function SchedulerPage() {
   const [showForm, setShowForm] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'nearest' | 'latest' | 'enabled' | 'disabled'>('nearest');
+  const [schedSearch, setSchedSearch] = useState('');
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
@@ -48,7 +49,14 @@ export default function SchedulerPage() {
   const [formCadence, setFormCadence] = useState(24);
 
   const sortedSchedules = useMemo(() => {
-    const schedulesCopy = [...schedules];
+    const q = schedSearch.trim().toLowerCase();
+    const filtered = q
+      ? schedules.filter(s =>
+          projectName(s.project_id).toLowerCase().includes(q) ||
+          (AVAILABLE_SCANNERS.find(sc => sc.id === s.scanner)?.label ?? s.scanner).toLowerCase().includes(q)
+        )
+      : schedules;
+    const schedulesCopy = [...filtered];
     switch (sortBy) {
       case 'nearest':
         return schedulesCopy.sort((a, b) => {
@@ -75,7 +83,8 @@ export default function SchedulerPage() {
       default:
         return schedulesCopy;
     }
-  }, [schedules, sortBy]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules, sortBy, schedSearch]);
 
   const load = async () => {
     if (!user) return;
@@ -253,8 +262,17 @@ export default function SchedulerPage() {
       ) : (
         <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
           {/* Table header with sort controls */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] flex-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 gap-3 flex-wrap">
+            <div className="relative min-w-48">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <input
+                value={schedSearch}
+                onChange={e => setSchedSearch(e.target.value)}
+                placeholder="Search project or scanner…"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] flex-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold hidden md:grid">
               <span>Project</span>
               <span>Scanner</span>
               <span>Frequency</span>
@@ -262,8 +280,8 @@ export default function SchedulerPage() {
               <span>Next run</span>
               <span />
             </div>
-            <div className="flex items-center gap-2 ml-4">
-              <span className="text-xs text-slate-500 font-medium">Sort by:</span>
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
               {(['nearest', 'latest', 'enabled', 'disabled'] as const).map(sort => (
                 <button
                   key={sort}
@@ -280,10 +298,14 @@ export default function SchedulerPage() {
                   {sort === 'disabled' && 'Disabled'}
                 </button>
               ))}
+              {schedSearch && <span className="text-xs text-slate-500">{sortedSchedules.length} result{sortedSchedules.length !== 1 ? 's' : ''}</span>}
             </div>
           </div>
           {/* Table rows */}
           <div className="divide-y divide-slate-800/50">
+            {sortedSchedules.length === 0 && (
+              <div className="px-5 py-10 text-center text-sm text-slate-500">No schedules match the search.</div>
+            )}
             {sortedSchedules.map(s => {
               const cadenceLabel = CADENCES.find(c => c.hours === s.cadence_hours)?.label ?? `${s.cadence_hours}h`;
               return (
