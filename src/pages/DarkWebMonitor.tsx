@@ -16,13 +16,22 @@ export default function OsintAnalyzer() {
   const [results, setResults] = useState<ScanHistory[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
+
+  const RISK_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
 
   const visibleResults = useMemo(() => {
-    if (sevFilter === 'all') return results;
-    return results.filter(r =>
-      !r.error && r.result.riskLevel === sevFilter
-    );
-  }, [results, sevFilter]);
+    const filtered = sevFilter === 'all'
+      ? results
+      : results.filter(r => !r.error && r.result.riskLevel === sevFilter);
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'newest') return 0; // already newest-first (prepend on scan)
+      if (sortBy === 'risk_desc') return (RISK_ORDER[b.result.riskLevel ?? 'none'] ?? 0) - (RISK_ORDER[a.result.riskLevel ?? 'none'] ?? 0);
+      if (sortBy === 'risk_asc') return (RISK_ORDER[a.result.riskLevel ?? 'none'] ?? 0) - (RISK_ORDER[b.result.riskLevel ?? 'none'] ?? 0);
+      if (sortBy === 'query') return a.query.localeCompare(b.query);
+      return 0;
+    });
+  }, [results, sevFilter, sortBy]);
 
   const exportCsv = useCallback(() => {
     const rows = ['Query,BreachCount,RiskScore,RiskLevel,ScannedAt'];
@@ -152,8 +161,22 @@ export default function OsintAnalyzer() {
                     {s === 'all' ? 'All' : s}
                   </button>
                 ))}
-              </div>
-              <button
+              </div>              {/* Sort */}
+              <div className="flex items-center gap-1">
+                {([['newest', 'Newest'], ['risk_desc', 'Risk ↓'], ['risk_asc', 'Risk ↑'], ['query', 'A→Z']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setSortBy(val)}
+                    className={`text-[10px] px-2 py-1 rounded border transition ${
+                      sortBy === val
+                        ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                        : 'border-slate-800 text-slate-500 hover:border-slate-600 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>              <button
                 onClick={exportCsv}
                 className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
               >
