@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Search, Globe, AlertTriangle, Loader2, Info, Terminal, Copy, Check, Download } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Search, Globe, AlertTriangle, Loader2, Info, Terminal, Copy, Check, Download, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { downloadFile } from '../lib/exporters';
 
@@ -16,6 +16,22 @@ export default function ActiveRecon() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'queued' | 'running' | 'done'>('idle');
   const [copied, setCopied] = useState(false);
+  const [portSearch, setPortSearch] = useState('');
+  const [portSort, setPortSort] = useState<'port_asc' | 'port_desc' | 'service' | 'state'>('port_asc');
+
+  const displayedPorts = useMemo(() => {
+    const q = portSearch.trim().toLowerCase();
+    const filtered = q
+      ? MOCK_PORTS.filter(p => p.port.toLowerCase().includes(q) || p.service.toLowerCase().includes(q) || p.version.toLowerCase().includes(q))
+      : MOCK_PORTS;
+    return [...filtered].sort((a, b) => {
+      if (portSort === 'port_asc') return parseInt(a.port) - parseInt(b.port);
+      if (portSort === 'port_desc') return parseInt(b.port) - parseInt(a.port);
+      if (portSort === 'service') return a.service.localeCompare(b.service);
+      if (portSort === 'state') return a.state.localeCompare(b.state);
+      return 0;
+    });
+  }, [portSearch, portSort]);
 
   const copyOutput = useCallback(async () => {
     const text = MOCK_PORTS.map(p => `${p.port.padEnd(10)} ${p.state.padEnd(6)} ${p.service.padEnd(10)} ${p.version}`).join('\n');
@@ -146,8 +162,37 @@ export default function ActiveRecon() {
               )}
               {status === 'done' && (
                 <>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <div className="relative flex-1 min-w-40 max-w-xs">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+                      <input
+                        value={portSearch}
+                        onChange={e => setPortSearch(e.target.value)}
+                        placeholder="Search port, service…"
+                        className="w-full pl-6 pr-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      {([['port_asc', 'Port↑'], ['port_desc', 'Port↓'], ['service', 'Svc A→Z'], ['state', 'State']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          onClick={() => setPortSort(val)}
+                          className={`text-[10px] px-2 py-0.5 rounded border transition ${
+                            portSort === val
+                              ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
+                              : 'border-slate-700 text-slate-500 hover:border-slate-500 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="text-emerald-300">PORT       STATE  SERVICE    VERSION</div>
-                  {MOCK_PORTS.map(p => (
+                  {displayedPorts.length === 0 ? (
+                    <div className="text-slate-600 italic">No ports match filter.</div>
+                  ) : displayedPorts.map(p => (
                     <div key={p.port} className="text-slate-300">{p.port.padEnd(10)} {p.state.padEnd(6)} {p.service.padEnd(10)} {p.version}</div>
                   ))}
                   <div className="text-emerald-500 mt-2 font-bold">Scan complete. Results added to Scans dashboard.</div>
