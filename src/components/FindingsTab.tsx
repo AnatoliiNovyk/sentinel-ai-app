@@ -424,7 +424,7 @@ function FindingRow({
           )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             {vuln.cve_id && (
-              <MetaCell label="CVE" value={vuln.cve_id} />
+              <MetaCell label="CVE" value={vuln.cve_id} link={`https://nvd.nist.gov/vuln/detail/${vuln.cve_id}`} />
             )}
             {vuln.mitre_tactic && (
               <MetaCell label="MITRE" value={vuln.mitre_tactic} />
@@ -497,11 +497,22 @@ function FindingRow({
   );
 }
 
-function MetaCell({ label, value }: { label: string; value: string }) {
+function MetaCell({ label, value, link }: { label: string; value: string; link?: string }) {
   return (
     <div className="rounded-md border border-slate-800 bg-slate-900/50 px-3 py-2">
       <div className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</div>
-      <div className="text-xs text-slate-200 font-mono mt-0.5 truncate">{value}</div>
+      {link ? (
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-sky-400 hover:text-sky-300 font-mono mt-0.5 truncate block underline-offset-2 hover:underline transition"
+        >
+          {value}
+        </a>
+      ) : (
+        <div className="text-xs text-slate-200 font-mono mt-0.5 truncate">{value}</div>
+      )}
     </div>
   );
 }

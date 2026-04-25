@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Network,
   Zap,
+  RotateCcw,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -286,7 +287,12 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
           onUpdated={(next) => setVulns((prev) => prev.map((v) => (v.id === next.id ? next : v)))}
         />
       )}
-      {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} liveJobs={liveJobs} />}
+      {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} liveJobs={liveJobs} onRescan={async (scanner) => {
+          if (!user) return;
+          const result = await dispatchScan(user.id, project.id, scanner, project.target ?? '');
+          if (!result.ok) alert(errorToUserMessage(result.error));
+          else await load();
+        }} />}
       {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}
       {tab === 'activity' && <ActivityTab items={activity} />}
 
@@ -466,12 +472,23 @@ function WebhookPanel({ project }: { project: Project }) {
   );
 }
 
-function ScansTab({ scans, vulns, project, liveJobs }: {
+function ScansTab({ scans, vulns, project, liveJobs, onRescan }: {
   scans: Scan[];
   vulns: Vulnerability[];
   project: Project;
   liveJobs: {id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[];
+  onRescan: (scanner: string) => Promise<void>;
 }) {
+  const [rescanning, setRescanning] = useState<string | null>(null);
+
+  const handleRescan = async (scanner: string) => {
+    setRescanning(scanner);
+    try {
+      await onRescan(scanner);
+    } finally {
+      setRescanning(null);
+    }
+  };
   const vulnsByScan = useMemo(() => {
     return vulns.reduce((acc, v) => {
       (acc[v.scan_id] ??= []).push(v);
@@ -517,6 +534,15 @@ function ScansTab({ scans, vulns, project, liveJobs }: {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleRescan(s.scanner)}
+                disabled={rescanning === s.scanner || liveJobs.some(j => j.scanner === s.scanner)}
+                title="Re-run this scan"
+                aria-label="Re-run scan"
+                className="p-2 text-slate-500 hover:text-emerald-400 transition disabled:opacity-40"
+              >
+                <RotateCcw className={`w-4 h-4 ${rescanning === s.scanner ? 'animate-spin' : ''}`} />
+              </button>
               <button
                 onClick={() => downloadFile(`${project.name}_${s.id}.json`, toJsonExport(project, s, scanVulns), 'application/json')}
                 aria-label="Download JSON export"
