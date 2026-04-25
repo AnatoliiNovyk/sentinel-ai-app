@@ -2,6 +2,7 @@
 
 > **Autonomous Security Auditing Platform** — AI-driven vulnerability scanning, remediation, and compliance monitoring for modern infrastructure.
 
+[![CI](https://github.com/AnatoliiNovyk/sentinel-ai-app/actions/workflows/ci.yml/badge.svg)](https://github.com/AnatoliiNovyk/sentinel-ai-app/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
