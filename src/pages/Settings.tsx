@@ -1,11 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
-  Webhook, Users, Plus, Trash2
+  Webhook, Users, Plus, Trash2, Server, RefreshCw, WifiOff
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
+
+const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
+
+type AgentHealthData = {
+  status: 'starting' | 'ok' | 'error';
+  uptime: number;
+  jobsProcessed: number;
+  jobsFailed: number;
+  lastJobAt: string | null;
+  lastError: string | null;
+  timestamp: string;
+};
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 const PLANS = [
@@ -108,7 +120,38 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
-  // F-11 & F-10
+  // Agent health
+  const [agentUrl, setAgentUrl] = useState(() => localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_URL);
+  const [agentHealth, setAgentHealth] = useState<AgentHealthData | null>(null);
+  const [agentChecking, setAgentChecking] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
+
+  const checkAgent = useCallback(async (url = agentUrl) => {
+    setAgentChecking(true);
+    setAgentError(null);
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (res.ok) {
+        const data: AgentHealthData = await res.json();
+        setAgentHealth(data);
+      } else {
+        setAgentError(`HTTP ${res.status}`);
+        setAgentHealth(null);
+      }
+    } catch (e) {
+      setAgentError(e instanceof Error ? e.message : 'Unreachable');
+      setAgentHealth(null);
+    } finally {
+      setAgentChecking(false);
+    }
+  }, [agentUrl]);
+
+  const saveAgentUrl = () => {
+    localStorage.setItem('agentHealthUrl', agentUrl);
+    checkAgent(agentUrl);
+  };
+
+
   const [webhookUrl, setWebhookUrl] = useState('');
   const [teamEmails, setTeamEmails] = useState<{email: string, role: string}[]>([
     { email: profile?.email || '', role: 'Owner' }
@@ -394,6 +437,75 @@ export default function Settings() {
             </button>
           </div>
         </div>
+      </section>
+
+      {/* Agent Configuration */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Server className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">Agent Configuration</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">
+          Connect to your self-hosted Sentinel Agent. The agent runs nuclei/nmap scans on your VPS.
+        </p>
+
+        <div className="flex gap-2 mb-5">
+          <input
+            type="url"
+            value={agentUrl}
+            onChange={(e) => setAgentUrl(e.target.value)}
+            placeholder="http://your-vps:9090/health"
+            className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          />
+          <button
+            onClick={saveAgentUrl}
+            disabled={agentChecking}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition"
+          >
+            {agentChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {agentChecking ? 'Checking…' : 'Check'}
+          </button>
+        </div>
+
+        {agentError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+            <WifiOff className="w-4 h-4 shrink-0" />
+            Agent unreachable: {agentError}
+          </div>
+        )}
+
+        {agentHealth && (
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-sm font-semibold text-emerald-400">Agent online</span>
+              <span className="text-xs text-slate-500 ml-auto">
+                {new Date(agentHealth.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Status', value: agentHealth.status, color: agentHealth.status === 'ok' ? 'text-emerald-400' : 'text-amber-400' },
+                { label: 'Uptime', value: `${Math.floor(agentHealth.uptime / 3600)}h ${Math.floor((agentHealth.uptime % 3600) / 60)}m`, color: 'text-white' },
+                { label: 'Jobs processed', value: String(agentHealth.jobsProcessed), color: 'text-white' },
+                { label: 'Jobs failed', value: String(agentHealth.jobsFailed), color: agentHealth.jobsFailed > 0 ? 'text-red-400' : 'text-white' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="rounded-md bg-slate-900/60 border border-slate-800 p-3 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{label}</div>
+                  <div className={`text-sm font-semibold capitalize ${color}`}>{value}</div>
+                </div>
+              ))}
+            </div>
+            {agentHealth.lastJobAt && (
+              <div className="mt-3 text-xs text-slate-500">
+                Last job: <span className="text-slate-300">{new Date(agentHealth.lastJobAt).toLocaleString()}</span>
+              </div>
+            )}
+            {agentHealth.lastError && (
+              <div className="mt-2 text-xs text-red-400 truncate">⚠ {agentHealth.lastError}</div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Save */}
