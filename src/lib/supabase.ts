@@ -148,3 +148,13 @@ export type Notification = {
   read_at: string | null;
   created_at: string;
 };
+
+export type AgentLog = {
+  id: string;
+  job_id: string | null;
+  scan_id: string | null;
+  project_id: string | null;
+  level: 'info' | 'success' | 'error' | 'warn';
+  message: string;
+  created_at: string;
+};

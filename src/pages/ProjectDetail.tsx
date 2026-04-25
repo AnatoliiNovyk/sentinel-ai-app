@@ -27,6 +27,7 @@ import FindingsTab from '../components/FindingsTab';
 import AssetGraph from '../components/AssetGraph';
 import ReportViewer from '../components/ReportViewer';
 import ScanDiff from '../components/ScanDiff';
+import AgentLogsPanel from '../components/AgentLogsPanel';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -405,15 +406,19 @@ function ScansTab({ scans, vulns, project }: { scans: Scan[]; vulns: Vulnerabili
 
   if (scans.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
-        <Radar className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-        <div className="text-sm text-slate-400">No scans yet for this project.</div>
+      <div className="space-y-6">
+        <AgentLogsPanel projectId={project.id} />
+        <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
+          <Radar className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+          <div className="text-sm text-slate-400">No scans yet for this project.</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      <AgentLogsPanel projectId={project.id} />
       {/* F-07: Continuous Monitoring Diff */}
       {scans.filter(s => s.status === 'completed').length >= 2 && (
         <ScanDiff scans={scans} vulns={vulns} />

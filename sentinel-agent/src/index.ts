@@ -352,6 +352,27 @@ async function runNuclei(target: string): Promise<Finding[]> {
   }
 }
 
+// --- Agent Logging ---
+async function writeLog(
+  jobId: string,
+  scanId: string | null,
+  projectId: string,
+  level: 'info' | 'success' | 'error' | 'warn',
+  message: string
+): Promise<void> {
+  try {
+    await supabase.from('agent_logs').insert({
+      job_id: jobId,
+      scan_id: scanId,
+      project_id: projectId,
+      level,
+      message,
+    });
+  } catch {
+    // fire-and-forget — logging must never crash the agent
+  }
+}
+
 // --- Job Processing ---
 async function reportResult(
   jobId: string,
@@ -396,10 +417,12 @@ async function fetchPendingJob(): Promise<ScanJob | null> {
 
 async function runJob(job: ScanJob) {
   console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
+  await writeLog(job.id, job.scan_id, job.project_id, 'info', `▶️ Starting ${job.scanner} scan on ${job.target}`);
   try {
     let findings: Finding[] = [];
     
     if (job.scanner === 'ai_task' || job.scanner === 'ai-agent') {
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', '🤖 Consulting Ollama AI model...');
       const aiResponse = await consultOllama(job.target);
       findings = [{
         title: 'AI Security Response',
@@ -411,16 +434,24 @@ async function runJob(job: ScanJob) {
         status: 'open'
       }];
     } else if (job.scanner === 'nuclei' || job.scanner === 'nuclei-scan') {
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🔬 Running Nuclei template scan on ${job.target}...`);
       findings = await runNuclei(job.target);
     } else {
-      // default: nmap port scan
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', `📡 Running Nmap port scan on ${job.target}...`);
       findings = await runNmap(job.target);
     }
 
+    const realFindings = findings.filter(f => f.severity !== 'info' || !f.title.toLowerCase().includes('no '));
+    await writeLog(
+      job.id, job.scan_id, job.project_id, 'success',
+      `✅ Scan complete — ${realFindings.length} finding(s) found (${findings.length} total)`
+    );
     await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
+    await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
   } catch (err: unknown) {
     const message = getErrorMessage(err);
     console.error(`❌ Job ${job.id} crashed:`, message);
+    await writeLog(job.id, job.scan_id, job.project_id, 'error', `❌ Scan failed: ${message}`);
     await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
   }
 }
