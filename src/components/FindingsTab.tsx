@@ -163,6 +163,27 @@ export default function FindingsTab({
 
   return (
     <div className="space-y-4">
+      {/* Summary stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: counts.all, color: 'text-slate-200', active: statusFilter === 'all', onClick: () => setStatusFilter('all') },
+          { label: 'Open', value: (counts.open ?? 0) + (counts.in_progress ?? 0), color: 'text-red-400', active: statusFilter === 'open', onClick: () => setStatusFilter('open') },
+          { label: 'SLA Overdue', value: slaCounts.overdue, color: 'text-rose-400', active: slaFilter === 'overdue', onClick: () => setSlaFilter(slaFilter === 'overdue' ? 'all' : 'overdue') },
+          { label: 'Resolved', value: counts.resolved ?? 0, color: 'text-emerald-400', active: statusFilter === 'resolved', onClick: () => setStatusFilter(statusFilter === 'resolved' ? 'all' : 'resolved') },
+        ].map(c => (
+          <button
+            key={c.label}
+            onClick={c.onClick}
+            className={`rounded-xl border p-4 text-left w-full transition ${
+              c.active ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-xs text-slate-400 mb-1">{c.label}</div>
+            <div className={`text-3xl font-bold tabular-nums ${c.color}`}>{c.value}</div>
+          </button>
+        ))}
+      </div>
+
       {/* Search input */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />

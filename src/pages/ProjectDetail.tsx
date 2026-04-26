@@ -489,8 +489,36 @@ function OverviewTab({
     return curr - prev;
   }, [scans, vulnsByScanCount]);
 
+  const openCount     = vulns.filter(v => v.status === 'open' || v.status === 'in_progress').length;
+  const resolvedCount = vulns.filter(v => v.status === 'resolved').length;
+  const avgAgeDays    = vulns.length === 0 ? 0 : Math.round(
+    vulns.filter(v => v.status === 'open' || v.status === 'in_progress')
+      .reduce((s, v) => s + (Date.now() - new Date(v.created_at).getTime()) / 86_400_000, 0) /
+    Math.max(1, openCount)
+  );
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      {/* Quick-stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total findings', value: vulns.length,   color: 'text-slate-200' },
+          { label: 'Open',           value: openCount,      color: 'text-red-400'   },
+          { label: 'Resolved',       value: resolvedCount,  color: 'text-emerald-400' },
+          { label: 'Reports',        value: scans.length,   color: 'text-sky-400', sub: 'scans run' },
+        ].map(c => (
+          <div key={c.label} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+            <div className="text-xs text-slate-400 mb-1">{c.label}</div>
+            <div className={`text-3xl font-bold tabular-nums ${c.color}`}>{c.value}</div>
+            {c.sub && <div className="text-[10px] text-slate-600 mt-0.5">{c.sub}</div>}
+            {'label' in c && c.label === 'Open' && openCount > 0 && (
+              <div className="text-[10px] text-slate-600 mt-0.5">avg {avgAgeDays}d old</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400" /> Posture
@@ -591,6 +619,7 @@ function OverviewTab({
 
         <WebhookPanel project={project} />
       </div>
+    </div>
     </div>
   );
 }
