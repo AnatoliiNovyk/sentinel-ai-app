@@ -164,6 +164,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           <span className="flex items-center gap-1"><kbd className="bg-slate-900 border border-slate-800 px-1 rounded">↑↓</kbd> navigate</span>
           <span className="flex items-center gap-1"><kbd className="bg-slate-900 border border-slate-800 px-1 rounded">↵</kbd> open</span>
           <span className="flex items-center gap-1"><kbd className="bg-slate-900 border border-slate-800 px-1 rounded">esc</kbd> close</span>
+          {query.trim() && (
+            <span className="text-slate-600">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+          )}
           <span className="ml-auto flex items-center gap-1"><Command className="w-3 h-3" />K</span>
         </div>
       </div>

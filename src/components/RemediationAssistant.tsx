@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bot, ChevronDown, ChevronRight, Clock, Code2, ExternalLink, RefreshCw, Sparkles, Zap } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, Clock, Code2, Copy, Check, ExternalLink, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { Vulnerability } from '../lib/supabase';
 import {
   RemediationSuggestion,
@@ -160,6 +160,7 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [copyStates, setCopyStates] = useState<CopyState>({});
+  const [allCopied, setAllCopied] = useState(false);
 
   // Load cached suggestion on mount
   useEffect(() => {
@@ -196,6 +197,21 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
       // Clipboard not available
     }
   }, []);
+
+  const handleCopyAll = useCallback(async () => {
+    if (!suggestion) return;
+    const cmds = suggestion.steps
+      .filter(s => s.command)
+      .map(s => `# Step ${s.order}: ${s.title}\n${s.command}`)
+      .join('\n\n');
+    try {
+      await navigator.clipboard.writeText(cmds);
+      setAllCopied(true);
+      setTimeout(() => setAllCopied(false), 2000);
+    } catch {
+      // Clipboard not available
+    }
+  }, [suggestion]);
 
   const priorityMeta = suggestion ? PRIORITY_META[suggestion.priority] : null;
   const effortMeta = suggestion ? EFFORT_META[suggestion.effort] : null;
@@ -289,6 +305,9 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
                 <Clock className="w-3 h-3" /> {suggestion.estimated_time}
               </span>
             )}
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">
+              {suggestion.steps.length} step{suggestion.steps.length !== 1 ? 's' : ''}
+            </span>
           </div>
           <p className="mt-1 text-xs text-slate-300 leading-relaxed line-clamp-2">{suggestion.summary}</p>
         </div>
@@ -309,8 +328,20 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
 
           {/* Steps */}
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">
-              Remediation Steps
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">
+                Remediation Steps
+              </div>
+              {suggestion.steps.some(s => s.command) && (
+                <button
+                  onClick={handleCopyAll}
+                  title={allCopied ? 'All commands copied!' : 'Copy all commands'}
+                  className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-emerald-300 transition px-2 py-0.5 rounded hover:bg-slate-800"
+                >
+                  {allCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {allCopied ? 'Copied!' : 'Copy all'}
+                </button>
+              )}
             </div>
             {suggestion.steps.map((step) => (
               <StepCard
