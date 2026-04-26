@@ -137,7 +137,7 @@ export default function NotificationBell() {
   };
 
   return (
-    <div className="relative" ref={popoverRef}>
+    <div className="relative mr-1" ref={popoverRef}>
       <button
         onClick={() => setOpen((v) => !v)}
         className={`relative p-2 rounded-md transition ${

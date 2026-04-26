@@ -238,8 +238,8 @@ export default function AppLayout() {
           </div>
         </div>
       </aside>
-      <main ref={mainRef} className="flex-1 overflow-auto flex flex-col relative min-w-0">
-        <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-4 sm:px-8">
+      <main ref={mainRef} className="flex-1 overflow-y-auto flex flex-col relative min-w-0">
+        <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-4 sm:px-8 overflow-visible">
           <div className="flex items-center gap-3">
             {/* Hamburger — mobile only */}
             <button
