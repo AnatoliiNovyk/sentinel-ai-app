@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal } from 'lucide-react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal, LayoutGrid, LayoutList } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
@@ -26,6 +26,8 @@ export default function Projects() {
   const [envFilter, setEnvFilter] = useState<'all' | 'external' | 'cloud' | 'internal' | 'iac'>('all');
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'risk_desc' | 'risk_asc' | 'name'>('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('grid');
+  const [draggedProject, setDraggedProject] = useState<Project | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -47,6 +49,15 @@ export default function Projects() {
     toast.success('Project deleted.');
     setConfirmId(null);
     load();
+  };
+
+  const updateStatus = async (projectId: string, newStatus: 'todo' | 'in_progress' | 'done') => {
+    await supabase
+      .from('projects')
+      .update({ status: newStatus })
+      .eq('id', projectId);
+    const updated = projects.map(p => p.id === projectId ? { ...p, status: newStatus } : p);
+    setProjects(updated);
   };
 
   const visible = useMemo(() => {
@@ -96,6 +107,33 @@ export default function Projects() {
       </div>
       <div ref={sentinelRef} className="h-0" />
       <div className="px-8 pb-8">
+      {/* View mode toggle */}
+      {!loading && projects.length > 0 && (
+        <div className="mb-6 flex items-center gap-1.5 border border-slate-800 rounded-lg p-1 bg-slate-900/40 w-fit">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`p-2 rounded-md transition ${
+              viewMode === 'grid'
+                ? 'bg-slate-800 text-white shadow'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+            title="Grid view"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`p-2 rounded-md transition ${
+              viewMode === 'kanban'
+                ? 'bg-slate-800 text-white shadow'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+            title="Kanban view"
+          >
+            <LayoutList className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Search + filter bar */}
       {!loading && projects.length > 0 && (
@@ -182,6 +220,19 @@ export default function Projects() {
             <Plus className="w-4 h-4" /> Create first project
           </button>
         </div>
+      ) : viewMode === 'kanban' ? (
+        <KanbanBoard
+          projects={visible}
+          onProjectSelect={setSelected}
+          onStatusChange={updateStatus}
+          onDelete={(p) => {
+            setConfirmId(p.id);
+            setConfirmName(p.name);
+          }}
+          draggedProject={draggedProject}
+          onDragStart={setDraggedProject}
+          onDragEnd={() => setDraggedProject(null)}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visible.length === 0 ? (
@@ -377,6 +428,123 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ── Kanban Board Component ──────────────────────────────────────────────────
+function KanbanBoard({
+  projects,
+  onProjectSelect,
+  onStatusChange,
+  onDelete,
+  draggedProject,
+  onDragStart,
+  onDragEnd,
+}: {
+  projects: Project[];
+  onProjectSelect: (p: Project) => void;
+  onStatusChange: (id: string, status: 'todo' | 'in_progress' | 'done') => void;
+  onDelete: (p: Project) => void;
+  draggedProject: Project | null;
+  onDragStart: (p: Project) => void;
+  onDragEnd: () => void;
+}) {
+  const COLUMNS: Array<{ id: 'todo' | 'in_progress' | 'done'; label: string; color: string }> = [
+    { id: 'todo', label: 'To Do', color: 'text-slate-400' },
+    { id: 'in_progress', label: 'In Progress', color: 'text-amber-400' },
+    { id: 'done', label: 'Done', color: 'text-emerald-400' },
+  ];
+
+  const grouped = COLUMNS.map(col => ({
+    ...col,
+    items: projects.filter(p => (p.status ?? 'todo') === col.id),
+  }));
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (columnId: 'todo' | 'in_progress' | 'done', e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedProject) {
+      onStatusChange(draggedProject.id, columnId);
+      onDragEnd();
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {grouped.map(column => (
+        <div
+          key={column.id}
+          className="rounded-lg border border-slate-800 bg-slate-900/30 flex flex-col"
+        >
+          <div className="px-4 py-3 border-b border-slate-800/50 flex items-center justify-between">
+            <h3 className={`font-semibold text-sm ${column.color}`}>{column.label}</h3>
+            <span className="text-xs text-slate-600 bg-slate-800 px-2 py-0.5 rounded-full">
+              {column.items.length}
+            </span>
+          </div>
+          <div
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(column.id, e)}
+            className="flex-1 p-3 space-y-2 min-h-96 overflow-y-auto"
+          >
+            {column.items.length === 0 ? (
+              <div className="text-center text-xs text-slate-600 py-8">
+                {column.id === 'todo' ? 'No planned projects' :
+                 column.id === 'in_progress' ? 'No active projects' :
+                 'No completed projects'}
+              </div>
+            ) : (
+              column.items.map(p => {
+                const meta = ENV_META[p.environment] ?? ENV_META.external;
+                const Icon = meta.icon;
+                const band = riskBand(p.risk_score ?? 0);
+                return (
+                  <div
+                    key={p.id}
+                    draggable
+                    onDragStart={() => onDragStart(p)}
+                    onDragEnd={onDragEnd}
+                    className={`group rounded-lg border cursor-move transition-all duration-200 p-3 ${
+                      draggedProject?.id === p.id
+                        ? 'opacity-50 border-amber-500 bg-amber-500/5'
+                        : 'border-slate-700 bg-slate-800/50 hover:border-emerald-500/40 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <button
+                        onClick={() => onProjectSelect(p)}
+                        className="flex-1 text-left min-w-0 hover:text-emerald-400 transition"
+                      >
+                        <h4 className="font-semibold text-white text-sm truncate">{p.name}</h4>
+                        <p className="text-xs text-slate-500 truncate">{p.target}</p>
+                      </button>
+                      <button
+                        onClick={() => onDelete(p)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <div className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md border ${meta.color}`}>
+                        <Icon className="w-2.5 h-2.5" /> {meta.label}
+                      </div>
+                      <div className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md border ${band.color}`}>
+                        {band.label}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

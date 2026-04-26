@@ -48,6 +48,7 @@ export type Project = {
   description: string;
   target: string;
   environment: 'external' | 'cloud' | 'internal' | 'iac';
+  status?: 'todo' | 'in_progress' | 'done'; // Kanban status
   created_at: string;
   tags: string[];
   risk_score: number;
