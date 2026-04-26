@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
   ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown, ShieldAlert, ExternalLink,
+  Users, Target, CheckCheck, UserCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
@@ -11,13 +12,14 @@ import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { SkeletonList } from '../components/Skeleton';
 
 export default function Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, organizations } = useAuth();
   const navigate = useNavigate();
   const [scans, setScans] = useState<Scan[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [findingsSearch, setFindingsSearch] = useState('');
   const [findingsSort, setFindingsSort] = useState<'severity' | 'newest' | 'oldest' | 'title'>('severity');
@@ -27,16 +29,18 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
-      const [scansRes, projectsRes, vulnsRes, jobsRes] = await Promise.all([
+      const [scansRes, projectsRes, vulnsRes, jobsRes, teamRes] = await Promise.all([
         supabase.from('scans').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
         supabase.from('projects').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('vulnerabilities').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500),
         supabase.from('scan_jobs').select('id,scanner,target,status,created_at,project_id').eq('user_id', user.id).in('status', ['pending','running']).order('created_at', { ascending: false }).limit(20),
+        organizations.length > 0 ? supabase.from('team_members').select('*,auth.users(email,user_metadata)').eq('org_id', organizations[0].id) : Promise.resolve({ data: [] }),
       ]);
       setScans(scansRes.data ?? []);
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
       setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
+      setTeamMembers((teamRes.data ?? []) as any[]);
       setLoading(false);
     };
     fetchAll();
@@ -47,7 +51,7 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scan_jobs', filter: `user_id=eq.${user.id}` }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, organizations]);
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const openVulns = vulns.filter(v => v.status === 'open' || v.status === 'in_progress');
@@ -356,7 +360,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Bottom row ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* SLA Watch */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -457,6 +461,63 @@ export default function Dashboard() {
             </div>
           )}
           </div>
+        </div>
+
+        {/* Team Collaboration */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" /> Team
+            </h2>
+            <span className="text-xs px-2 py-1 rounded-md bg-slate-800/50 border border-slate-700 text-slate-300">
+              {teamMembers.length}
+            </span>
+          </div>
+          {teamMembers.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm text-center">
+              <div>
+                <Users className="w-6 h-6 mx-auto mb-2 text-slate-700" />
+                <div>Solo workspace</div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 flex-1">
+              <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Active members</div>
+              <div className="flex flex-wrap gap-2">
+                {teamMembers.slice(0, 5).map((tm, i) => (
+                  <div key={tm.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-slate-800/50 border border-slate-700 hover:border-emerald-500/40 transition">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-xs font-semibold text-slate-950">
+                      {tm.role === 'owner' ? '👤' : tm.role === 'admin' ? '⚙️' : '👥'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white truncate">{(tm.auth?.users?.email ?? '').split('@')[0]}</div>
+                      <div className="text-[10px] text-slate-500">{tm.role}</div>
+                    </div>
+                  </div>
+                ))}
+                {teamMembers.length > 5 && (
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-slate-800/50 border border-slate-700">
+                    <span className="text-xs font-medium text-slate-400">+{teamMembers.length - 5}</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider pt-2">Activity (24h)</div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2 text-slate-400">
+                  <Target className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{liveJobs.length} scans running</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-400">
+                  <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{scans.filter(s => s.status === 'completed').length} completed</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-400">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                  <span>{openVulns.length} open findings</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
