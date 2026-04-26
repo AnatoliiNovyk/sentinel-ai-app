@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react';
-import { MessageCircle, Send, Trash2, Edit2, X } from 'lucide-react';
+import { MessageCircle, Send, Trash2, Edit2, X, Clock } from 'lucide-react';
 import { useAuth } from '../api/client';
 import { FindingComment } from '../lib/supabase';
 import { getComments, addComment, updateComment, deleteComment, subscribeToComments } from '../lib/commentService';
+
+function timeAgo(iso: string) {
+  const delta = Math.max(0, Date.now() - new Date(iso).getTime());
+  const min = Math.floor(delta / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 interface CommentThreadProps {
   vulnerabilityId: string;
@@ -68,7 +78,10 @@ export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentTh
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800/50 border border-slate-700 hover:border-emerald-500/50 text-slate-300 text-xs transition"
       >
         <MessageCircle className="w-3.5 h-3.5" />
-        Comments ({commentCount})
+        Comments
+        {commentCount > 0 && (
+          <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">{commentCount}</span>
+        )}
       </button>
     );
   }
@@ -78,8 +91,13 @@ export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentTh
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-slate-800">
         <div>
-          <h3 className="text-sm font-semibold text-white">Comments</h3>
-          <p className="text-xs text-slate-400">{vulnerabilityTitle}</p>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-white">Comments</h3>
+            {commentCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/20">{commentCount}</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 truncate max-w-[240px]" title={vulnerabilityTitle}>{vulnerabilityTitle}</p>
         </div>
         <button
           onClick={() => setIsOpen(false)}
@@ -105,7 +123,7 @@ export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentTh
                   <div className="text-xs text-slate-400">
                     <span className="text-emerald-400 font-semibold">User {comment.user_id.slice(0, 6)}</span>
                     {' '}
-                    <span>{new Date(comment.created_at).toLocaleDateString()}</span>
+                    <span className="inline-flex items-center gap-0.5 text-slate-600"><Clock className="w-2.5 h-2.5" />{timeAgo(comment.created_at)}</span>
                   </div>
                   {user?.id === comment.user_id && (
                     <div className="flex gap-1">
