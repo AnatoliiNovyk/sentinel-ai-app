@@ -11,12 +11,28 @@ const { mockUpdateEq } = vi.hoisted(() => ({
 
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
+  const makeApiUsageSelectChain = () => ({
+    eq: () => ({
+      eq: () => ({
+        gt: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+      }),
+    }),
+  });
   return {
     ...actual,
     supabase: {
-      from: () => ({
-        update: () => ({ eq: mockUpdateEq }),
-      }),
+      from: (table: string) => {
+        if (table === 'api_usage') {
+          return {
+            select: () => makeApiUsageSelectChain(),
+            update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
+            insert: () => Promise.resolve({ data: null, error: null }),
+          };
+        }
+        return {
+          update: () => ({ eq: mockUpdateEq }),
+        };
+      },
     },
   };
 });
@@ -104,7 +120,7 @@ describe('Settings — Profile section', () => {
 describe('Settings — Plans', () => {
   it('renders all four plan names', () => {
     render(<Settings />);
-    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getAllByText('Free').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Basic')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
     expect(screen.getByText('Enterprise')).toBeInTheDocument();

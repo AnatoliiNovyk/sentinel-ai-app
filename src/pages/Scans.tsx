@@ -88,7 +88,10 @@ const Scans = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [selectedProjectId, isRefreshing]);  const uniqueStatuses = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.status)))], [scans]);
+  }, [selectedProjectId, isRefreshing]);
+
+  const uniqueScanners = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.scanner)))], [scans]);
+  const uniqueStatuses = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.status)))], [scans]);
 
   const filteredScans = useMemo(() => {
     const q = scanSearch.toLowerCase();

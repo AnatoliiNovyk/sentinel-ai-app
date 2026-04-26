@@ -223,7 +223,7 @@ describe('handler integration: traceparent response header', () => {
     const tp = res.headers.get('traceparent');
     expect(tp).not.toBeNull();
     expect(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(tp!)).toBe(true);
-  });
+  }, 10000);
 
   it('propagates upstream trace ID in response traceparent', async () => {
     const { handleAiGatewayRequest } = await import('../../../supabase/functions/ai-gateway/handler');

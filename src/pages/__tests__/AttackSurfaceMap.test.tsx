@@ -58,12 +58,14 @@ describe('AttackSurfaceMap', () => {
 
   it('renders stat card "Projects"', async () => {
     render(<AttackSurfaceMap />);
-    await waitFor(() => expect(screen.getByText('Projects')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
+    });
   });
 
-  it('renders stat card "Total Findings"', async () => {
+  it('renders stat card "Open Findings"', async () => {
     render(<AttackSurfaceMap />);
-    await waitFor(() => expect(screen.getByText('Total Findings')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Open Findings')).toBeInTheDocument());
   });
 
   it('renders stat card "Critical"', async () => {

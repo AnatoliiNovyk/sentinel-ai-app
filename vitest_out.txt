@@ -1,0 +1,959 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+
+ [32mтЬУ[39m src/lib/__tests__/validation.test.ts [2m([22m[2m57 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/audit.service.unit.test.ts [2m([22m[2m18 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/darkWebMonitor.test.ts [2m([22m[2m27 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/exporters.test.ts [2m([22m[2m31 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/reportBuilder.test.ts [2m([22m[2m26 tests[22m[2m)[22m[90m 37[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/rls.e2e.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/supplyChain.test.ts [2m([22m[2m49 tests[22m[2m)[22m[90m 32[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/ai-gateway-tracing.test.ts[2m > [22m[2mhandler integration: traceparent response header[2m > [22m[2mreturns traceparent header in POST response
+[22m[39m{"timestamp":"2026-04-26T15:32:25.482Z","request_id":"req-mofxfuh2-daabfcc4ad4f129f","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-tracing.test.ts[2m > [22m[2mhandler integration: traceparent response header[2m > [22m[2mpropagates upstream trace ID in response traceparent
+[22m[39m{"timestamp":"2026-04-26T15:32:25.487Z","request_id":"req-mofxfuha-7ddc6b02a54190f5","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":2}
+
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-tracing.test.ts [2m([22m[2m30 tests[22m[2m)[22m[90m 131[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/ai-gateway-admin-metrics.test.ts[2m > [22m[2mai-gateway admin metrics endpoint[2m > [22m[2mreturns 401 for GET metrics without valid admin key
+[22m[39m{"timestamp":"2026-04-26T15:32:25.489Z","request_id":"req-mofxfuhc-a590ace31b1a5ace","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-admin-metrics.test.ts[2m > [22m[2mai-gateway admin metrics endpoint[2m > [22m[2mreturns telemetry snapshot for GET metrics with valid admin key
+[22m[39m{"timestamp":"2026-04-26T15:32:25.500Z","request_id":"req-mofxfuho-5fe7d7125d56c24a","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-admin-metrics.test.ts[2m > [22m[2mai-gateway admin metrics endpoint[2m > [22m[2msets alerts to true when thresholds are exceeded
+[22m[39m{"timestamp":"2026-04-26T15:32:25.508Z","request_id":"req-mofxfuhw-3062812cf17e5a6a","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+{"timestamp":"2026-04-26T15:32:25.510Z","request_id":"req-mofxfuhy-7a1cecb3bb44814c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":2,"status_code":401}
+{"timestamp":"2026-04-26T15:32:25.512Z","request_id":"req-mofxfui0-0a2e51ae519d8d2b","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":3,"status_code":401}
+{"timestamp":"2026-04-26T15:32:25.514Z","request_id":"req-mofxfui2-ae5ad822ee9f4bfa","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":4,"status_code":401}
+{"timestamp":"2026-04-26T15:32:25.515Z","request_id":"req-mofxfui3-b9cf89abaa4d892a","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":5,"status_code":401}
+{"timestamp":"2026-04-26T15:32:25.518Z","request_id":"req-mofxfui5-d748dfa0643a0c88","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":1,"status_code":400}
+{"timestamp":"2026-04-26T15:32:25.520Z","request_id":"req-mofxfui8-69265343aa894812","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":2,"status_code":400}
+{"timestamp":"2026-04-26T15:32:25.521Z","request_id":"req-mofxfui9-6d362a9c5657e3cc","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":3,"status_code":400}
+{"timestamp":"2026-04-26T15:32:25.523Z","request_id":"req-mofxfuia-311f292742c61250","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":4,"status_code":400}
+{"timestamp":"2026-04-26T15:32:25.523Z","request_id":"req-mofxfuib-a2d129258df07bd1","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":5,"status_code":400}
+{"timestamp":"2026-04-26T15:32:25.525Z","request_id":"req-mofxfuic-9f1545fa9fe37079","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+{"timestamp":"2026-04-26T15:32:25.526Z","request_id":"req-mofxfuid-103dd5ab4ef7fb10","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":2}
+{"timestamp":"2026-04-26T15:32:25.527Z","request_id":"req-mofxfuie-b27d5e8097b774ae","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":3}
+{"timestamp":"2026-04-26T15:32:25.529Z","request_id":"req-mofxfuig-aac59aaa89cd3779","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":4}
+{"timestamp":"2026-04-26T15:32:25.530Z","request_id":"req-mofxfuii-ed0ab7705f0eecef","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":5}
+{"timestamp":"2026-04-26T15:32:25.532Z","request_id":"req-mofxfuij-9db066e5f4625f5d","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":6}
+{"timestamp":"2026-04-26T15:32:25.533Z","request_id":"req-mofxfuil-eba129ef58ec3524","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":7}
+{"timestamp":"2026-04-26T15:32:25.534Z","request_id":"req-mofxfuim-f13768d89e8ebc98","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":8}
+{"timestamp":"2026-04-26T15:32:25.537Z","request_id":"req-mofxfuip-60456919008df27a","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":9}
+{"timestamp":"2026-04-26T15:32:25.540Z","request_id":"req-mofxfuis-f3eb6cb700a46b11","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":10}
+{"timestamp":"2026-04-26T15:32:25.542Z","request_id":"req-mofxfuiu-b2c49689224b9a0e","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":11}
+{"timestamp":"2026-04-26T15:32:25.544Z","request_id":"req-mofxfuiw-030cef4cdac3c694","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":12}
+{"timestamp":"2026-04-26T15:32:25.545Z","request_id":"req-mofxfuix-08a8c4beff360660","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":13}
+{"timestamp":"2026-04-26T15:32:25.546Z","request_id":"req-mofxfuiy-1799cd985f066d7b","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":14}
+{"timestamp":"2026-04-26T15:32:25.547Z","request_id":"req-mofxfuiy-b97c0e7b59eef98b","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":15}
+{"timestamp":"2026-04-26T15:32:25.548Z","request_id":"req-mofxfuiz-321b68a98157d53f","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":16}
+{"timestamp":"2026-04-26T15:32:25.548Z","request_id":"req-mofxfuj0-97d5b26804604ef5","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":17}
+{"timestamp":"2026-04-26T15:32:25.549Z","request_id":"req-mofxfuj1-a0b7a66a8c94b7bc","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":18}
+{"timestamp":"2026-04-26T15:32:25.549Z","request_id":"req-mofxfuj1-006487ca722073bf","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":19}
+{"timestamp":"2026-04-26T15:32:25.550Z","request_id":"req-mofxfuj2-e539f788c84c536e","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":20}
+{"timestamp":"2026-04-26T15:32:25.551Z","request_id":"req-mofxfuj3-eb0644b800d9a2f8","level":"warn","event":"telemetry_event","metric":"response_skipped_compression_count","count":1}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-admin-metrics.test.ts[2m > [22m[2mai-gateway admin metrics endpoint[2m > [22m[2mdoes not change standard POST behavior with valid auth
+[22m[39m{"timestamp":"2026-04-26T15:32:25.556Z","request_id":"req-mofxfuj7-4760597b47d4a08a","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-admin-metrics.test.ts[2m > [22m[2mai-gateway admin metrics endpoint[2m > [22m[2mreturns 401 for GET /metrics without valid admin key
+[22m[39m{"timestamp":"2026-04-26T15:32:25.563Z","request_id":"req-mofxfuje-b0e7521f5e8d69a5","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-admin-metrics.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 88[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/rateLimiter.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 461[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/connectionPool.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 446[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/otelCollector.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 1329[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m OTelCollectorClient[2m > [22mFlushing[2m > [22mreturns failed count after max retries exceeded [33m311[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m OTelCollectorClient[2m > [22mFlushing[2m > [22mimplements exponential backoff on retries [33m328[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m OTelCollectorClient[2m > [22mStatistics[2m > [22mtracks failed metrics [33m327[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/security.integration.test.ts [2m([22m[2m48 tests[22m[2m)[22m[33m 1411[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Security Integration Tests[2m > [22mData Exfiltration Prevention[2m > [22mlimits SBOM size to prevent memory exhaustion [33m1171[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/scans.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/compliance.test.ts [2m([22m[2m19 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/evidencePackage.test.ts [2m([22m[2m30 tests[22m[2m)[22m[90m 53[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mreturns 400 for invalid JSON with safe error payload
+[22m[39m{"timestamp":"2026-04-26T15:32:28.535Z","request_id":"req-mofxfwtx-25f506d3ce5b1fc0","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":1,"status_code":400}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mreturns 413 for payload too large
+[22m[39m{"timestamp":"2026-04-26T15:32:28.538Z","request_id":"req-mofxfwu2-eb046a2e14dc66ad","level":"warn","event":"telemetry_event","metric":"payload_too_large_count","count":1,"status_code":413}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mreturns 429 when rate limit is exceeded
+[22m[39m{"timestamp":"2026-04-26T15:32:28.541Z","request_id":"req-mofxfwu4-e0b3daf1865a2eb4","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+{"timestamp":"2026-04-26T15:32:28.542Z","request_id":"req-mofxfwu6-9b218bd185f792c5","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":2}
+{"timestamp":"2026-04-26T15:32:28.544Z","request_id":"req-mofxfwu7-b48e9f74f6cf5a71","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":3}
+{"timestamp":"2026-04-26T15:32:28.545Z","request_id":"req-mofxfwu9-5dfea729a1732871","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":4}
+{"timestamp":"2026-04-26T15:32:28.547Z","request_id":"req-mofxfwua-c41b2aaee24bca11","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":5}
+{"timestamp":"2026-04-26T15:32:28.548Z","request_id":"req-mofxfwuc-66238c401dc1c182","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":6}
+{"timestamp":"2026-04-26T15:32:28.549Z","request_id":"req-mofxfwud-2484ea51ea079fcd","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":7}
+{"timestamp":"2026-04-26T15:32:28.551Z","request_id":"req-mofxfwue-e1f5b85d00b0c686","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":8}
+{"timestamp":"2026-04-26T15:32:28.552Z","request_id":"req-mofxfwug-ba066a8e240cf0f5","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":9}
+{"timestamp":"2026-04-26T15:32:28.553Z","request_id":"req-mofxfwuh-efb124c4bdcdaa09","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":10}
+{"timestamp":"2026-04-26T15:32:28.554Z","request_id":"req-mofxfwui-1356a1c76fbd4dcb","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":11}
+{"timestamp":"2026-04-26T15:32:28.555Z","request_id":"req-mofxfwuj-4f17853d679e14d0","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":12}
+{"timestamp":"2026-04-26T15:32:28.556Z","request_id":"req-mofxfwuk-a58fd72625132225","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":13}
+{"timestamp":"2026-04-26T15:32:28.556Z","request_id":"req-mofxfwuk-0e26b4f5b3f07819","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":14}
+{"timestamp":"2026-04-26T15:32:28.563Z","request_id":"req-mofxfwul-385caf13052cbb05","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":15}
+{"timestamp":"2026-04-26T15:32:28.568Z","request_id":"req-mofxfwut-6319ec7108b7f3f6","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":16}
+{"timestamp":"2026-04-26T15:32:28.586Z","request_id":"req-mofxfwve-678103c65e874fdf","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":17}
+{"timestamp":"2026-04-26T15:32:28.587Z","request_id":"req-mofxfwvf-198f6688845374b0","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":18}
+{"timestamp":"2026-04-26T15:32:28.589Z","request_id":"req-mofxfwvh-ca2e869bf9aaf456","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":19}
+{"timestamp":"2026-04-26T15:32:28.596Z","request_id":"req-mofxfwvi-058f5b398704a7b0","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":20}
+{"timestamp":"2026-04-26T15:32:28.597Z","request_id":"req-mofxfwvp-b72fa36627bb2ae0","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":21}
+{"timestamp":"2026-04-26T15:32:28.598Z","request_id":"req-mofxfwvq-497c23a343fbd8d2","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":22}
+{"timestamp":"2026-04-26T15:32:28.600Z","request_id":"req-mofxfwvs-c91b54b733030106","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":23}
+{"timestamp":"2026-04-26T15:32:28.609Z","request_id":"req-mofxfww0-e9c9fa9a5211fab0","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":24}
+{"timestamp":"2026-04-26T15:32:28.610Z","request_id":"req-mofxfww2-5cc7719822c90218","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":25}
+{"timestamp":"2026-04-26T15:32:28.617Z","request_id":"req-mofxfww9-9d3aa76706fcf962","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":26}
+{"timestamp":"2026-04-26T15:32:28.622Z","request_id":"req-mofxfwwd-665c7df8e34b5391","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":27}
+{"timestamp":"2026-04-26T15:32:28.623Z","request_id":"req-mofxfwwf-4e6e317e639d455e","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":28}
+{"timestamp":"2026-04-26T15:32:28.625Z","request_id":"req-mofxfwwg-68e0cedc9f85153e","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":29}
+{"timestamp":"2026-04-26T15:32:28.628Z","request_id":"req-mofxfwwk-65eddc889bb3ab89","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":30}
+{"timestamp":"2026-04-26T15:32:28.630Z","request_id":"req-mofxfwwm-1c469e86f18050d9","level":"warn","event":"telemetry_event","metric":"rate_limited_count","count":1,"status_code":429}
+{"timestamp":"2026-04-26T15:32:28.630Z","request_id":"req-mofxfwwm-1c469e86f18050d9","level":"warn","event":"rate_limit_exceeded","trace_id":"a6014c7ee17e3baf1a69f945580aebd2","span_id":"e4211adaddca6eb6","retry_after_seconds":60}
+{"timestamp":"2026-04-26T15:32:28.631Z","request_id":"req-mofxfwwn-0ba1ad4260cd2d9e","level":"warn","event":"telemetry_event","metric":"rate_limited_count","count":2,"status_code":429}
+{"timestamp":"2026-04-26T15:32:28.632Z","request_id":"req-mofxfwwn-0ba1ad4260cd2d9e","level":"warn","event":"rate_limit_exceeded","trace_id":"e42cc9bbe84521bdf26c6ffb196cb64f","span_id":"da3f3a896cba909c","retry_after_seconds":60}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mreturns 401 when authorization header is missing
+[22m[39m{"timestamp":"2026-04-26T15:32:28.634Z","request_id":"req-mofxfwwq-4a6224525994e579","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mreturns 401 when authorization scheme is not Bearer
+[22m[39m{"timestamp":"2026-04-26T15:32:28.637Z","request_id":"req-mofxfwwt-17c9890ffa075c18","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":2,"status_code":401}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mapplies security headers on JSON responses
+[22m[39m{"timestamp":"2026-04-26T15:32:28.639Z","request_id":"req-mofxfwwv-ab3d18544b3dba81","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":2,"status_code":400}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mpreserves incoming x-request-id when valid
+[22m[39m{"timestamp":"2026-04-26T15:32:28.642Z","request_id":"client.req-12345","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":3,"status_code":400}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-handler.test.ts[2m > [22m[2mai-gateway handler[2m > [22m[2mgenerates x-request-id when incoming one is invalid
+[22m[39m{"timestamp":"2026-04-26T15:32:28.643Z","request_id":"req-mofxfwwz-ac37fbb6e856ef67","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":4,"status_code":400}
+
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-handler.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 128[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/cveEnrichment.test.ts [2m([22m[2m17 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+stderr | src/context/__tests__/AuthContext.test.tsx > AuthContext > useAuth > throws error when used outside AuthProvider
+Error: useAuth must be used within AuthProvider
+    at Module.useAuth (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\context\useAuth.ts:6:19)
+    at TestComponent (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\context\__tests__\AuthContext.test.tsx:76:9)
+    at renderWithHooks (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: useAuth must be used within AuthProvider
+    at Module.useAuth (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\context\useAuth.ts:6:19)
+    at TestComponent (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\context\__tests__\AuthContext.test.tsx:76:9)
+    at renderWithHooks (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+The above error occurred in the <TestComponent> component:
+
+    at TestComponent (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\context\__tests__\AuthContext.test.tsx:78:25)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScan[2m > [22m[2mfalls back to MOCK mode when edge is unavailable
+[22m[39m[scanDispatch] Running in MOCK mode (no real agent)
+
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScan[2m > [22m[2mreturns REAL mode when edge dispatch succeeds
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-1
+
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-prometheus.test.ts [2m([22m[2m16 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScansParallel[2m > [22m[2mdispatches multiple scans and returns summary
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-x
+[scanDispatch] Job queued via edge fn: job_id=job-x
+[scanDispatch] Job queued via edge fn: job_id=job-x
+
+ [32mтЬУ[39m src/context/__tests__/AuthContext.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 626[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AuthContext[2m > [22mAuthProvider[2m > [22msignIn returns { error: null } on success [33m326[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScansParallel[2m > [22m[2mrespects concurrency limit
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-1
+[scanDispatch] Job queued via edge fn: job_id=job-1
+
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScansParallel[2m > [22m[2mrespects concurrency limit
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-1
+[scanDispatch] Job queued via edge fn: job_id=job-1
+
+[90mstdout[2m | src/lib/__tests__/scanDispatch.test.ts[2m > [22m[2mdispatchScansParallel[2m > [22m[2mrespects concurrency limit
+[22m[39m[scanDispatch] Job queued via edge fn: job_id=job-1
+
+ [32mтЬУ[39m src/lib/__tests__/scanDispatch.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 313[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/parallelScanner.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 226[2mms[22m[39m
+ [32mтЬУ[39m src/api/ai.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 1527[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AiService[2m > [22minvokes polling progress callback with retrying status [33m1504[2mms[22m[39m
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements unauthorized_count for missing auth
+[22m[39m{"timestamp":"2026-04-26T15:32:30.008Z","request_id":"req-mofxfxyv-e94743782bb31e41","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements invalid_json_count for malformed JSON
+[22m[39m{"timestamp":"2026-04-26T15:32:30.018Z","request_id":"req-mofxfxz3-81d599446797987e","level":"warn","event":"telemetry_event","metric":"invalid_json_count","count":1,"status_code":400}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements payload_too_large_count for oversized body
+[22m[39m{"timestamp":"2026-04-26T15:32:30.022Z","request_id":"req-mofxfxz9-3f2b614e6ecf7254","level":"warn","event":"telemetry_event","metric":"payload_too_large_count","count":1,"status_code":413}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements rate_limited_count when requests exceed window limit
+[22m[39m{"timestamp":"2026-04-26T15:32:30.025Z","request_id":"req-mofxfxzc-bcf5ad54e6d61dae","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+{"timestamp":"2026-04-26T15:32:30.028Z","request_id":"req-mofxfxzf-54af8d2a7c5c4c60","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":2}
+{"timestamp":"2026-04-26T15:32:30.030Z","request_id":"req-mofxfxzh-c11c908cbe406fec","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":3}
+{"timestamp":"2026-04-26T15:32:30.032Z","request_id":"req-mofxfxzk-3a701e7c89f72766","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":4}
+{"timestamp":"2026-04-26T15:32:30.035Z","request_id":"req-mofxfxzm-36494d0677d9f154","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":5}
+{"timestamp":"2026-04-26T15:32:30.037Z","request_id":"req-mofxfxzo-1f8d01c1cff6b540","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":6}
+{"timestamp":"2026-04-26T15:32:30.039Z","request_id":"req-mofxfxzq-2f79de348cd7ef49","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":7}
+{"timestamp":"2026-04-26T15:32:30.041Z","request_id":"req-mofxfxzt-c0e88774ee7c841e","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":8}
+{"timestamp":"2026-04-26T15:32:30.046Z","request_id":"req-mofxfxzw-0b37eeda3260c9d4","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":9}
+{"timestamp":"2026-04-26T15:32:30.068Z","request_id":"req-mofxfy00-9367067332781c65","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":10}
+{"timestamp":"2026-04-26T15:32:30.075Z","request_id":"req-mofxfy0m-0ae54b2f76aa6a5a","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":11}
+{"timestamp":"2026-04-26T15:32:30.094Z","request_id":"req-mofxfy10-bce72362c9f35310","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":12}
+{"timestamp":"2026-04-26T15:32:30.099Z","request_id":"req-mofxfy1e-dc9aad606b6fd938","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":13}
+{"timestamp":"2026-04-26T15:32:30.105Z","request_id":"req-mofxfy1k-bad8ce5252a62f98","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":14}
+{"timestamp":"2026-04-26T15:32:30.106Z","request_id":"req-mofxfy1m-52f4fb27976c165f","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":15}
+{"timestamp":"2026-04-26T15:32:30.108Z","request_id":"req-mofxfy1n-79aa6145b49cc285","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":16}
+{"timestamp":"2026-04-26T15:32:30.109Z","request_id":"req-mofxfy1p-5ab2e614cc64edc2","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":17}
+{"timestamp":"2026-04-26T15:32:30.111Z","request_id":"req-mofxfy1q-758d15dbc6387e71","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":18}
+{"timestamp":"2026-04-26T15:32:30.113Z","request_id":"req-mofxfy1t-241fc2932680b172","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":19}
+{"timestamp":"2026-04-26T15:32:30.115Z","request_id":"req-mofxfy1u-5b24f2204c1d3ffa","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":20}
+{"timestamp":"2026-04-26T15:32:30.116Z","request_id":"req-mofxfy1w-abd6b34cead89f6c","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":21}
+{"timestamp":"2026-04-26T15:32:30.117Z","request_id":"req-mofxfy1x-0ec51be06a506f14","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":22}
+{"timestamp":"2026-04-26T15:32:30.118Z","request_id":"req-mofxfy1y-71c5e768b69536fd","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":23}
+{"timestamp":"2026-04-26T15:32:30.120Z","request_id":"req-mofxfy20-4e9beaa43e2f1767","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":24}
+{"timestamp":"2026-04-26T15:32:30.121Z","request_id":"req-mofxfy21-02e5c590867ce4b5","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":25}
+{"timestamp":"2026-04-26T15:32:30.122Z","request_id":"req-mofxfy22-a04dfa55db09431d","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":26}
+{"timestamp":"2026-04-26T15:32:30.123Z","request_id":"req-mofxfy23-17bb679aec7c2cbd","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":27}
+{"timestamp":"2026-04-26T15:32:30.138Z","request_id":"req-mofxfy23-69980141d1e8a679","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":28}
+{"timestamp":"2026-04-26T15:32:30.148Z","request_id":"req-mofxfy2q-48caded593728610","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":29}
+{"timestamp":"2026-04-26T15:32:30.156Z","request_id":"req-mofxfy30-b58e157e7593bd64","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":30}
+{"timestamp":"2026-04-26T15:32:30.158Z","request_id":"req-mofxfy32-d60771a297f87451","level":"warn","event":"telemetry_event","metric":"rate_limited_count","count":1,"status_code":429}
+{"timestamp":"2026-04-26T15:32:30.158Z","request_id":"req-mofxfy32-d60771a297f87451","level":"warn","event":"rate_limit_exceeded","trace_id":"3a83c3700120337d82f43fd54d9feed8","span_id":"0d043c9e5ea44dd2","retry_after_seconds":60}
+{"timestamp":"2026-04-26T15:32:30.159Z","request_id":"req-mofxfy33-109eadc75174ca45","level":"warn","event":"telemetry_event","metric":"rate_limited_count","count":2,"status_code":429}
+{"timestamp":"2026-04-26T15:32:30.159Z","request_id":"req-mofxfy33-109eadc75174ca45","level":"warn","event":"rate_limit_exceeded","trace_id":"5a22ec309b1dea41c3c54f1b99f679b2","span_id":"7ed308b4aa819a2f","retry_after_seconds":60}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements provider_fallback_count for successful mock fallback flow
+[22m[39m{"timestamp":"2026-04-26T15:32:30.161Z","request_id":"req-mofxfy35-677f447ebe20708f","level":"warn","event":"telemetry_event","metric":"provider_fallback_count","count":1}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mincrements ai_invalid_json_count when kill-chain response is not valid JSON
+[22m[39m{"timestamp":"2026-04-26T15:32:30.165Z","request_id":"req-mofxfy37-e77463f014732540","level":"warn","event":"telemetry_event","metric":"ai_invalid_json_count","count":1,"status_code":502}
+
+[90mstdout[2m | src/lib/__tests__/ai-gateway-telemetry.test.ts[2m > [22m[2mai-gateway telemetry[2m > [22m[2mkeeps only last 50 recent events and returns safe event shape
+[22m[39m{"timestamp":"2026-04-26T15:32:30.170Z","request_id":"req-mofxfy3e-5774b19f11b587be","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":1,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.177Z","request_id":"req-mofxfy3l-2a1ad59d62feeb1d","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":2,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.178Z","request_id":"req-mofxfy3m-72c3af2c674639d3","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":3,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.179Z","request_id":"req-mofxfy3n-190e30471aa7b7ab","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":4,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.187Z","request_id":"req-mofxfy3v-7b0f117ee6070f47","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":5,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.189Z","request_id":"req-mofxfy3x-95545a1b201d213e","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":6,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.190Z","request_id":"req-mofxfy3y-f14be2c00f96caba","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":7,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.190Z","request_id":"req-mofxfy3y-99ef3a50e48d405c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":8,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.205Z","request_id":"req-mofxfy4c-b47d7a8ceaa3dfb6","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":9,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.212Z","request_id":"req-mofxfy4k-48cdc5a5290a66e3","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":10,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.213Z","request_id":"req-mofxfy4l-2253b1ee62ff2e4c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":11,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.214Z","request_id":"req-mofxfy4m-d0feaf94f83fb906","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":12,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.214Z","request_id":"req-mofxfy4m-12b412ff95eff6f3","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":13,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.215Z","request_id":"req-mofxfy4n-aa2b4f3596c995a2","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":14,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.216Z","request_id":"req-mofxfy4o-964eacf2410d2bae","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":15,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.216Z","request_id":"req-mofxfy4o-7b26739d1a69beff","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":16,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.220Z","request_id":"req-mofxfy4r-668a8d4a475e3c6c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":17,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.220Z","request_id":"req-mofxfy4s-ed44ae4f9895b05a","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":18,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.223Z","request_id":"req-mofxfy4v-22f80f827ebfcec2","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":19,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.224Z","request_id":"req-mofxfy4w-693a16af4ab88a9f","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":20,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.224Z","request_id":"req-mofxfy4w-ce120169060a3937","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":21,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.225Z","request_id":"req-mofxfy4x-4a5845ba92bd9d42","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":22,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.229Z","request_id":"req-mofxfy51-0c97f3e0f60ce4fd","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":23,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.230Z","request_id":"req-mofxfy52-4f66ff5b0fe65abf","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":24,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.231Z","request_id":"req-mofxfy53-5a6d8b605113e03b","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":25,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.231Z","request_id":"req-mofxfy53-59ac4df5de1e0900","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":26,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.234Z","request_id":"req-mofxfy56-c8ff7808aaf5639c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":27,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.235Z","request_id":"req-mofxfy57-3a6af3ada5aba459","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":28,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.236Z","request_id":"req-mofxfy58-66a5fa13e0f223fd","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":29,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.236Z","request_id":"req-mofxfy58-f96cee2b72356db2","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":30,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.237Z","request_id":"req-mofxfy59-dbc294e81a0aac09","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":31,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.237Z","request_id":"req-mofxfy59-644c0c94db6e3efe","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":32,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.238Z","request_id":"req-mofxfy5a-5c4b65a24903ef36","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":33,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.238Z","request_id":"req-mofxfy5a-b73458c3e2fe79ff","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":34,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.239Z","request_id":"req-mofxfy5b-9b6216f80b3578d9","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":35,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.239Z","request_id":"req-mofxfy5b-599293b72e650e24","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":36,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.239Z","request_id":"req-mofxfy5b-9d2262dd75ff9d5e","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":37,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.240Z","request_id":"req-mofxfy5c-4c2a2bd3671c97c9","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":38,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.240Z","request_id":"req-mofxfy5c-eb46d48dbf321002","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":39,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.240Z","request_id":"req-mofxfy5c-9d8dc3e5f94d0a37","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":40,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.243Z","request_id":"req-mofxfy5f-96d22dcdd6989446","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":41,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.243Z","request_id":"req-mofxfy5f-9f6158b3211f9ccd","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":42,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.244Z","request_id":"req-mofxfy5g-5c2b2108caa55c15","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":43,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.245Z","request_id":"req-mofxfy5h-9dbc5093cbd105e7","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":44,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.245Z","request_id":"req-mofxfy5h-ff4a6e94843f2c3c","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":45,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.246Z","request_id":"req-mofxfy5i-a23e56398ee14dfe","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":46,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.248Z","request_id":"req-mofxfy5k-8626e606358fa5c2","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":47,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.253Z","request_id":"req-mofxfy5o-f02db73bc5f0825e","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":48,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.258Z","request_id":"req-mofxfy5s-cb04d3ce4915cc52","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":49,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.259Z","request_id":"req-mofxfy5v-ab866cac2a0e39be","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":50,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.260Z","request_id":"req-mofxfy5w-746ef0cf687c0e71","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":51,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.261Z","request_id":"req-mofxfy5x-0596deaec4fc2efe","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":52,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.267Z","request_id":"req-mofxfy63-651a94ca93314158","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":53,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.268Z","request_id":"req-mofxfy64-fb2bda549cf1b9d9","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":54,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.269Z","request_id":"req-mofxfy65-6d6f0bab964e1aab","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":55,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.269Z","request_id":"req-mofxfy65-292f073127c18c93","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":56,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.271Z","request_id":"req-mofxfy66-9aeb0414d88b7770","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":57,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.274Z","request_id":"req-mofxfy6a-4c870bd456c5f635","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":58,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.275Z","request_id":"req-mofxfy6b-b1f37940d828b686","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":59,"status_code":401}
+{"timestamp":"2026-04-26T15:32:30.276Z","request_id":"req-mofxfy6b-5da5dacd7c98ddfa","level":"warn","event":"telemetry_event","metric":"unauthorized_count","count":60,"status_code":401}
+
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-telemetry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 294[2mms[22m[39m
+stderr | src/components/__tests__/SchedulesPanel.test.tsx > SchedulesPanel тАФ empty state > shows "New schedule" button
+Warning: An update to SchedulesPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SchedulesPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\SchedulesPanel.tsx:27:27)
+Warning: An update to SchedulesPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SchedulesPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\SchedulesPanel.tsx:27:27)
+
+stderr | src/components/__tests__/SchedulesPanel.test.tsx > SchedulesPanel тАФ empty state > "New schedule" button is disabled when no projects
+Warning: An update to SchedulesPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SchedulesPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\SchedulesPanel.tsx:27:27)
+Warning: An update to SchedulesPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SchedulesPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\SchedulesPanel.tsx:27:27)
+
+ [32mтЬУ[39m src/components/__tests__/SchedulesPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 501[2mms[22m[39m
+ [31mтЭп[39m src/pages/__tests__/ProjectDetail.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+stderr | src/lib/__tests__/schedulerDispatch.test.ts > dispatchDueSchedules > returns 0 when due schedules query fails
+[scheduler] Error fetching due schedules: { message: 'db unavailable' }
+
+[90mstdout[2m | src/lib/__tests__/schedulerDispatch.test.ts[2m > [22m[2mdispatchDueSchedules[2m > [22m[2mdispatches due schedules and counts successful launches only
+[22m[39m[scanDispatch] Running in MOCK mode (no real agent)
+[scanDispatch] Running in MOCK mode (no real agent)
+
+stderr | src/lib/__tests__/schedulerDispatch.test.ts > dispatchDueSchedules > dispatches due schedules and counts successful launches only
+[scheduler] Failed to dispatch scheduled scan: {
+  code: 'SCAN_MOCK_FAILED',
+  message: 'Mock scan failed to execute.',
+  cause: undefined,
+  context: { projectId: 'p-2', scanner: 'amass' },
+  timestamp: '2026-04-26T15:32:32.940Z'
+}
+
+ [32mтЬУ[39m src/lib/__tests__/schedulerDispatch.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 71[2mms[22m[39m
+ [31mтЭп[39m src/pages/__tests__/Chat.integration.test.tsx [2m([22m[2m4 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[90m 14[2mms[22m[39m
+[31m   [31m├Ч[31m Chat integration flow[2m > [22msends suggestion and persists user+assistant messages via agent path[90m 8[2mms[22m[31m[39m
+[31m     тЖТ Cannot redefine property: scrollTo[39m
+[31m   [31m├Ч[31m Chat integration flow[2m > [22mrenders assistant response from gateway when agent returns null[90m 1[2mms[22m[31m[39m
+[31m     тЖТ Cannot redefine property: scrollTo[39m
+[31m   [31m├Ч[31m Chat integration flow[2m > [22mrenders error message when gateway throws[90m 1[2mms[22m[31m[39m
+[31m     тЖТ Cannot redefine property: scrollTo[39m
+[31m   [31m├Ч[31m Chat integration flow[2m > [22mshows thinking label while gateway is processing[90m 1[2mms[22m[31m[39m
+[31m     тЖТ Cannot redefine property: scrollTo[39m
+ [32mтЬУ[39m src/__tests__/App.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[90m 189[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/ReportViewer.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1027[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ReportViewer[2m > [22mclose interactions[2m > [22mcalls onClose when X button clicked [33m364[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/scans.service.integration.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [31mтЭп[39m src/pages/__tests__/Projects.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [32mтЬУ[39m src/components/__tests__/ScanDiff.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 734[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ScanDiff[2m > [22mdiff classification[2m > [22mshows correct counts in summary pills [33m409[2mms[22m[39m
+stderr | src/pages/__tests__/KillChain.test.tsx > KillChain тАФ layout > renders "AI Red Team Simulation" heading
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+
+stderr | src/pages/__tests__/KillChain.test.tsx > KillChain тАФ layout > renders "Target Project" label
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+
+stderr | src/pages/__tests__/KillChain.test.tsx > KillChain тАФ layout > renders "Generate Kill Chain" button
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+
+ [32mтЬУ[39m src/components/__tests__/RemediationModal.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 592[2mms[22m[39m
+stderr | src/pages/__tests__/KillChain.test.tsx > KillChain тАФ simulation > button is disabled while loading
+Warning: An update to KillChain inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at KillChain (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\KillChain.tsx:18:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Settings" heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Profile" section heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Subscription" section heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Remediation SLA" section heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Team Members" section heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ layout > renders "Webhook Integrations" section heading
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Profile section > email input is disabled and pre-filled from profile
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Profile section > full name input is pre-filled from profile
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Profile section > company input is pre-filled from profile
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Profile section > full name input updates on change
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Plans > renders all four plan names
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Plans > shows "Current plan тЬУ" for active plan (free)
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Plans > shows "Most Popular" badge on Pro plan
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ SLA section > renders SLA input for Critical with value from DEFAULT_SLA_CONFIG
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ SLA section > renders SLA inputs for all four severities
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Team Members > renders owner email in team list
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Team Members > renders "Owner" role badge
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Team Members > adds a new team member when Invite button clicked
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+stderr | src/pages/__tests__/Settings.test.tsx > Settings тАФ Save > renders "Save changes" button
+Warning: An update to ApiRateLimitsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApiRateLimitsPanel (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\ApiRateLimitsPanel.tsx:39:31)
+    at div
+    at Settings (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Settings.tsx:213:57)
+
+ [32mтЬУ[39m src/pages/__tests__/KillChain.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1536[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m KillChain тАФ layout[2m > [22mrenders "Generate Kill Chain" button [33m431[2mms[22m[39m
+stderr | src/lib/__tests__/aiGateway.test.ts > callAiGateway > fallback to local mock > falls back to local mock when edge function returns non-OK status
+[aiGateway] Edge fn returned 503 тАФ using local mock
+[aiGateway] Falling back to local mock: Error: Gateway 503
+    at Module.callAiGateway (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\lib\aiGateway.ts:35:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\lib\__tests__\aiGateway.test.ts:113:22
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:533:5
+    at runTest (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1056:11)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1271:3)
+
+stderr | src/lib/__tests__/aiGateway.test.ts > callAiGateway > fallback to local mock > falls back to local mock when fetch throws (network error)
+[aiGateway] Falling back to local mock: Error: Network error
+    at D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\lib\__tests__\aiGateway.test.ts:121:39
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1262:5)
+
+stderr | src/lib/__tests__/aiGateway.test.ts > callAiGateway > fallback to local mock > uses last user message content for mock fallback
+[aiGateway] Falling back to local mock: Error: timeout
+    at D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\lib\__tests__\aiGateway.test.ts:130:39
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1262:5)
+
+stderr | src/lib/__tests__/aiGateway.test.ts > callAiGateway > fallback to local mock > handles empty messages array gracefully in fallback
+[aiGateway] Falling back to local mock: Error: timeout
+    at D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\lib\__tests__\aiGateway.test.ts:142:39
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/@vitest/runner/dist/index.js:1262:5)
+
+ [32mтЬУ[39m src/lib/__tests__/aiGateway.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/Settings.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 5896[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Settings тАФ layout[2m > [22mrenders "Settings" heading [33m372[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Settings тАФ Team Members[2m > [22madds a new team member when Invite button clicked [33m854[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Settings тАФ Save[2m > [22mrenders "Save changes" button [33m551[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Settings тАФ Save[2m > [22mcalls supabase update when Save clicked [33m463[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Settings тАФ Save[2m > [22mshows "Saved!" after successful save [33m1070[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/FindingsTab.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 670[2mms[22m[39m
+ [31mтЭп[39m src/pages/__tests__/Reports.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+stderr | src/components/__tests__/NotificationBell.test.tsx > NotificationBell тАФ closed state > renders the Bell button
+Warning: An update to NotificationBell inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at NotificationBell (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\NotificationBell.tsx:38:51)
+
+stderr | src/components/__tests__/NotificationBell.test.tsx > NotificationBell тАФ open popover > opens popover when Bell button clicked
+Warning: An update to NotificationBell inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at NotificationBell (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\NotificationBell.tsx:38:51)
+Warning: An update to NotificationBell inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at NotificationBell (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\NotificationBell.tsx:38:51)
+Warning: An update to NotificationBell inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at NotificationBell (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\NotificationBell.tsx:38:51)
+
+ [32mтЬУ[39m src/lib/__tests__/riskScore.test.ts [2m([22m[2m24 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/nucleiParser.test.ts [2m([22m[2m26 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/scanQueue.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/NotificationBell.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 838[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m NotificationBell тАФ open popover[2m > [22mshows "Mark all read" button (enabled when unread exist) [33m521[2mms[22m[39m
+ [32mтЬУ[39m src/api/__tests__/ai.service.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/DarkWebMonitor.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1992[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m OsintAnalyzer (DarkWebMonitor)[2m > [22mrenders Analyze button disabled when input is empty [33m389[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m OsintAnalyzer (DarkWebMonitor)[2m > [22mshows error message when scan fails [33m323[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/logger.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/VulnerabilityList.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 506[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/Scans.integration.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 965[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Scans integration flow[2m > [22mdispatches new scan from modal with project fallback target [33m671[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/Scheduler.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1355[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m SchedulerPage[2m > [22mrenders "New schedule" button [33m432[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/AssetGraph.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 439[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/scheduler.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/aiRedTeam.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/SupplyChain.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 449[2mms[22m[39m
+ [31mтЭп[39m src/pages/__tests__/Integrations.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [32mтЬУ[39m src/components/__tests__/ScanHeader.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 814[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ScanHeader тАФ static rendering[2m > [22mrenders "New Scan" button [33m464[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/VulnerabilityCard.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 238[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/agentTools.integration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-contract.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 40[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/AppLayout.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 2764[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AppLayout тАФ sidebar[2m > [22mrenders Dashboard nav link [33m875[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AppLayout тАФ sidebar[2m > [22mrenders AI Assistant nav link [33m416[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AppLayout тАФ sidebar[2m > [22mrenders Projects nav link [33m370[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AppLayout тАФ Scans link[2m > [22mrenders Scans nav link pointing to /scans [33m350[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/AttackSurfaceMap.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1463[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AttackSurfaceMap[2m > [22mrenders "Attack Surface Map" heading [33m328[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m AttackSurfaceMap[2m > [22mrenders "Re-layout" button [33m514[2mms[22m[39m
+stderr | src/components/__tests__/Sparkline.test.tsx > Sparkline > renders correctly for single data point
+Warning: Received NaN for the `cx` attribute. If this is expected, cast the value to a string.
+    at circle
+    at svg
+    at Sparkline (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\components\Sparkline.tsx:4:3)
+
+ [32mтЬУ[39m src/components/__tests__/Sparkline.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[90m 135[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/Auth.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1272[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Auth тАФ Sign In mode (default)[2m > [22mrenders "Sign in" submit button [33m481[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/aiMock.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/ExecutionConsole.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 398[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/agentToolsPure.test.ts [2m([22m[2m11 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/PublicReport.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 750[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m PublicReport[2m > [22mrenders "Markdown" download button when report found [33m466[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/scanMock.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+stderr | src/pages/__tests__/Compliance.test.tsx > Compliance > renders loading state initially
+Warning: An update to Compliance inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at Compliance (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Compliance.tsx:19:51)
+Warning: An update to Compliance inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at Compliance (D:\WORK\GITHUB\SENTINEL_AI\sentinel-ai-app\src\pages\Compliance.tsx:19:51)
+
+ [32mтЬУ[39m src/pages/__tests__/Compliance.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1706[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Compliance[2m > [22mrenders "Compliance" heading after data loads [33m405[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/threatIntel.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/ai-gateway-rate-limit.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/Landing.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1016[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m Landing[2m > [22mrenders "Start Free Trial" CTA button [33m400[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/ApiDocs.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 705[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ApiDocs[2m > [22mclicking "Copy cURL" copies to clipboard [33m403[2mms[22m[39m
+ [32mтЬУ[39m src/components/__tests__/ScanStats.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 142[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/result-contract.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32mтЬУ[39m src/lib/__tests__/errors.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/NotFound.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 339[2mms[22m[39m
+ [32mтЬУ[39m src/pages/__tests__/PassiveRecon.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 5861[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ActiveRecon (PassiveRecon)[2m > [22mrenders "Start Active Recon" button disabled when input is empty [33m381[2mms[22m[39m
+   [33m[2mтЬУ[22m[39m ActiveRecon (PassiveRecon)[2m > [22mshows scan complete message after scan finishes [33m5060[2mms[22m[39m

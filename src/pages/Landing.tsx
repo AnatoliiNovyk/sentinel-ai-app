@@ -34,6 +34,9 @@ export default function Landing() {
       a: 'Yes! We provide one-click evidence export for SOC2, CIS Controls, NIST CSF, and MITRE ATT&CK. Perfect for audit preparation and compliance reporting.',
     },
   ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white">
       
       {/* Header */}
       <header className="fixed top-0 w-full border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md z-50">
