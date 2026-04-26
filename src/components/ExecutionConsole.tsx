@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Terminal, CheckCircle2, Loader2 } from 'lucide-react';
+import { Terminal, CheckCircle2, Loader2, Copy, Check } from 'lucide-react';
 
 interface LogLine {
   text: string;
@@ -17,7 +17,15 @@ interface ExecutionConsoleProps {
 export default function ExecutionConsole({ code, type, onComplete, onCancel }: ExecutionConsoleProps) {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [logCopied, setLogCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const copyLog = useCallback(() => {
+    const text = logs.map(l => `[${l.timestamp}] ${l.text}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setLogCopied(true);
+    setTimeout(() => setLogCopied(false), 2000);
+  }, [logs]);
 
   const addLog = useCallback((text: string, type: LogLine['type'] = 'info') => {
     setLogs((prev) => [
@@ -76,7 +84,21 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
             </div>
             <Terminal className="w-4 h-4 text-slate-400" />
             <span className="text-xs font-mono text-slate-300">sentinel-ai --apply-fix --force</span>
+            {logs.length > 0 && (
+              <span className="text-[10px] text-slate-600 font-mono">[{logs.length} lines]</span>
+            )}
           </div>
+          <div className="flex items-center gap-2">
+          {logs.length > 0 && (
+            <button
+              onClick={copyLog}
+              className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-white transition"
+              aria-label="Copy log" title="Copy log"
+            >
+              {logCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {logCopied ? 'Copied' : 'Copy log'}
+            </button>
+          )}
           {!isFinishing && (
             <button 
               onClick={onCancel}
@@ -85,6 +107,7 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
               Abort
             </button>
           )}
+          </div>
         </div>
 
         {/* Terminal Body */}
@@ -121,7 +144,12 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
 
         <div className="px-4 py-2 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
           <span>Sentinel AI v2.4 (Engine: Hyperion)</span>
-          <span>Status: {isFinishing ? 'Success' : 'Executing...'}</span>
+          <span className="flex items-center gap-3">
+            {logs.filter(l => l.type === 'error').length > 0 && (
+              <span className="text-red-400">{logs.filter(l => l.type === 'error').length} error(s)</span>
+            )}
+            <span>Status: {isFinishing ? 'Success' : 'Executing...'}</span>
+          </span>
         </div>
       </div>
     </div>

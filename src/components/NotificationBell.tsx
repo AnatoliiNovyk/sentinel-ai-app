@@ -158,7 +158,26 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute right-0 mt-2 w-96 rounded-xl border border-slate-800 bg-slate-950 shadow-2xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-            <div className="text-sm font-semibold text-white">Notifications</div>
+            <div>
+              <div className="text-sm font-semibold text-white">Notifications</div>
+              {items.length > 0 && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  {(['critical','warning','success','info'] as const).map(sev => {
+                    const cnt = items.filter(n => n.severity === sev).length;
+                    if (cnt === 0) return null;
+                    const cls = sev === 'critical' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+                      : sev === 'warning' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                      : sev === 'success' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      : 'text-sky-400 bg-sky-500/10 border-sky-500/20';
+                    return (
+                      <span key={sev} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border capitalize ${cls}`}>
+                        {cnt} {sev}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button
               onClick={markAllRead}
               disabled={unread === 0}
