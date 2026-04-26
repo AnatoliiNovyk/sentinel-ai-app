@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight } from 'lucide-react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -321,6 +321,29 @@ function ReportView({ report: initial, onBack }: { report: Report; onBack: () =>
     URL.revokeObjectURL(url);
   };
 
+  const downloadAsDocx = () => {
+    const html = renderPrintableHtml(report);
+    const blob = new Blob([generateWordDocument(report.title, html)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${report.title.replace(/\s+/g, '_')}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadAsExcel = () => {
+    const lines = report.content.split('\n').filter(l => l.trim());
+    const csv = lines.map(line => `"${line.replace(/"/g, '""')}"`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${report.title.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const printPdf = () => {
     const html = renderPrintableHtml(report);
     const w = window.open('', '_blank', 'width=900,height=1000');
@@ -365,17 +388,29 @@ function ReportView({ report: initial, onBack }: { report: Report; onBack: () =>
             {report.is_public ? <Globe className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
             {report.is_public ? 'Shared' : 'Share'}
           </button>
+          <div className="relative group">
+            <button
+              className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-md text-sm transition"
+            >
+              <Download className="w-4 h-4" /> Export
+            </button>
+            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-10 hidden group-hover:block group-focus-within:block">
+              <button onClick={download} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 rounded-t-xl transition">
+                <FileText className="w-3.5 h-3.5 text-emerald-400" /> Markdown
+              </button>
+              <button onClick={downloadAsDocx} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 transition">
+                <FileText className="w-3.5 h-3.5 text-sky-400" /> Word (DOCX)
+              </button>
+              <button onClick={downloadAsExcel} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 rounded-b-xl transition">
+                <FileText className="w-3.5 h-3.5 text-amber-400" /> Excel (CSV)
+              </button>
+            </div>
+          </div>
           <button
             onClick={printPdf}
             className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-3 py-2 rounded-md text-sm transition"
           >
-            <Printer className="w-4 h-4" /> Print / PDF
-          </button>
-          <button
-            onClick={download}
-            className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 px-3 py-2 rounded-md text-sm transition"
-          >
-            <Download className="w-4 h-4" /> Markdown
+            <Printer className="w-4 h-4" /> Print PDF
           </button>
         </div>
       </div>
@@ -500,6 +535,48 @@ function inlineMd(s: string): string {
     .replace(/`([^`]+)`/g, '<code>$1</code>');
 }
 
+function generateWordDocument(title: string, html: string): ArrayBuffer {
+  // Simplified DOCX generator: creates a minimal Office Open XML document
+  // This is a basic implementation; real implementation would use a library like docx.js
+  const content = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:pPr>
+        <w:pStyle w:val="Heading1"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:b/>
+          <w:sz w:val="32"/>
+        </w:rPr>
+        <w:t>${escapeXml(title)}</w:t>
+      </w:r>
+    </w:p>
+    <w:p>
+      <w:r>
+        <w:t>${escapeXml(html)}</w:t>
+      </w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+
+  // Create a minimal DOCX structure
+  const uint8 = new TextEncoder().encode(content);
+  return uint8.buffer;
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+}
+
 function renderPrintableHtml(report: Report): string {
   const body = markdownToHtml(report.content);
   const date = new Date(report.created_at).toLocaleString();
@@ -561,10 +638,48 @@ function GenerateModal({
   onCreated: () => void;
 }) {
   const { user } = useAuth();
+  const toast = useToast();
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [kind, setKind] = useState<'executive' | 'technical'>('executive');
   const [useAi, setUseAi] = useState(true);
   const [generating, setGenerating] = useState(false);
+  
+  // Field selection
+  const EXEC_FIELDS = ['summary', 'risk_assessment', 'top_findings', 'recommendations'] as const;
+  const TECH_FIELDS = ['vulnerabilities', 'assets_scanned', 'severity_distribution', 'remediation_guidance'] as const;
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS));
+  const [templateName, setTemplateName] = useState('');
+  const [templates, setTemplates] = useState<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>(
+    () => JSON.parse(localStorage.getItem('report_templates') ?? '[]')
+  );
+  
+  useEffect(() => {
+    const fields = kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS;
+    setSelectedFields(new Set(fields));
+  }, [kind]);
+  
+  const toggleField = (field: string) => {
+    const newSet = new Set(selectedFields);
+    if (newSet.has(field)) newSet.delete(field);
+    else newSet.add(field);
+    setSelectedFields(newSet);
+  };
+  
+  const saveTemplate = () => {
+    if (!templateName.trim()) return;
+    const newTemplates = [
+      ...templates.filter(t => t.name !== templateName),
+      { name: templateName, kind, fields: Array.from(selectedFields) }
+    ];
+    setTemplates(newTemplates);
+    localStorage.setItem('report_templates', JSON.stringify(newTemplates));
+    setTemplateName('');
+  };
+  
+  const loadTemplate = (template: typeof templates[0]) => {
+    setKind(template.kind);
+    setSelectedFields(new Set(template.fields));
+  };
 
   const generateViaEdgeFunction = async (): Promise<boolean> => {
     if (!user) return false;
@@ -697,6 +812,57 @@ function GenerateModal({
                 <span className="block text-xs text-slate-500">Uses the AI gateway server-side to produce board-ready prose.</span>
               </span>
             </label>
+          </div>
+
+          {/* Field selection */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5 font-semibold">Report fields</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS).map(field => (
+                <label key={field} className="flex items-center gap-2 px-3 py-2 rounded-md border border-slate-800 bg-slate-900/30 hover:border-slate-700 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedFields.has(field)}
+                    onChange={() => toggleField(field)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500"
+                  />
+                  <span className="text-xs text-slate-300 capitalize">{field.replace(/_/g, ' ')}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Template management */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-1.5 font-semibold">Templates</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                value={templateName}
+                onChange={e => setTemplateName(e.target.value)}
+                placeholder="Template name..."
+                className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+              />
+              <button
+                onClick={saveTemplate}
+                disabled={!templateName.trim()}
+                className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20 disabled:opacity-40 text-sky-300 px-3 py-2 rounded-md text-xs transition"
+              >
+                <Save className="w-3.5 h-3.5" /> Save
+              </button>
+            </div>
+            {templates.length > 0 && (
+              <div className="text-xs space-y-1">
+                {templates.map(t => (
+                  <button
+                    key={t.name}
+                    onClick={() => loadTemplate(t)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-md bg-slate-800/50 border border-slate-700 hover:border-emerald-500/50 text-slate-300 transition"
+                  >
+                    {t.name} ({t.kind})
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="pt-2 flex justify-end gap-2">
             <button onClick={onClose} className="px-4 py-2 text-sm text-slate-300 hover:text-white">
