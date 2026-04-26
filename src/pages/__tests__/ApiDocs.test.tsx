@@ -45,14 +45,14 @@ describe('ApiDocs', () => {
 
   it('renders cURL code block with POST endpoint', () => {
     render(<ApiDocs />);
-    expect(screen.getByText(/POST \/scan-dispatch/i)).toBeInTheDocument();
+    expect(screen.getByText('/functions/v1/scan-dispatch')).toBeInTheDocument();
   });
 
   it('clicking "Copy cURL" copies to clipboard', async () => {
     render(<ApiDocs />);
-    const btn = screen.getByRole('button', { name: /copy curl/i });
-    fireEvent.click(btn);
+    const btns = screen.getAllByRole('button', { name: /copy curl/i });
+    fireEvent.click(btns[0]);
     expect(mockClipboardWriteText).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.getByText(/Copied/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/Copied/i)[0]).toBeInTheDocument());
   });
 });

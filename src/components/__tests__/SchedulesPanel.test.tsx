@@ -116,13 +116,15 @@ describe('SchedulesPanel — with schedules', () => {
   it('shows "Active" badge for enabled schedule', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: true })]);
     render(<SchedulesPanel projects={[makeProject()]} />);
-    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    // After data loads the stat pill AND the per-item badge both render 'Active',
+    // so we use getAllByText and assert at least one element is present.
+    await waitFor(() => expect(screen.getAllByText('Active').length).toBeGreaterThan(0));
   });
 
   it('shows "Paused" badge for disabled schedule', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: false })]);
     render(<SchedulesPanel projects={[makeProject()]} />);
-    await waitFor(() => expect(screen.getByText('Paused')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('Paused').length).toBeGreaterThan(0));
   });
 
   it('shows "Daily" cadence label for 24h schedule', async () => {

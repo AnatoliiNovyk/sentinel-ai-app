@@ -114,10 +114,13 @@ vi.mock('../../api/client', () => {
 
 describe('Chat integration flow', () => {
   beforeEach(() => {
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-      configurable: true,
-      value: vi.fn(),
-    });
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
+    if (!descriptor || descriptor.configurable !== false) {
+      Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+        configurable: true,
+        value: vi.fn(),
+      });
+    }
 
     vi.clearAllMocks();
     conversations = [];

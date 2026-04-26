@@ -20,6 +20,7 @@ vi.mock('react-router-dom', () => ({
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
 
+  // chain with: eq → order → limit
   const makeChain = (data: unknown[]) => ({
     eq: () => ({
       order: () => ({
@@ -28,9 +29,21 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
     }),
   });
 
+  // chain with: eq → order (no limit)
   const makeChainNoLimit = (data: unknown[]) => ({
     eq: () => ({
       order: () => Promise.resolve({ data, error: null }),
+    }),
+  });
+
+  // chain with: eq → in → order → limit  (for scan_jobs)
+  const makeChainInFilter = (data: unknown[]) => ({
+    eq: () => ({
+      in: () => ({
+        order: () => ({
+          limit: () => Promise.resolve({ data, error: null }),
+        }),
+      }),
     }),
   });
 
@@ -41,6 +54,8 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         if (table === 'scans') return { select: () => makeChain([]) };
         if (table === 'projects') return { select: () => makeChainNoLimit([]) };
         if (table === 'vulnerabilities') return { select: () => makeChain([]) };
+        if (table === 'scan_jobs') return { select: () => makeChainInFilter([]) };
+        if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
         // sla-related writes
         return {
           update: () => ({ eq: () => ({ is: () => Promise.resolve({ data: null, error: null }) }) }),
@@ -66,7 +81,7 @@ vi.mock('../../context/useAuth', () => {
     created_at: '2026-01-01T00:00:00Z',
     sla_warned_at: null,
   };
-  return { useAuth: () => ({ user: _user, profile: _profile }) };
+  return { useAuth: () => ({ user: _user, profile: _profile, organizations: [] }) };
 });
 
 // Sparkline is a pure SVG component — no need to mock

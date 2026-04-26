@@ -6,6 +6,7 @@ vi.mock('react-router-dom', () => ({
   Link: ({ to, children, className }: { to: string; children: React.ReactNode; className?: string }) => (
     <a href={to} className={className}>{children}</a>
   ),
+  useNavigate: () => vi.fn(),
 }));
 
 describe('NotFound', () => {
@@ -14,24 +15,24 @@ describe('NotFound', () => {
     expect(screen.getByText('404')).toBeInTheDocument();
   });
 
-  it('renders "The page you are looking for" description', () => {
+  it('renders page evaded detection description', () => {
     render(<NotFound />);
-    expect(screen.getByText(/The page you are looking for/i)).toBeInTheDocument();
+    expect(screen.getByText(/this page has evaded detection/i)).toBeInTheDocument();
   });
 
-  it('renders "Return to Base" link', () => {
+  it('renders "Return to Dashboard" link', () => {
     render(<NotFound />);
-    expect(screen.getByRole('link', { name: /Return to Base/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Return to Dashboard/i })).toBeInTheDocument();
   });
 
-  it('"Return to Base" link points to "/"', () => {
+  it('"Return to Dashboard" link points to "/"', () => {
     render(<NotFound />);
-    const link = screen.getByRole('link', { name: /Return to Base/i });
+    const link = screen.getByRole('link', { name: /Return to Dashboard/i });
     expect(link).toHaveAttribute('href', '/');
   });
 
-  it('renders "neutralized or does not exist" text', () => {
+  it('renders "doesn\'t exist or has been patched" text', () => {
     render(<NotFound />);
-    expect(screen.getByText(/neutralized or does not exist/i)).toBeInTheDocument();
+    expect(screen.getByText(/doesn't exist or has been patched/i)).toBeInTheDocument();
   });
 });

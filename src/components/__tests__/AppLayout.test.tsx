@@ -30,6 +30,8 @@ vi.mock('react-router-dom', () => ({
   ),
   Outlet: () => <div data-testid="outlet-content">Outlet</div>,
   useLocation: () => mockLocation,
+  useNavigate: () => vi.fn(),
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
 }));
 
 vi.mock('../NotificationBell', () => ({

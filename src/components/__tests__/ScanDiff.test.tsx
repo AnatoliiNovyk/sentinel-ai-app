@@ -109,9 +109,11 @@ describe('ScanDiff', () => {
         makeVuln('v4', 'scan-old', 'Both Bug', 'host3.com'),       // persisted
       ];
       render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
-      expect(screen.getByText('1 New')).toBeInTheDocument();
-      expect(screen.getByText('1 Fixed')).toBeInTheDocument();
-      expect(screen.getByText('1 Persisted')).toBeInTheDocument();
+      // Count and label are rendered in separate <div>s within each stat button;
+      // match the button whose accessible text content is "<count> <label>"
+      expect(screen.getByRole('button', { name: /^1\s+New$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^1\s+Fixed$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^1\s+Persisted$/i })).toBeInTheDocument();
     });
   });
 

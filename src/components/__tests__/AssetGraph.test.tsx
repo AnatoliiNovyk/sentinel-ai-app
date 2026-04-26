@@ -96,7 +96,8 @@ describe('AssetGraph — with vulns', () => {
     );
     expect(screen.getByText('Secure')).toBeInTheDocument();
     expect(screen.getByText('Risk')).toBeInTheDocument();
-    expect(screen.getByText('Critical')).toBeInTheDocument();
+    // 'Critical' appears in both the stat pill label and the legend pill; use getAllByText
+    expect(screen.getAllByText('Critical').length).toBeGreaterThan(0);
   });
 
   it('renders connecting lines for each asset node', () => {

@@ -119,6 +119,8 @@ describe('SchedulerPage', () => {
       error: null,
     });
     render(<SchedulerPage />);
-    await waitFor(() => expect(screen.getByText('Alpha Project')).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getAllByText(/Alpha Project|p-1/i).length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

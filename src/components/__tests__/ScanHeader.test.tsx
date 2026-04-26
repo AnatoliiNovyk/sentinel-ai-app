@@ -46,7 +46,8 @@ describe('ScanHeader — static rendering', () => {
   it('renders project select with placeholder option', () => {
     render(<ScanHeader {...BASE_PROPS} />);
     expect(screen.getByRole('combobox', { name: /select project/i })).toBeInTheDocument();
-    expect(screen.getByText('Select Project...')).toBeInTheDocument();
+    // Placeholder option shows "All projects (N)" where N is the project count
+    expect(screen.getByText(/All projects/i)).toBeInTheDocument();
   });
 
   it('renders all project options', () => {
