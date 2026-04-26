@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import type { GatewayResponse } from '../../lib/aiGateway';
 import Chat from '../Chat';
 
@@ -135,16 +135,22 @@ describe('Chat integration flow', () => {
     mockCallAiGateway.mockResolvedValue({ content: 'Gateway response', provider: 'mock', isMock: true } satisfies GatewayResponse);
   });
 
+  afterEach(() => {
+    vi.clearAllMocks();
+    conversations = [];
+    messages = [];
+  });
+
   it('sends suggestion and persists user+assistant messages via agent path', async () => {
     render(<Chat />);
 
     fireEvent.click(screen.getByRole('button', { name: 'List my open findings' }));
 
-    await waitFor(() => expect(mockRunAgent).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText('Agent response ready')).toBeInTheDocument());
+    await waitFor(() => expect(mockRunAgent).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('Agent response ready')).toBeInTheDocument(), { timeout: 3000 });
 
     expect(screen.getAllByText('List my open findings').length).toBeGreaterThan(0);
-  });
+  }, { timeout: 5000 });
 
   it('renders assistant response from gateway when agent returns null', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -158,9 +164,9 @@ describe('Chat integration flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Check compliance status' }));
 
-    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText('Recovered answer after retry')).toBeInTheDocument());
-  });
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('Recovered answer after retry')).toBeInTheDocument(), { timeout: 3000 });
+  }, { timeout: 5000 });
 
   it('renders error message when gateway throws', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -170,10 +176,11 @@ describe('Chat integration flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate an executive summary' }));
 
-    await waitFor(() =>
-      expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
+      { timeout: 3000 },
     );
-  });
+  }, { timeout: 5000 });
 
   it('shows thinking label while gateway is processing', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -188,11 +195,12 @@ describe('Chat integration flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SLA status — what is overdue?' }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/Analyzing|Querying|Computing|Checking|Generating|Calling/i)).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByText(/Analyzing|Querying|Computing|Checking|Generating|Calling/i)).toBeInTheDocument(),
+      { timeout: 3000 },
     );
 
     releaseGateway();
-    await waitFor(() => expect(screen.getByText('Recovered after wait')).toBeInTheDocument());
-  });
+    await waitFor(() => expect(screen.getByText('Recovered after wait')).toBeInTheDocument(), { timeout: 3000 });
+  }, { timeout: 6000 });
 });

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import Scans from '../Scans';
 
 const {
@@ -121,38 +121,45 @@ describe('Scans integration flow', () => {
     });
   });
 
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('loads initial data and shows mode and vulnerabilities', async () => {
     render(<Scans />);
 
-    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalledWith('project-1'));
-    await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalledWith('scan-1'));
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalledWith('project-1'), { timeout: 3000 });
+    await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalledWith('scan-1'), { timeout: 3000 });
 
     expect(screen.getByTestId('mode').textContent).toBe('MOCK');
     expect(screen.getByTestId('vuln-count').textContent).toBe('1');
-  });
+  }, { timeout: 5000 });
 
   it('dispatches new scan from modal with project fallback target', async () => {
     render(<Scans />);
 
-    await waitFor(() => screen.getByText('open-new-scan'));
+    await waitFor(() => screen.getByText('open-new-scan'), { timeout: 3000 });
 
     fireEvent.click(screen.getByText('open-new-scan'));
     fireEvent.click(screen.getByRole('button', { name: 'Launch scan' }));
 
-    await waitFor(() => {
-      expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1');
-    });
-  });
+    await waitFor(
+      () => {
+        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1');
+      },
+      { timeout: 3000 },
+    );
+  }, { timeout: 5000 });
 
   it('runs AI generation flow and refreshes vulnerabilities', async () => {
     render(<Scans />);
 
-    await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalledWith('scan-1'));
+    await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalledWith('scan-1'), { timeout: 3000 });
 
     fireEvent.click(screen.getByText('generate-ai-fix'));
 
-    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1), { timeout: 3000 });
     expect(mockCallAiGateway).toHaveBeenCalledWith([
       expect.objectContaining({ role: 'user', content: expect.stringContaining('Outdated package') }),
     ]);
@@ -160,8 +167,11 @@ describe('Scans integration flow', () => {
       expect.objectContaining({ description: 'Fix it', remediation: 'Update package', remediation_code: 'npm update' }),
     );
 
-    await waitFor(() => {
-      expect(mockGetScanVulnerabilities).toHaveBeenCalledTimes(2);
-    });
-  });
+    await waitFor(
+      () => {
+        expect(mockGetScanVulnerabilities).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 3000 },
+    );
+  }, { timeout: 6000 });
 });

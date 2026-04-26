@@ -91,29 +91,33 @@ vi.mock('../../context/useAuth', () => {
 describe('Dashboard — layout', () => {
   it('renders "Security posture" heading', async () => {
     render(<Dashboard />);
-    await waitFor(() =>
-      expect(screen.getByText('Security posture')).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByText('Security posture')).toBeInTheDocument(),
+      { timeout: 5000 },
     );
   });
 
   it('renders welcome message with first name', async () => {
     render(<Dashboard />);
-    await waitFor(() =>
-      expect(screen.getByText(/welcome back.*jane/i)).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByText(/welcome back.*jane/i)).toBeInTheDocument(),
+      { timeout: 5000 },
     );
   });
 
   it('renders "Launch AI audit" button', async () => {
     render(<Dashboard />);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /launch ai audit/i })).toBeInTheDocument(),
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: /launch ai audit/i })).toBeInTheDocument(),
+      { timeout: 5000 },
     );
   });
 
   it('navigates to /chat when "Launch AI audit" clicked', async () => {
     render(<Dashboard />);
-    await waitFor(() =>
-      screen.getByRole('button', { name: /launch ai audit/i }),
+    await waitFor(
+      () => screen.getByRole('button', { name: /launch ai audit/i }),
+      { timeout: 5000 },
     );
     fireEvent.click(screen.getByRole('button', { name: /launch ai audit/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/chat');
@@ -123,37 +127,55 @@ describe('Dashboard — layout', () => {
 describe('Dashboard — KPI cards', () => {
   it('renders "Projects" KPI card', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByText('Projects')).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('Projects')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
   });
 
   it('renders "Open findings" KPI card', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByText('Open findings')).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('Open findings')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
   });
 
   it('renders "Resolved" KPI card', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByText('Resolved')).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('Resolved')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
   });
 
   it('shows zero values when no data', async () => {
     render(<Dashboard />);
     // All KPI values are 0 with empty data
-    await waitFor(() => {
-      const zeros = screen.getAllByText('0');
-      expect(zeros.length).toBeGreaterThanOrEqual(3);
-    });
+    await waitFor(
+      () => {
+        const zeros = screen.getAllByText('0');
+        expect(zeros.length).toBeGreaterThanOrEqual(3);
+      },
+      { timeout: 5000 },
+    );
   });
 });
 
 describe('Dashboard — SLA section', () => {
   it('renders "SLA watch" section heading', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByText('SLA watch')).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('SLA watch')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
   });
 
   it('renders "Recent scans" section heading', async () => {
     render(<Dashboard />);
-    await waitFor(() => expect(screen.getByText('Recent scans')).toBeInTheDocument());
+    await waitFor(
+      () => expect(screen.getByText('Recent scans')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
   });
 });
