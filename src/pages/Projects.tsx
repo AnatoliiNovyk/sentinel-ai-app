@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal, LayoutGrid, LayoutList } from 'lucide-react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal, LayoutGrid, LayoutList, Download, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
@@ -28,6 +28,7 @@ export default function Projects() {
   const [sort, setSort] = useState<'newest' | 'oldest' | 'risk_desc' | 'risk_asc' | 'name'>('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('grid');
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -60,6 +61,32 @@ export default function Projects() {
     setProjects(updated);
   };
 
+  const stats = useMemo(() => {
+    const total = projects.length;
+    const highRisk = projects.filter(p => { const b = riskBand(p.risk_score ?? 0); return b === 'critical' || b === 'high'; }).length;
+    const avgRisk = total > 0 ? Math.round(projects.reduce((s, p) => s + (p.risk_score ?? 0), 0) / total) : 0;
+    const envCounts = projects.reduce<Record<string, number>>((acc, p) => { acc[p.environment] = (acc[p.environment] ?? 0) + 1; return acc; }, {});
+    return { total, highRisk, avgRisk, envCounts };
+  }, [projects]);
+
+  const allTags = useMemo(() => {
+    const counts: Record<string, number> = {};
+    projects.forEach(p => { (p.tags ?? []).forEach((t: string) => { counts[t] = (counts[t] ?? 0) + 1; }); });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  }, [projects]);
+
+  const exportCsv = useCallback(() => {
+    const rows = [['Name', 'Target', 'Environment', 'Risk Score', 'Status', 'Tags', 'Created']].concat(
+      projects.map(p => [p.name, p.target ?? '', p.environment, String(p.risk_score ?? 0), p.status ?? '', (p.tags ?? []).join(';'), new Date(p.created_at).toLocaleDateString()])
+    );
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [projects]);
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return [...projects]
@@ -69,6 +96,7 @@ export default function Projects() {
         const band = riskBand(p.risk_score ?? 0);
         return band === riskFilter;
       })
+      .filter(p => !tagFilter || (p.tags ?? []).includes(tagFilter))
       .filter(p => !q || p.name.toLowerCase().includes(q) || (p.target ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q))
       .sort((a, b) => {
         if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -96,6 +124,15 @@ export default function Projects() {
             {!stuck && <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>}
           </div>
           <div className="flex items-center gap-2">
+            {projects.length > 0 && (
+              <button
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-2 rounded-md text-sm transition"
+                title="Export projects to CSV"
+              >
+                <Download className="w-4 h-4" /> Export CSV
+              </button>
+            )}
             <button
               onClick={() => setModalOpen(true)}
               className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
@@ -107,6 +144,55 @@ export default function Projects() {
       </div>
       <div ref={sentinelRef} className="h-0" />
       <div className="px-8 pb-8">
+      {/* Stat cards */}
+      {!loading && projects.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Projects</span>
+              <FolderKanban className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className="text-2xl font-bold text-white">{stats.total}</div>
+            <div className="text-xs text-slate-500 mt-1">{Object.keys(stats.envCounts).length} environment{Object.keys(stats.envCounts).length !== 1 ? 's' : ''}</div>
+          </div>
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-red-400/70 uppercase tracking-wide font-medium">High/Critical Risk</span>
+              <AlertTriangle className="w-4 h-4 text-red-500/60" />
+            </div>
+            <div className="text-2xl font-bold text-red-300">{stats.highRisk}</div>
+            <div className="text-xs text-red-400/60 mt-1">{stats.total > 0 ? Math.round((stats.highRisk / stats.total) * 100) : 0}% of all projects</div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-500 uppercase tracking-wide font-medium">Avg Risk Score</span>
+              <TrendingUp className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className={`text-2xl font-bold ${stats.avgRisk >= 70 ? 'text-red-300' : stats.avgRisk >= 40 ? 'text-amber-300' : 'text-emerald-300'}`}>{stats.avgRisk}</div>
+            <div className="text-xs text-slate-500 mt-1">across all projects</div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-500 uppercase tracking-wide font-medium">By Environment</span>
+              <Server className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className="flex flex-col gap-1 mt-1">
+              {Object.entries(stats.envCounts).slice(0, 3).map(([env, count]) => (
+                <div key={env} className="flex items-center gap-2">
+                  <div className="flex-1 h-1 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      ref={(el) => { if (el) el.style.width = `${Math.round((count / stats.total) * 100)}%`; }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-400 w-16 truncate capitalize">{env}</span>
+                  <span className="text-xs text-slate-500 w-4 text-right">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* View mode toggle */}
       {!loading && projects.length > 0 && (
         <div className="mb-6 flex items-center gap-1.5 border border-slate-800 rounded-lg p-1 bg-slate-900/40 w-fit">
@@ -198,9 +284,38 @@ export default function Projects() {
             <option value="risk_asc">Risk ↑ low→high</option>
             <option value="name">Name A–Z</option>
           </select>
-          {(search || envFilter !== 'all') && (
+          {(search || envFilter !== 'all' || tagFilter) && (
             <span className="text-xs text-slate-500">{visible.length} of {projects.length}</span>
           )}
+        </div>
+      )}
+      {/* Tag filter chips */}
+      {!loading && allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-4">
+          <Tag className="w-3.5 h-3.5 text-slate-500" />
+          <button
+            onClick={() => setTagFilter(null)}
+            className={`text-xs px-2 py-1 rounded-md border transition ${
+              tagFilter === null
+                ? 'border-slate-600 bg-slate-800 text-slate-200'
+                : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            All tags
+          </button>
+          {allTags.map(([tag, count]) => (
+            <button
+              key={tag}
+              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+              className={`text-xs px-2 py-1 rounded-md border transition ${
+                tagFilter === tag
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+              }`}
+            >
+              {tag} <span className="opacity-50">·{count}</span>
+            </button>
+          ))}
         </div>
       )}
 
