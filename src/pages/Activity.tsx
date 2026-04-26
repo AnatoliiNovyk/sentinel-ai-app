@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown,
   ExternalLink, Filter, Info, Loader2,
-  RefreshCcw, Search, XCircle, Zap,
+  RefreshCcw, Search, XCircle, Zap, Download,
 } from 'lucide-react';
 import { supabase, AgentLog, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
+import { downloadFile } from '../lib/exporters';
 
 type ViewTab = 'logs' | 'anomalies';
 
@@ -225,12 +226,29 @@ export default function ActivityPage() {
   const grouped = useMemo(() => groupByDay(filtered), [filtered]);
 
   const statCards = [
-    { label: 'Total',   value: stats.total,   level: 'all'     as LevelFilter, dot: 'bg-slate-400' },
-    { label: 'Info',    value: stats.info,    level: 'info'    as LevelFilter, dot: 'bg-sky-400' },
-    { label: 'Success', value: stats.success, level: 'success' as LevelFilter, dot: 'bg-emerald-400' },
-    { label: 'Warn',    value: stats.warn,    level: 'warn'    as LevelFilter, dot: 'bg-amber-400' },
-    { label: 'Error',   value: stats.error,   level: 'error'   as LevelFilter, dot: 'bg-red-400' },
+    { label: 'Total',   value: stats.total,   level: 'all'     as LevelFilter, dot: 'bg-slate-400', sub: undefined },
+    { label: 'Info',    value: stats.info,    level: 'info'    as LevelFilter, dot: 'bg-sky-400',     sub: stats.total ? `${Math.round(stats.info / stats.total * 100)}%` : undefined },
+    { label: 'Success', value: stats.success, level: 'success' as LevelFilter, dot: 'bg-emerald-400', sub: stats.total ? `${Math.round(stats.success / stats.total * 100)}%` : undefined },
+    { label: 'Warn',    value: stats.warn,    level: 'warn'    as LevelFilter, dot: 'bg-amber-400',   sub: stats.total ? `${Math.round(stats.warn / stats.total * 100)}%` : undefined },
+    { label: 'Error',   value: stats.error,   level: 'error'   as LevelFilter, dot: 'bg-red-400',     sub: stats.total ? `${Math.round(stats.error / stats.total * 100)}% error rate` : undefined },
   ];
+
+  const exportCsv = useCallback(() => {
+    const date = new Date().toISOString().split('T')[0];
+    const rows = ['ID,Level,Message,Project,ScanID,CreatedAt'];
+    for (const l of filtered) {
+      const projName = l.project_id ? (projectMap.get(l.project_id) ?? l.project_id.slice(0, 8)) : '';
+      rows.push([
+        l.id,
+        l.level,
+        `"${(l.message ?? '').replace(/"/g, '""')}"`,
+        `"${projName.replace(/"/g, '""')}"`,
+        l.scan_id ?? '',
+        l.created_at,
+      ].join(','));
+    }
+    downloadFile(`activity-${date}.csv`, rows.join('\n'), 'text/csv');
+  }, [filtered, projectMap]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
@@ -293,6 +311,18 @@ export default function ActivityPage() {
               <RefreshCcw className={`w-3.5 h-3.5 ${autoRefresh ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
               {autoRefresh ? 'Live' : 'Paused'}
             </button>
+
+            {/* Export CSV */}
+            {logs.length > 0 && (
+              <button
+                onClick={exportCsv}
+                title="Export filtered logs as CSV"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            )}
           </div>
         </div>
 
@@ -353,6 +383,7 @@ export default function ActivityPage() {
               <span className="text-xs text-slate-400 uppercase tracking-wide font-semibold">{c.label}</span>
             </div>
             <p className="text-2xl font-bold text-slate-100">{c.value.toLocaleString()}</p>
+            {c.sub && <p className="text-[10px] text-slate-500 mt-0.5">{c.sub}</p>}
           </button>
         ))}
       </div>

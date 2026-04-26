@@ -332,11 +332,64 @@ export default function Settings() {
     else window.open('mailto:billing@santinelai.online', '_blank');
   };
 
+  // ── Account overview stats ────────────────────────────────────────────────
+  const slaRulesCount  = Object.keys(sla).length;
+  const retentionCount = Object.keys(retention).length;
+  const planLabel      = PLANS.find(p => p.id === plan)?.label ?? plan;
+
+  const overviewCards = [
+    {
+      label: 'Current plan',
+      value: planLabel,
+      sub: plan === 'free' ? 'Free tier' : 'Paid subscription',
+      color: plan === 'enterprise' ? 'text-amber-300' : plan === 'pro' ? 'text-violet-300' : plan === 'basic' ? 'text-sky-300' : 'text-slate-300',
+      icon: CreditCard,
+    },
+    {
+      label: 'SLA rules',
+      value: String(slaRulesCount),
+      sub: 'severity policies',
+      color: 'text-emerald-400',
+      icon: Timer,
+    },
+    {
+      label: 'Team members',
+      value: String(teamEmails.length),
+      sub: 'in this org',
+      color: 'text-sky-400',
+      icon: Users,
+    },
+    {
+      label: 'Retention policies',
+      value: String(retentionCount),
+      sub: 'data types tracked',
+      color: 'text-violet-400',
+      icon: Database,
+    },
+  ];
+
   return (
     <div className="p-8 max-w-5xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">Manage your account, subscription and SLA policies.</p>
+      </div>
+
+      {/* Account overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {overviewCards.map(c => {
+          const Icon = c.icon;
+          return (
+            <div key={c.label} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Icon className={`w-4 h-4 ${c.color}`} />
+                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">{c.label}</span>
+              </div>
+              <div className={`text-2xl font-bold tabular-nums ${c.color}`}>{c.value}</div>
+              <div className="text-[10px] text-slate-600">{c.sub}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Profile */}
