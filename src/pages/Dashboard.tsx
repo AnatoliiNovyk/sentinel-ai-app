@@ -142,6 +142,37 @@ export default function Dashboard() {
   const completedScans = scans.filter(s => s.status === 'completed').length;
   const activeScans    = liveJobs.length + scans.filter(s => s.status === 'running' || s.status === 'queued').length;
 
+  // ── Advanced analytics ───────────────────────────────────────────────
+  // Scan velocity: daily scan counts for last 14 days
+  const scanVelocity = useMemo(() => buildScanVelocity(scans, 14), [scans]);
+
+  // Risk score trend: estimated daily risk score (last 30 days)
+  const riskTrend = useMemo(() => buildRiskTrend(vulns, projects, 30), [vulns, projects]);
+
+  // SLA compliance gauge
+  const slaGauge = useMemo(() => {
+    if (slaRows.length === 0) return { pct: 100, within: 0, total: 0, breached: 0 };
+    const within = slaRows.filter(r => !r.overdue).length;
+    return { pct: Math.round((within / slaRows.length) * 100), within, total: slaRows.length, breached: slaRows.filter(r => r.overdue).length };
+  }, [slaRows]);
+
+  // MTTR: mean time to remediate (days) from resolved vulns
+  const mttr = useMemo(() => {
+    const resolved = vulns.filter(v => (v.status === 'resolved' || v.status === 'false_positive') && v.status_updated_at);
+    if (resolved.length === 0) return null;
+    const avg = resolved.reduce((sum, v) => {
+      return sum + (new Date(v.status_updated_at).getTime() - new Date(v.created_at).getTime()) / 86_400_000;
+    }, 0) / resolved.length;
+    return Math.round(avg);
+  }, [vulns]);
+
+  // Severity distribution of open vulns
+  const severityDist = useMemo(() => {
+    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    for (const v of openVulns) counts[v.severity] = (counts[v.severity] ?? 0) + 1;
+    return counts;
+  }, [openVulns]);
+
   return (
     <div className="p-8 max-w-7xl space-y-8">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -346,7 +377,7 @@ export default function Dashboard() {
                         <span className={`text-[10px] font-bold tabular-nums ${textColor}`}>{score}</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                        <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} style={{ width: `${score}%` }} />
+                        <div className={`h-full ${barColor} transition-all duration-700 rounded-full`} ref={(el) => { if (el) el.style.width = `${score}%`; }} />
                       </div>
                     </div>
                   );
@@ -518,6 +549,164 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Advanced Analytics ──────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-slate-200">Analytics</h2>
+          <span className="text-xs text-slate-600">— trends, velocity & compliance</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Scan velocity bar chart (2 cols) */}
+          <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-semibold text-sm">Scan velocity</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Daily scans — last 14 days</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                  <span className="w-2 h-2 rounded-sm bg-emerald-500" /> Completed
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                  <span className="w-2 h-2 rounded-sm bg-red-500" /> Failed
+                </span>
+              </div>
+            </div>
+            <ScanVelocityChart data={scanVelocity} />
+            <div className="flex justify-between mt-2 px-1">
+              {scanVelocity.filter((_, i) => i % 3 === 0 || i === scanVelocity.length - 1).map(d => (
+                <span key={d.day} className="text-[10px] text-slate-600">{d.label}</span>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t border-slate-800">
+              <SummaryPill label="Total scans" value={scans.length} color="text-slate-200" />
+              <SummaryPill label="Completed" value={completedScans} color="text-emerald-400" />
+              <SummaryPill label="Failed" value={scans.filter(s => s.status === 'failed').length} color="text-red-400" />
+            </div>
+          </div>
+
+          {/* SLA Compliance Gauge (1 col) */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6 flex flex-col items-center justify-center gap-4">
+            <div className="w-full">
+              <h3 className="font-semibold text-sm">SLA compliance</h3>
+              <p className="text-xs text-slate-500 mt-0.5">% of findings within deadline</p>
+            </div>
+            <SlaDonut pct={slaGauge.pct} />
+            <div className="w-full grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-bold text-emerald-400 tabular-nums">{slaGauge.within}</div>
+                <div className="text-[10px] text-slate-500">On track</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-red-400 tabular-nums">{slaGauge.breached}</div>
+                <div className="text-[10px] text-slate-500">Breached</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-slate-200 tabular-nums">{slaGauge.total}</div>
+                <div className="text-[10px] text-slate-500">Total</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Risk score trend (2 cols) */}
+          <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-semibold text-sm">Risk score trend</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Cumulative org-level risk — last 30 days</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {riskTrend.length > 0 && (() => {
+                  const last = riskTrend[riskTrend.length - 1].score;
+                  const first = riskTrend[0].score;
+                  const delta = last - first;
+                  const color = delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-slate-500';
+                  const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
+                  return (
+                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${color}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                      {delta > 0 ? '+' : ''}{delta.toFixed(0)}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <RiskTrendChart data={riskTrend} />
+            <div className="flex justify-between mt-2 px-1">
+              {riskTrend.filter((_, i) => i % 6 === 0 || i === riskTrend.length - 1).map(d => (
+                <span key={d.day} className="text-[10px] text-slate-600">{d.label}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* MTTR + Severity distribution (1 col) */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6 flex flex-col gap-5">
+            {/* MTTR */}
+            <div>
+              <h3 className="font-semibold text-sm mb-3">Mean time to remediate</h3>
+              {mttr === null ? (
+                <div className="text-sm text-slate-500">No resolved findings yet</div>
+              ) : (
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold tabular-nums text-white">{mttr}</span>
+                  <span className="text-slate-400 text-sm mb-1">days avg</span>
+                </div>
+              )}
+              {mttr !== null && (
+                <div className="mt-2 text-xs text-slate-500">
+                  Based on {vulns.filter(v => v.status === 'resolved' || v.status === 'false_positive').length} resolved findings
+                </div>
+              )}
+            </div>
+
+            {/* Severity distribution */}
+            <div className="border-t border-slate-800 pt-4">
+              <h3 className="font-semibold text-sm mb-3">Severity distribution</h3>
+              {openVulns.length === 0 ? (
+                <div className="text-sm text-slate-500">No open findings</div>
+              ) : (
+                <div className="space-y-2">
+                  {(['critical', 'high', 'medium', 'low', 'info'] as const).map(sev => {
+                    const count = severityDist[sev] ?? 0;
+                    const pct = openVulns.length === 0 ? 0 : Math.round((count / openVulns.length) * 100);
+                    const barCls = {
+                      critical: 'bg-red-500',
+                      high: 'bg-orange-500',
+                      medium: 'bg-yellow-400',
+                      low: 'bg-sky-400',
+                      info: 'bg-slate-500',
+                    }[sev];
+                    const textCls = {
+                      critical: 'text-red-400',
+                      high: 'text-orange-400',
+                      medium: 'text-yellow-400',
+                      low: 'text-sky-400',
+                      info: 'text-slate-400',
+                    }[sev];
+                    return (
+                      <div key={sev}>
+                        <div className="flex items-center justify-between text-xs mb-0.5">
+                          <span className={`capitalize font-medium ${textCls}`}>{sev}</span>
+                          <span className="text-slate-400 tabular-nums">{count} <span className="text-slate-600">({pct}%)</span></span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${barCls}`}
+                            ref={(el) => { if (el) el.style.width = `${pct}%`; }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -701,7 +890,7 @@ function AreaTrendChart({ trend, max }: { trend: { day: string; label: string; o
   const closed  = trend.map(d => d.closed);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: 140 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[140px]" preserveAspectRatio="none">
       <defs>
         <linearGradient id="grad-opened" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#ef4444" stopOpacity="0.25" />
@@ -739,6 +928,158 @@ function SummaryPill({ label, value, color, signed }: { label: string; value: nu
 }
 
 /* ── Data helpers ────────────────────────────────────────────────────────────── */
+
+function buildScanVelocity(scans: Scan[], days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const buckets: { day: string; label: string; completed: number; failed: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    buckets.push({ day: d.toISOString().slice(0, 10), label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), completed: 0, failed: 0 });
+  }
+  for (const s of scans) {
+    const iso = s.created_at.slice(0, 10);
+    const b = buckets.find(x => x.day === iso);
+    if (b) {
+      if (s.status === 'completed') b.completed++;
+      else if (s.status === 'failed') b.failed++;
+    }
+  }
+  return buckets;
+}
+
+function buildRiskTrend(vulns: Vulnerability[], projects: Project[], days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const SEV_W: Record<string, number> = { critical: 10, high: 5, medium: 2, low: 1, info: 0 };
+  const buckets: { day: string; label: string; score: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dayIso = d.toISOString().slice(0, 10);
+    // Simulate risk score: sum of weights for vulns open on this day
+    let score = 0;
+    for (const v of vulns) {
+      const created = v.created_at.slice(0, 10);
+      const resolved = (v.status === 'resolved' || v.status === 'false_positive') && v.status_updated_at
+        ? v.status_updated_at.slice(0, 10) : null;
+      if (created <= dayIso && (!resolved || resolved > dayIso)) {
+        score += SEV_W[v.severity] ?? 0;
+      }
+    }
+    buckets.push({ day: dayIso, label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), score });
+  }
+  // Normalize to 0-100 scale
+  const max = Math.max(1, ...buckets.map(b => b.score));
+  return buckets.map(b => ({ ...b, score: Math.round((b.score / max) * 100) }));
+}
+
+function ScanVelocityChart({ data }: { data: { completed: number; failed: number }[] }) {
+  const W = 600, H = 100, pad = { t: 8, r: 4, b: 4, l: 4 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const max = Math.max(1, ...data.map(d => d.completed + d.failed));
+  const barW = innerW / data.length;
+  const gap = barW * 0.2;
+  const bw = barW - gap;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[100px]" preserveAspectRatio="none">
+      {/* Grid */}
+      {[0.5, 1].map(f => (
+        <line key={f} x1={pad.l} x2={W - pad.r}
+          y1={pad.t + innerH * (1 - f)} y2={pad.t + innerH * (1 - f)}
+          stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+      ))}
+      {data.map((d, i) => {
+        const x = pad.l + i * barW + gap / 2;
+        const totalPx = ((d.completed + d.failed) / max) * innerH;
+        const failedPx = (d.failed / max) * innerH;
+        const completedPx = (d.completed / max) * innerH;
+        const yTotal = pad.t + innerH - totalPx;
+        return (
+          <g key={i}>
+            {d.completed > 0 && (
+              <rect
+                x={x} y={pad.t + innerH - completedPx}
+                width={bw} height={completedPx}
+                fill="#10b981" fillOpacity="0.8" rx="1"
+              />
+            )}
+            {d.failed > 0 && (
+              <rect
+                x={x} y={yTotal}
+                width={bw} height={failedPx}
+                fill="#ef4444" fillOpacity="0.8" rx="1"
+              />
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function RiskTrendChart({ data }: { data: { score: number }[] }) {
+  if (data.length < 2) return null;
+  const W = 600, H = 120, pad = 8;
+  const w = W - pad * 2, h = H - pad * 2;
+  const max = Math.max(1, ...data.map(d => d.score));
+
+  const px = (i: number) => pad + (i / (data.length - 1)) * w;
+  const py = (v: number) => pad + h - (v / max) * h;
+
+  const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${px(i)} ${py(d.score)}`).join(' ');
+  const area = `${line} L ${px(data.length - 1)} ${H} L ${px(0)} ${H} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[120px]" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="grad-risk" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <line key={f} x1={pad} x2={W - pad}
+          y1={pad + h * (1 - f)} y2={pad + h * (1 - f)}
+          stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+      ))}
+      <path d={area} fill="url(#grad-risk)" />
+      <path d={line} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Latest dot */}
+      <circle cx={px(data.length - 1)} cy={py(data[data.length - 1].score)} r="3" fill="#8b5cf6" />
+    </svg>
+  );
+}
+
+function SlaDonut({ pct }: { pct: number }) {
+  const R = 52, cx = 64, cy = 64;
+  const circ = 2 * Math.PI * R;
+  const dash = (circ * pct) / 100;
+  const color = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <svg viewBox="0 0 128 128" className="w-36 h-36">
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="#1e293b" strokeWidth="12" />
+      <circle
+        cx={cx} cy={cy} r={R} fill="none"
+        stroke={color} strokeWidth="12"
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeDashoffset={circ / 4}
+        strokeLinecap="round"
+        className="[transition:stroke-dasharray_0.8s_ease]"
+      />
+      <text x={cx} y={cy - 4} textAnchor="middle" fill="white" fontSize="22" fontWeight="700" fontFamily="monospace">
+        {pct}%
+      </text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fill="#64748b" fontSize="9">
+        compliance
+      </text>
+    </svg>
+  );
+}
 
 function buildTrend(vulns: Vulnerability[], days: number) {
   const today = new Date();
@@ -811,7 +1152,7 @@ function SlaGroup({ label, tone, rows }: {
             <div className="mt-1 h-1 rounded-full bg-slate-800 overflow-hidden">
               <div
                 className={`h-full ${overdue ? 'bg-red-500' : tone === 'amber' ? 'bg-amber-400' : 'bg-emerald-500'}`}
-                style={{ width: `${Math.min(100, (ageDays / budget) * 100)}%` }}
+                ref={(el) => { if (el) el.style.width = `${Math.min(100, (ageDays / budget) * 100)}%`; }}
               />
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
