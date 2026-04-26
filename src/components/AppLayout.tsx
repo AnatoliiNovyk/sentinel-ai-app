@@ -1,4 +1,4 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command, Menu, X as XIcon, Bell } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command, Menu, X as XIcon, Bell, Bug } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
@@ -83,6 +83,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/chat': 'AI Assistant',
   '/projects': 'Projects',
   '/scans': 'Scans',
+  '/vulnerabilities': 'Vulnerabilities',
   '/reports': 'Reports',
   '/compliance': 'Compliance',
   '/scheduler':  'Scan Scheduler',
@@ -102,6 +103,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'chat',        label: 'AI Assistant', icon: MessageSquare,   path: '/chat' },
   { id: 'projects',    label: 'Projects',     icon: FolderKanban,    path: '/projects' },
   { id: 'scans',       label: 'Scans',        icon: Radar,           path: '/scans' },
+  { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug,        path: '/vulnerabilities' },
   { id: 'reports',     label: 'Reports',      icon: FileText,        path: '/reports' },
   { id: 'compliance',  label: 'Compliance',   icon: ShieldCheck,     path: '/compliance' },
   { id: 'scheduler',   label: 'Scheduler',    icon: CalendarClock,   path: '/scheduler' },
