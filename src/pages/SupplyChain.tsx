@@ -273,6 +273,41 @@ export default function SupplyChain() {
             </div>
           </div>
 
+          {/* Risk score bar */}
+          {results.length > 0 && (() => {
+            const riskPct = Math.round((vulnerableDeps.length / results.length) * 100);
+            const riskColor = riskPct >= 50 ? 'bg-red-500' : riskPct >= 25 ? 'bg-orange-500' : riskPct > 0 ? 'bg-yellow-500' : 'bg-emerald-500';
+            const riskLabel = riskPct >= 50 ? 'High Risk' : riskPct >= 25 ? 'Medium Risk' : riskPct > 0 ? 'Low Risk' : 'Clean';
+            return (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dependency Risk Score</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                      riskPct >= 50 ? 'bg-red-500/10 text-red-400' :
+                      riskPct >= 25 ? 'bg-orange-500/10 text-orange-400' :
+                      riskPct > 0 ? 'bg-yellow-500/10 text-yellow-400' :
+                      'bg-emerald-500/10 text-emerald-400'
+                    }`}>{riskLabel}</span>
+                    <span className="text-sm font-bold text-white">{riskPct}%</span>
+                  </div>
+                </div>
+                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${riskColor}`}
+                    ref={(el) => { if (el) el.style.width = `${riskPct}%`; }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                  <span>{vulnerableDeps.length} vulnerable of {results.length} packages</span>
+                  {sevBreakdown.fixable > 0 && (
+                    <span className="text-emerald-600">{sevBreakdown.fixable} fixable</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {vulnerableDeps.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-4">

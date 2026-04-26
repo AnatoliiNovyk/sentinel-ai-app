@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search, Download, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search, Download, CheckCircle2, Clock, XCircle, RefreshCw } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { callAiGateway } from '../lib/aiGateway';
@@ -78,8 +78,17 @@ const Scans = () => {
     return 'REAL';
   })();
 
-  const uniqueScanners = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.scanner)))], [scans]);
-  const uniqueStatuses = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.status)))], [scans]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (!selectedProjectId || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await loadScans(selectedProjectId);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [selectedProjectId, isRefreshing]);  const uniqueStatuses = useMemo(() => ['all', ...Array.from(new Set(scans.map(s => s.status)))], [scans]);
 
   const filteredScans = useMemo(() => {
     const q = scanSearch.toLowerCase();
@@ -402,16 +411,32 @@ Respond ONLY with valid JSON in this exact format:
         {/* Scans Sidebar */}
         <div className="lg:w-64 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recent Scans</h2>
-            {vulnerabilities.length > 0 && (
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recent Scans</h2>
+              {filteredScans.length !== scans.length && (
+                <span className="text-[10px] text-slate-500">{filteredScans.length}/{scans.length}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {vulnerabilities.length > 0 && (
+                <button
+                  onClick={exportVulnsCsv}
+                  title="Export vulnerabilities CSV"
+                  className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 px-2 py-1 rounded-md transition"
+                >
+                  <Download className="w-3 h-3" /> CSV
+                </button>
+              )}
               <button
-                onClick={exportVulnsCsv}
-                title="Export vulnerabilities CSV"
-                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 px-2 py-1 rounded-md transition"
+                onClick={handleRefresh}
+                disabled={isRefreshing || !selectedProjectId}
+                title="Refresh scans"
+                aria-label="Refresh scans"
+                className="p-1.5 rounded-md border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition disabled:opacity-40"
               >
-                <Download className="w-3 h-3" /> CSV
+                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-            )}
+            </div>
           </div>
 
           {/* Search */}

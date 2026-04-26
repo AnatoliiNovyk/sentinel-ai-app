@@ -349,7 +349,14 @@ export default function Chat() {
             </div>
             <div>
               <div className="text-sm font-semibold text-white">Sentinel Agent</div>
-              <div className="text-xs text-slate-500">AI-orchestrated security auditor</div>
+              <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                AI-orchestrated security auditor
+                {messages.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-medium">
+                    {messages.length} msg
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${providerMeta.color}`}>
@@ -410,14 +417,24 @@ export default function Chat() {
 
         <form onSubmit={handleSubmit} className="p-4 border-t border-slate-800">
           <div className="max-w-3xl mx-auto flex gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-              placeholder="Ask anything… (Enter to send, Shift+Enter for new line)"
-              rows={1}
-            />
+            <div className="flex-1 relative">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                maxLength={2000}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+                placeholder="Ask anything… (Enter to send, Shift+Enter for new line)"
+                rows={1}
+              />
+              {input.length > 0 && (
+                <span className={`absolute bottom-2 right-2 text-[10px] pointer-events-none ${
+                  input.length > 1800 ? 'text-red-400' : 'text-slate-600'
+                }`}>
+                  {input.length}/2000
+                </span>
+              )}
+            </div>
             <button
               disabled={sending || !input.trim()}
               aria-label="Send message"
