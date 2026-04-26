@@ -182,3 +182,46 @@ export type FindingComment = {
   updated_at: string;
   replies?: FindingComment[];
 };
+
+// API Rate Limiting
+export type ApiRateLimit = {
+  scans_per_month: number;
+  reports_per_day: number;
+  chat_messages_per_hour: number;
+  api_calls_per_second: number;
+};
+
+export const DEFAULT_RATE_LIMITS: Record<string, ApiRateLimit> = {
+  free: {
+    scans_per_month: 10,
+    reports_per_day: 5,
+    chat_messages_per_hour: 20,
+    api_calls_per_second: 1,
+  },
+  basic: {
+    scans_per_month: 100,
+    reports_per_day: 50,
+    chat_messages_per_hour: 100,
+    api_calls_per_second: 5,
+  },
+  pro: {
+    scans_per_month: 999999,
+    reports_per_day: 999999,
+    chat_messages_per_hour: 999999,
+    api_calls_per_second: 20,
+  },
+  enterprise: {
+    scans_per_month: 999999,
+    reports_per_day: 999999,
+    chat_messages_per_hour: 999999,
+    api_calls_per_second: 100,
+  },
+};
+
+export type ApiUsage = {
+  user_id: string;
+  metric: keyof ApiRateLimit;
+  count: number;
+  reset_at: string;
+  created_at: string;
+};

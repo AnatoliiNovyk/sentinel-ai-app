@@ -427,5 +427,35 @@ CREATE INDEX IF NOT EXISTS idx_finding_comments_parent ON finding_comments(paren
 CREATE INDEX IF NOT EXISTS idx_finding_comments_created ON finding_comments(created_at DESC);
 
 -- =============================================================================
+-- 13. API USAGE TRACKING (Rate limiting and quota management)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS api_usage (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  metric text NOT NULL DEFAULT 'scans_per_month',
+  count integer NOT NULL DEFAULT 0,
+  reset_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT api_usage_metric_check CHECK (metric IN ('scans_per_month', 'reports_per_day', 'chat_messages_per_hour', 'api_calls_per_second'))
+);
+
+ALTER TABLE api_usage ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='api_usage' AND policyname='Users read own usage') THEN
+    CREATE POLICY "Users read own usage" ON api_usage FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='api_usage' AND policyname='Users can insert usage records') THEN
+    CREATE POLICY "Users can insert usage records" ON api_usage FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='api_usage' AND policyname='Users can update own usage') THEN
+    CREATE POLICY "Users can update own usage" ON api_usage FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_api_usage_user_metric ON api_usage(user_id, metric);
+CREATE INDEX IF NOT EXISTS idx_api_usage_reset ON api_usage(reset_at DESC);
+
+-- =============================================================================
 -- DONE ✓
 -- =============================================================================

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
+import { ApiRateLimitsPanel } from '../components/ApiRateLimitsPanel';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
 
@@ -314,6 +315,7 @@ export default function Settings() {
             </div>
             <button
               onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+              title={twoFactorEnabled ? 'Disable two-factor authentication' : 'Enable two-factor authentication'}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                 twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-700'
               }`}
@@ -337,6 +339,7 @@ export default function Settings() {
             </div>
             <button
               onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? 'Disable dark mode' : 'Enable dark mode'}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                 darkMode ? 'bg-emerald-500' : 'bg-slate-700'
               }`}
@@ -434,6 +437,11 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* API Rate Limits */}
+      {user && profile && (
+        <ApiRateLimitsPanel userId={user.id} planId={profile.plan ?? 'free'} />
+      )}
+
       {/* SLA Config */}
       <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
         <div className="flex items-center gap-2 mb-1">
@@ -489,6 +497,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => setShowWebhook(v => !v)}
                   aria-label={showWebhook ? 'Hide URL' : 'Show URL'}
+                  title={showWebhook ? 'Hide URL' : 'Show URL'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
                 >
                   {showWebhook ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
