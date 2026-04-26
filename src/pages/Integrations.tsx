@@ -2,8 +2,17 @@ import { useState, useMemo, useCallback } from 'react';
 import {
   Activity, AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight,
   Copy, ExternalLink, Github, Gitlab, Globe, Info, Layers, Link2, Pencil,
-  Plus, RefreshCw, Send, Settings2, Shield, Slack, Trash2, X, Zap,
+  Plus, RefreshCw, Send, Settings2, Shield, Slack, Trash2, X, Zap, Clock, Filter,
 } from 'lucide-react';
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -379,9 +388,16 @@ function WebhookRow({
             <Activity className="w-3.5 h-3.5" /> {hook.delivery_count} sent
           </span>
           {hook.last_triggered && (
-            <span title="Last triggered">
-              {new Date(hook.last_triggered).toLocaleDateString()}
+            <span title={new Date(hook.last_triggered).toLocaleString()} className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />{relativeTime(hook.last_triggered)}
             </span>
+          )}
+          {hook.last_status && (
+            <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${
+              hook.last_status === 'ok'
+                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
+                : 'text-red-300 bg-red-500/10 border-red-500/20'
+            }`}>{hook.last_status === 'ok' ? '200 OK' : 'Error'}</span>
           )}
         </div>
 
@@ -593,23 +609,24 @@ function HealthDashboard({
   const activeWebhooks = webhooks.filter((w) => w.enabled).length;
   const errorWebhooks = webhooks.filter((w) => w.last_status === 'error').length;
   const totalDeliveries = webhooks.reduce((sum, w) => sum + w.delivery_count, 0);
+  const triggeredWebhooks = webhooks.filter(w => w.last_triggered);
+  const successRate = triggeredWebhooks.length === 0 ? null
+    : Math.round((triggeredWebhooks.filter(w => w.last_status === 'ok').length / triggeredWebhooks.length) * 100);
 
   const stats = [
-    { label: 'Services Connected', value: connectedCount, total: SERVICES.length, icon: <Link2 className="w-4 h-4" />, color: 'text-emerald-400' },
-    { label: 'Active Webhooks', value: activeWebhooks, total: webhooks.length, icon: <Globe className="w-4 h-4" />, color: 'text-sky-400' },
-    { label: 'Failed Webhooks', value: errorWebhooks, total: webhooks.length, icon: <AlertTriangle className="w-4 h-4" />, color: errorWebhooks > 0 ? 'text-red-400' : 'text-slate-500' },
-    { label: 'Total Deliveries', value: totalDeliveries, icon: <Send className="w-4 h-4" />, color: 'text-purple-400' },
+    { label: 'Services Connected', value: `${connectedCount} / ${SERVICES.length}`, icon: <Link2 className="w-4 h-4" />, color: 'text-emerald-400' },
+    { label: 'Active Webhooks', value: `${activeWebhooks} / ${webhooks.length}`, icon: <Globe className="w-4 h-4" />, color: 'text-sky-400' },
+    { label: 'Failed Webhooks', value: String(errorWebhooks), icon: <AlertTriangle className="w-4 h-4" />, color: errorWebhooks > 0 ? 'text-red-400' : 'text-slate-500' },
+    { label: 'Total Deliveries', value: String(totalDeliveries), icon: <Send className="w-4 h-4" />, color: 'text-purple-400' },
+    { label: 'Delivery Success', value: successRate === null ? '—' : `${successRate}%`, icon: <CheckCircle2 className="w-4 h-4" />, color: successRate === null ? 'text-slate-500' : successRate >= 80 ? 'text-emerald-400' : successRate >= 50 ? 'text-yellow-400' : 'text-red-400' },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
       {stats.map((s) => (
         <div key={s.label} className="rounded-xl border border-slate-800 bg-slate-900/30 px-4 py-3">
           <div className={`mb-2 ${s.color}`}>{s.icon}</div>
-          <div className="text-xl font-bold text-white">
-            {s.value}
-            {s.total !== undefined && <span className="text-sm font-normal text-slate-500"> / {s.total}</span>}
-          </div>
+          <div className="text-xl font-bold text-white">{s.value}</div>
           <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
         </div>
       ))}
@@ -754,6 +771,17 @@ export default function Integrations() {
   const [services, setServices] = useState<Record<string, ServiceConfig>>(loadServices);
   const [webhooks, setWebhooks] = useState<Webhook[]>(loadWebhooks);
   const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
+  const [eventFilter, setEventFilter] = useState<WebhookEvent | 'all'>('all');
+
+  const allUsedEvents = useMemo(() => {
+    const set = new Set<WebhookEvent>();
+    webhooks.forEach(w => w.events.forEach(e => set.add(e)));
+    return [...set];
+  }, [webhooks]);
+
+  const filteredWebhooks = useMemo(() =>
+    eventFilter === 'all' ? webhooks : webhooks.filter(w => w.events.includes(eventFilter as WebhookEvent)),
+  [webhooks, eventFilter]);
 
   const handleSaveService = useCallback((id: ServiceId, fields: Record<string, string>, connected: boolean) => {
     setServices((prev) => {
@@ -883,6 +911,36 @@ export default function Integrations() {
             </div>
           </div>
 
+          {/* Event filter */}
+          {allUsedEvents.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <button
+                onClick={() => setEventFilter('all')}
+                className={`text-xs px-2.5 py-1 rounded-md border transition ${
+                  eventFilter === 'all'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                    : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                All ({webhooks.length})
+              </button>
+              {allUsedEvents.map(ev => (
+                <button
+                  key={ev}
+                  onClick={() => setEventFilter(ev === eventFilter ? 'all' : ev)}
+                  className={`text-xs px-2.5 py-1 rounded-md border font-mono transition ${
+                    eventFilter === ev
+                      ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {ev}
+                </button>
+              ))}
+            </div>
+          )}
+
           {webhooks.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-800 p-12 text-center">
               <Globe className="w-8 h-8 text-slate-700 mx-auto mb-2" />
@@ -891,7 +949,12 @@ export default function Integrations() {
             </div>
           ) : (
             <div className="space-y-3">
-              {webhooks.map((hook) => (
+              {filteredWebhooks.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
+                  No webhooks match the selected event filter.
+                </div>
+              )}
+              {filteredWebhooks.map((hook) => (
                 <WebhookRow
                   key={hook.id}
                   hook={hook}
