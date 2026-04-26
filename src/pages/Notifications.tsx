@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell, BellOff, Check, CheckCheck, Trash2, AlertTriangle,
   FileText, Radar, Info, Zap, ShieldAlert, ArrowRight, X,
-  RefreshCw, Filter,
+  RefreshCw, Filter, Download, Search,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, type Notification } from '../lib/supabase';
@@ -196,6 +196,7 @@ export default function Notifications() {
   const [readFilter, setReadFilter]   = useState<ReadFilter>('all');
   const [sevFilter, setSevFilter]     = useState<SevFilter>('all');
   const [typeFilter, setTypeFilter]   = useState<TypeFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const headerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
@@ -277,27 +278,56 @@ export default function Notifications() {
     toast.success('All read notifications deleted.');
   }, [user, toast]);
 
+  // ── Export CSV ─────────────────────────────────────────────────────────────
+  const exportCsv = useCallback(() => {
+    const date = new Date().toISOString().split('T')[0];
+    const rows = filtered.length > 0 ? filtered : items;
+    const lines = ['ID,Title,Body,Type,Severity,Read,Created'];
+    for (const n of rows) {
+      lines.push([
+        n.id,
+        `"${(n.title ?? '').replace(/"/g, '""')}"`,
+        `"${(n.body ?? '').replace(/"/g, '""')}"`,
+        n.type,
+        n.severity,
+        n.read_at ? 'yes' : 'no',
+        n.created_at,
+      ].join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `notifications-${date}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered, items]);
+
   // ── Derived ────────────────────────────────────────────────────────────────
   const unreadCount   = useMemo(() => items.filter(n => !n.read_at).length, [items]);
   const criticalCount = useMemo(() => items.filter(n => n.severity === 'critical' && !n.read_at).length, [items]);
   const readCount     = useMemo(() => items.filter(n => !!n.read_at).length, [items]);
+  const todayCount    = useMemo(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    return items.filter(n => new Date(n.created_at) >= todayStart).length;
+  }, [items]);
 
   const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return items.filter(n => {
       if (readFilter === 'unread' && n.read_at) return false;
       if (readFilter === 'read' && !n.read_at) return false;
       if (sevFilter !== 'all' && n.severity !== sevFilter) return false;
       if (typeFilter !== 'all' && n.type !== typeFilter) return false;
+      if (q && !n.title.toLowerCase().includes(q) && !(n.body ?? '').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [items, readFilter, sevFilter, typeFilter]);
+  }, [items, readFilter, sevFilter, typeFilter, searchQuery]);
 
   const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
   const hasMore = paged.length < filtered.length;
 
   const grouped = useMemo(() => groupByDate(paged), [paged]);
 
-  const hasActiveFilter = readFilter !== 'all' || sevFilter !== 'all' || typeFilter !== 'all';
+  const hasActiveFilter = readFilter !== 'all' || sevFilter !== 'all' || typeFilter !== 'all' || !!searchQuery.trim();
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -346,16 +376,25 @@ export default function Notifications() {
                 Clear read
               </button>
             )}
+            <button
+              onClick={exportCsv}
+              title="Export as CSV"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
           </div>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="px-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="px-8 grid grid-cols-2 sm:grid-cols-5 gap-4">
         <StatCard label="Total" value={items.length} color="text-slate-200" />
         <StatCard label="Unread" value={unreadCount} color="text-sky-300" sub="awaiting action" />
         <StatCard label="Critical unread" value={criticalCount} color="text-rose-400" />
         <StatCard label="Read" value={readCount} color="text-emerald-400" />
+        <StatCard label="Today" value={todayCount} color="text-violet-400" sub="received today" />
       </div>
 
       {/* Filters */}
@@ -365,12 +404,23 @@ export default function Notifications() {
             <Filter className="w-3.5 h-3.5" /> Filters
             {hasActiveFilter && (
               <button
-                onClick={() => { setReadFilter('all'); setSevFilter('all'); setTypeFilter('all'); setPage(1); }}
+                onClick={() => { setReadFilter('all'); setSevFilter('all'); setTypeFilter('all'); setSearchQuery(''); setPage(1); }}
                 className="ml-auto inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 normal-case tracking-normal font-medium"
               >
                 <X className="w-3 h-3" /> Clear
               </button>
             )}
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+              placeholder="Search notifications…"
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            />
           </div>
 
           {/* Read status */}

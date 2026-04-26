@@ -299,10 +299,11 @@ export default function Vulnerabilities() {
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const s = { total: vulns.length, critical: 0, high: 0, open: 0, breached: 0 };
+    const s = { total: vulns.length, critical: 0, high: 0, medium: 0, open: 0, breached: 0 };
     for (const v of vulns) {
       if (v.severity === 'critical') s.critical++;
       if (v.severity === 'high') s.high++;
+      if (v.severity === 'medium') s.medium++;
       if (v.status === 'open' || v.status === 'in_progress') s.open++;
       if (v.sla_breached_at) s.breached++;
     }
@@ -493,7 +494,7 @@ export default function Vulnerabilities() {
       </div>
 
       {/* Stats */}
-      <div className="px-8 grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="px-8 grid grid-cols-2 sm:grid-cols-6 gap-4">
         <StatCard label="Total" value={stats.total} color="text-slate-200"
           onClick={() => { setSevFilter('all'); setStatusFilter('all'); }}
           active={sevFilter === 'all' && statusFilter === 'all'} />
@@ -503,6 +504,9 @@ export default function Vulnerabilities() {
         <StatCard label="High" value={stats.high} color="text-orange-400"
           onClick={() => setSevFilter(sevFilter === 'high' ? 'all' : 'high')}
           active={sevFilter === 'high'} />
+        <StatCard label="Medium" value={stats.medium} color="text-yellow-400"
+          onClick={() => setSevFilter(sevFilter === 'medium' ? 'all' : 'medium')}
+          active={sevFilter === 'medium'} />
         <StatCard label="Open" value={stats.open} color="text-amber-300"
           onClick={() => setStatusFilter(statusFilter === 'open' ? 'all' : 'open')}
           active={statusFilter === 'open'} />
