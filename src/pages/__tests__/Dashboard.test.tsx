@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
@@ -88,6 +88,15 @@ vi.mock('../../context/useAuth', () => {
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe('Dashboard — layout', () => {
   it('renders "Security posture" heading', async () => {
     render(<Dashboard />);
@@ -115,10 +124,6 @@ describe('Dashboard — layout', () => {
 
   it('navigates to /chat when "Launch AI audit" clicked', async () => {
     render(<Dashboard />);
-    await waitFor(
-      () => screen.getByRole('button', { name: /launch ai audit/i }),
-      { timeout: 5000 },
-    );
     fireEvent.click(screen.getByRole('button', { name: /launch ai audit/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/chat');
   });
