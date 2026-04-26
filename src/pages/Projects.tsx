@@ -6,6 +6,7 @@ import ProjectDetail from './ProjectDetail';
 import { useToast } from '../lib/toastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonCardGrid } from '../components/Skeleton';
+import { useStickyHeader } from '../lib/useStickyHeader';
 import { riskBand } from '../lib/riskScore';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
@@ -68,27 +69,33 @@ export default function Projects() {
       });
   }, [projects, search, envFilter, riskFilter, sort]);
 
+  const { sentinelRef, stuck } = useStickyHeader();
+
   if (selected) {
     const fresh = projects.find((p) => p.id === selected.id) ?? selected;
     return <ProjectDetail project={fresh} onBack={() => setSelected(null)} />;
   }
 
   return (
-    <div className="p-8 max-w-7xl">
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Projects</h1>
-          <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-          >
-            <Plus className="w-4 h-4" /> New project
-          </button>
+    <div className="max-w-7xl">
+      <div className={`sticky top-0 z-30 px-8 transition-all duration-200 ${stuck ? 'py-3 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/60 shadow-lg shadow-slate-950/50' : 'pt-8 pb-4 bg-transparent'}`}>
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className={`font-bold tracking-tight text-white transition-all duration-200 ${stuck ? 'text-xl' : 'text-3xl'}`}>Projects</h1>
+            {!stuck && <p className="mt-1 text-sm text-slate-500">Organize your audit targets by environment.</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+            >
+              <Plus className="w-4 h-4" /> New project
+            </button>
+          </div>
         </div>
       </div>
+      <div ref={sentinelRef} className="h-0" />
+      <div className="px-8 pb-8">
 
       {/* Search + filter bar */}
       {!loading && projects.length > 0 && (
@@ -238,6 +245,7 @@ export default function Projects() {
         onConfirm={() => confirmId && remove(confirmId)}
         onCancel={() => setConfirmId(null)}
       />
+      </div>
     </div>
   );
 }

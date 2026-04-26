@@ -8,6 +8,7 @@ import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { useToast } from '../lib/toastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonCardGrid } from '../components/Skeleton';
+import { useStickyHeader } from '../lib/useStickyHeader';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -24,6 +25,7 @@ export default function Reports() {
   const toast = useToast();
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [confirmTitle, setConfirmTitle] = useState('');
+  const { sentinelRef, stuck } = useStickyHeader();
 
   const remove = useCallback(async (id: string) => {
     await supabase.from('reports').delete().eq('id', id);
@@ -74,20 +76,24 @@ export default function Reports() {
   if (selected) return <ReportView report={selected} onBack={() => setSelected(null)} />;
 
   return (
-    <div className="p-8 max-w-7xl">
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="mt-1 text-sm text-slate-500">AI-generated audit summaries and technical deep dives.</p>
+    <div className="max-w-7xl">
+      <div className={`sticky top-0 z-30 px-8 transition-all duration-200 ${stuck ? 'py-3 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/60 shadow-lg shadow-slate-950/50' : 'pt-8 pb-4 bg-transparent'}`}>
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className={`font-bold tracking-tight text-white transition-all duration-200 ${stuck ? 'text-xl' : 'text-3xl'}`}>Reports</h1>
+            {!stuck && <p className="mt-1 text-sm text-slate-500">AI-generated audit summaries and technical deep dives.</p>}
+          </div>
+          <button
+            onClick={() => setModalOpen(true)}
+            disabled={projects.length === 0}
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+          >
+            <Sparkles className="w-4 h-4" /> Generate report
+          </button>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          disabled={projects.length === 0}
-          className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-        >
-          <Sparkles className="w-4 h-4" /> Generate report
-        </button>
       </div>
+      <div ref={sentinelRef} className="h-0" />
+      <div className="px-8 pb-8">
 
       {!loading && reports.length > 0 && (
         <div className="space-y-3 mb-6">
@@ -244,6 +250,7 @@ export default function Reports() {
         onConfirm={() => confirmId && remove(confirmId)}
         onCancel={() => setConfirmId(null)}
       />
+      </div>
     </div>
   );
 }
