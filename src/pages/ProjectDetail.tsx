@@ -22,6 +22,9 @@ import {
   SlidersHorizontal,
   ChevronRight,
   FolderKanban,
+  TrendingUp,
+  TrendingDown,
+  Gauge,
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -472,6 +475,20 @@ function OverviewTab({
     return Math.max(0, 100 - penalty);
   }, [totals]);
 
+  const vulnsByScanCount = useMemo(() => {
+    return vulns.reduce((acc, v) => {
+      acc[v.scan_id] = (acc[v.scan_id] ?? 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [vulns]);
+
+  const trend = useMemo(() => {
+    if (scans.length < 2) return null;
+    const curr = vulnsByScanCount[scans[0].id] ?? 0;
+    const prev = vulnsByScanCount[scans[1].id] ?? 0;
+    return curr - prev;
+  }, [scans, vulnsByScanCount]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-6">
@@ -486,7 +503,7 @@ function OverviewTab({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-6 gap-2 mb-6">
+            <div className="grid grid-cols-6 gap-2 mb-4">
               <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-3 text-center">
                 <div className="text-[10px] text-emerald-500 uppercase font-bold tracking-tight">SOC2 Readiness</div>
                 <div className="text-lg font-bold mt-0.5 text-white">{soc2Score}%</div>
@@ -498,6 +515,17 @@ function OverviewTab({
                 </div>
               ))}
             </div>
+
+            {trend !== null && (
+              <div className={`flex items-center gap-1.5 mb-4 text-xs font-medium px-3 py-2 rounded-lg border ${
+                trend > 0 ? 'text-red-400 bg-red-500/5 border-red-500/20'
+                : trend < 0 ? 'text-emerald-400 bg-emerald-500/5 border-emerald-500/20'
+                : 'text-slate-400 bg-slate-800/50 border-slate-700'
+              }`}>
+                {trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : trend < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : null}
+                {trend > 0 ? `+${trend} findings vs previous scan` : trend < 0 ? `${Math.abs(trend)} fewer findings vs previous scan` : 'No change vs previous scan'}
+              </div>
+            )}
 
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
               Top priority findings
@@ -534,34 +562,31 @@ function OverviewTab({
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
-          <h3 className="font-semibold mb-4">Latest scan</h3>
-          {lastScan ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Scanner</span>
-                <span className="text-white font-medium">{lastScan.scanner}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Status</span>
-                <span className="text-emerald-400 capitalize">{lastScan.status}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Completed</span>
-                <span className="text-white">{new Date(lastScan.created_at).toLocaleDateString()}</span>
-              </div>
-              <div className="mt-4 pt-4 border-t border-slate-800">
-                <h4 className="text-[11px] font-semibold text-slate-500 uppercase mb-2">Recommended</h4>
-                <div className="flex flex-wrap gap-2">
-                  {AVAILABLE_SCANNERS.slice(0, 2).map(s => (
-                    <span key={s.id} className="px-2 py-1 rounded bg-slate-800 text-[10px] text-slate-300">{s.label}</span>
-                  ))}
-                </div>
-              </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+          <h3 className="font-semibold mb-1 flex items-center gap-2 text-sm">
+            <Gauge className="w-4 h-4 text-violet-400" /> Risk Posture
+          </h3>
+          <RiskGauge score={project.risk_score ?? 0} />
+          {lastScan && (
+            <div className="text-xs text-slate-500 flex justify-between mb-3">
+              <span>Last: <span className="text-slate-300 font-medium">{lastScan.scanner}</span></span>
+              <span className={lastScan.status === 'completed' ? 'text-emerald-400' : lastScan.status === 'failed' ? 'text-red-400' : 'text-sky-400'}>
+                {lastScan.status}
+              </span>
             </div>
-          ) : (
-            <div className="text-sm text-slate-500 italic">No scans performed yet.</div>
           )}
+          <div className="border-t border-slate-800 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Scan history</span>
+              <span className="text-[10px] text-slate-600">{scans.length} total</span>
+            </div>
+            <ScanHistoryChart scans={scans} vulnsByScan={vulnsByScanCount} />
+            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-600">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/>completed</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500 inline-block"/>failed</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-500 inline-block"/>running</span>
+            </div>
+          </div>
         </div>
 
         <WebhookPanel project={project} />
@@ -895,6 +920,78 @@ function ActivityTab({ items }: { items: ActivityItem[] }) {
 
 function severityWeight(s: string): number {
   return { critical: 5, high: 4, medium: 3, low: 2, info: 1 }[s] ?? 0;
+}
+
+function RiskGauge({ score }: { score: number }) {
+  const s = Math.min(100, Math.max(0, score));
+  const R = 80;
+  const CX = 100;
+  const CY = 105;
+  const color = s < 34 ? '#10b981' : s < 67 ? '#f59e0b' : '#ef4444';
+  const label = s < 34 ? 'LOW RISK' : s < 67 ? 'MEDIUM RISK' : 'HIGH RISK';
+
+  // Background: left (20,105) → top → right (180,105), sweep=1 (clockwise through top in SVG)
+  const bgPath = `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`;
+
+  let valuePath = '';
+  if (s > 0 && s < 100) {
+    // Angle in SVG clockwise terms: starts at 180° (left), goes to 180°+(s/100)*180°
+    const angleRad = Math.PI + (s / 100) * Math.PI;
+    const ex = (CX + R * Math.cos(angleRad)).toFixed(2);
+    const ey = (CY + R * Math.sin(angleRad)).toFixed(2);
+    valuePath = `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${ex} ${ey}`;
+  } else if (s === 100) {
+    valuePath = bgPath;
+  }
+
+  return (
+    <svg viewBox="0 0 200 120" className="w-full h-[110px]">
+      <path d={bgPath} fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
+      {valuePath && (
+        <path d={valuePath} fill="none" stroke={color} strokeWidth="14" strokeLinecap="round" />
+      )}
+      <text x="100" y="100" textAnchor="middle" fill="white" fontSize="30" fontWeight="700">{s}</text>
+      <text x="100" y="116" textAnchor="middle" fill="#64748b" fontSize="9">{label}</text>
+    </svg>
+  );
+}
+
+function ScanHistoryChart({ scans, vulnsByScan }: { scans: Scan[]; vulnsByScan: Record<string, number> }) {
+  const recent = [...scans].slice(0, 10).reverse();
+  if (recent.length === 0) {
+    return <div className="h-[66px] flex items-center justify-center text-xs text-slate-600">No scan data</div>;
+  }
+  const counts = recent.map(s => vulnsByScan[s.id] ?? 0);
+  const maxCount = Math.max(...counts, 1);
+  const CHART_H = 46;
+  const BAR_W = 14;
+  const GAP = 3;
+  const totalW = recent.length * (BAR_W + GAP) - GAP;
+  const offsetX = (200 - totalW) / 2;
+
+  return (
+    <svg viewBox="0 0 200 66" className="w-full h-[66px]">
+      {recent.map((s, i) => {
+        const count = counts[i];
+        const h = Math.max(4, (count / maxCount) * CHART_H);
+        const x = offsetX + i * (BAR_W + GAP);
+        const y = CHART_H - h;
+        const color =
+          s.status === 'failed' ? '#ef4444'
+          : s.status === 'running' ? '#3b82f6'
+          : s.status === 'completed' ? '#10b981'
+          : '#475569';
+        return (
+          <g key={s.id}>
+            <rect x={x} y={y} width={BAR_W} height={h} rx="2" fill={color} opacity="0.85" />
+            <text x={x + BAR_W / 2} y="62" textAnchor="middle" fill="#475569" fontSize="8">
+              {count > 0 ? count : '✓'}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
 }
 
 function severityClass(s: string): string {
