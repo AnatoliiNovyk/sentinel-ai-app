@@ -1,7 +1,8 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
+import CommandPalette from './CommandPalette';
 import { useEffect, useRef, useState } from 'react';
 
 const AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
@@ -118,6 +119,19 @@ export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const mainRef = useRef<HTMLElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     const el = mainRef.current;
@@ -195,6 +209,15 @@ export default function AppLayout() {
             {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              title="Command palette (Ctrl+K)"
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-slate-500 hover:text-slate-300 border border-slate-800 hover:border-slate-700 bg-slate-900/50 transition"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search…</span>
+              <span className="flex items-center gap-0.5 ml-1 text-slate-600"><Command className="w-3 h-3" />K</span>
+            </button>
             <AgentStatus />
             <NotificationBell />
           </div>
@@ -202,6 +225,8 @@ export default function AppLayout() {
         <div className="flex-1">
           <Outlet />
         </div>
+        {/* Command Palette */}
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {/* Scroll to top button */}
         {showScrollTop && (
           <button
