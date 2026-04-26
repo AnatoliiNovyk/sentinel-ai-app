@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
-  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown,
+  ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown, ShieldAlert, ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
@@ -52,6 +52,15 @@ export default function Dashboard() {
   // ── Derived data ─────────────────────────────────────────────────────────
   const openVulns = vulns.filter(v => v.status === 'open' || v.status === 'in_progress');
   const resolvedVulns = vulns.filter(v => v.status === 'resolved');
+
+  // Top 5 critical+high for the alert banner
+  const topCritical = useMemo(() => {
+    const SEV_W: Record<string, number> = { critical: 2, high: 1 };
+    return openVulns
+      .filter(v => v.severity === 'critical' || v.severity === 'high')
+      .sort((a, b) => (SEV_W[b.severity] ?? 0) - (SEV_W[a.severity] ?? 0))
+      .slice(0, 5);
+  }, [openVulns]);
 
   const trend30 = useMemo(() => buildTrend(vulns, 30), [vulns]);
   const trend14 = useMemo(() => buildTrend(vulns, 14), [vulns]);
@@ -195,6 +204,57 @@ export default function Dashboard() {
           subLabel={`${completedScans} completed`}
         />
       </div>
+
+      {/* ── Critical findings alert banner ──────────────────────────────── */}
+      {!loading && topCritical.length > 0 && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              </div>
+              <span className="text-sm font-semibold text-red-300">Critical &amp; High Priority</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-300 font-bold tabular-nums">{topCritical.length}</span>
+            </div>
+            <button
+              onClick={() => navigate('/projects')}
+              className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 transition"
+            >
+              View all <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+            {topCritical.map(v => {
+              const proj = projects.find(p => p.id === v.project_id);
+              const isCrit = v.severity === 'critical';
+              return (
+                <div key={v.id} className={`rounded-lg border p-3 flex flex-col gap-1 ${
+                  isCrit ? 'border-red-500/25 bg-red-500/8' : 'border-orange-500/25 bg-orange-500/8'
+                }`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                      isCrit
+                        ? 'text-red-300 bg-red-500/15 border-red-500/30'
+                        : 'text-orange-300 bg-orange-500/15 border-orange-500/30'
+                    }`}>{v.severity}</span>
+                    {v.cve_id && (
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${v.cve_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[9px] font-mono text-sky-400 hover:text-sky-300 hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >{v.cve_id}</a>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-200 font-medium line-clamp-2 leading-tight">{v.title}</div>
+                  {proj && <div className="text-[10px] text-slate-500 truncate">{proj.name}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Main content 3-col ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
