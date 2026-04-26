@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal, LayoutGrid, LayoutList, Download, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal, LayoutGrid, LayoutList, Download, Tag, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
@@ -18,6 +18,18 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
 
 export default function Projects() {
   const { user } = useAuth();
+
+  const relTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d}d ago`;
+    return new Date(iso).toLocaleDateString();
+  };
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -396,6 +408,9 @@ export default function Projects() {
                 <h3 className="font-semibold text-white truncate">{p.name}</h3>
                 <p className="mt-1 text-sm text-slate-400 line-clamp-2">{p.description || 'No description'}</p>
                 <div className="mt-4 text-xs text-slate-500 font-mono truncate">{p.target}</div>
+                <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-600">
+                  <Clock className="w-3 h-3" />{relTime(p.created_at)}
+                </div>
               </button>
             );})}
           )}

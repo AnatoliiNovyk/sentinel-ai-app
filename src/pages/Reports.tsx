@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader, CheckSquare, Square, BarChart2 } from 'lucide-react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader, CheckSquare, Square, BarChart2, Clock } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -12,6 +12,18 @@ import { useStickyHeader } from '../lib/useStickyHeader';
 
 export default function Reports() {
   const { user } = useAuth();
+
+  const relTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d}d ago`;
+    return new Date(iso).toLocaleDateString();
+  };
   const [reports, setReports] = useState<Report[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -341,7 +353,14 @@ export default function Reports() {
                     >
                       {r.kind}
                     </span>
-                    <span className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</span>
+                    {r.is_public && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md border text-amber-300 border-amber-500/30 bg-amber-500/10">
+                        <Globe className="w-2.5 h-2.5" /> Shared
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-500 ml-auto flex items-center gap-1">
+                      <Clock className="w-3 h-3" />{relTime(r.created_at)}
+                    </span>
                   </div>
                   <h3 className="font-semibold text-white pr-8">{r.title}</h3>
                   <p className="mt-1 text-sm text-slate-500">{project?.name ?? 'Project'}</p>
