@@ -1,4 +1,4 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command, Menu, X as XIcon } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
@@ -120,6 +120,10 @@ export default function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close sidebar on route change
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // Ctrl+K global shortcut
   useEffect(() => {
@@ -157,12 +161,37 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-      <aside className="w-64 shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col">
-        <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-800">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-slate-950" strokeWidth={2.5} />
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 border-r border-slate-800 flex flex-col
+        transition-transform duration-200
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:relative lg:translate-x-0 lg:flex lg:shrink-0
+      `}>
+        <div className="h-16 flex items-center justify-between gap-2 px-5 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-slate-950" strokeWidth={2.5} />
+            </div>
+            <span className="text-sm font-semibold">Sentinel AI</span>
           </div>
-          <span className="text-sm font-semibold">Sentinel AI</span>
+          {/* Close button — mobile only */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded transition"
+            aria-label="Close menu"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {nav.map(({ id, label, icon: Icon, path }) => {
@@ -203,10 +232,20 @@ export default function AppLayout() {
           </div>
         </div>
       </aside>
-      <main ref={mainRef} className="flex-1 overflow-auto flex flex-col relative">
-        <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-8">
-          <div className="text-sm font-medium text-slate-300">
-            {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
+      <main ref={mainRef} className="flex-1 overflow-auto flex flex-col relative min-w-0">
+        <header className="sticky top-0 z-30 h-16 border-b border-slate-800 bg-slate-950/85 backdrop-blur flex items-center justify-between px-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded transition"
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="text-sm font-medium text-slate-300">
+              {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
