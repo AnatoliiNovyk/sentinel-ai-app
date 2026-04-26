@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, AlertTriangle, Download, Moon, Sun, Copy, Check } from 'lucide-react';
+import { Shield, AlertTriangle, Download, Moon, Sun, Copy, Check, Printer, BookOpen, FileText, Hash } from 'lucide-react';
 import { supabase, Report } from '../lib/supabase';
 
 export default function PublicReport({ token }: { token: string }) {
@@ -35,6 +35,16 @@ export default function PublicReport({ token }: { token: string }) {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const printReport = () => window.print();
+
+  const reportMeta = report ? (() => {
+    const words      = report.content.trim().split(/\s+/).filter(Boolean).length;
+    const readMins   = Math.max(1, Math.round(words / 200));
+    const sections   = (report.content.match(/^#+\s/gm) ?? []).length;
+    const chars      = report.content.length;
+    return { words, readMins, sections, chars };
+  })() : null;
 
   const copyContent = () => {
     if (!report) return;
@@ -82,39 +92,49 @@ export default function PublicReport({ token }: { token: string }) {
             <span className={darkMode ? 'text-slate-600' : 'text-slate-300'}>·</span>
             <span>Shared report</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={copyContent}
-              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
-                darkMode
-                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
-                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
-                darkMode
-                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
-                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={download}
-              className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
-                darkMode
-                  ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
-                  : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Download className="w-4 h-4" /> Markdown
-            </button>
-          </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={copyContent}
+                className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                  darkMode
+                    ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                    : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+              <button
+                onClick={printReport}
+                className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                  darkMode
+                    ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                    : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Printer className="w-4 h-4" /> Print
+              </button>
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                  darkMode
+                    ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                    : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={download}
+                className={`inline-flex items-center gap-2 border px-3 py-1.5 rounded-md text-sm transition ${
+                  darkMode
+                    ? 'border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white'
+                    : 'border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Download className="w-4 h-4" /> Markdown
+              </button>
+            </div>
         </div>
       </header>
 
@@ -132,6 +152,28 @@ export default function PublicReport({ token }: { token: string }) {
             Public Share
           </div>
         </div>
+
+        {/* Report metadata stats */}
+        {reportMeta && (
+          <div className={`mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3`}>
+            {[
+              { icon: <BookOpen className="w-4 h-4" />, label: 'Read time', value: `~${reportMeta.readMins} min` },
+              { icon: <FileText className="w-4 h-4" />, label: 'Words',     value: reportMeta.words.toLocaleString() },
+              { icon: <Hash className="w-4 h-4" />,      label: 'Sections',  value: reportMeta.sections || '—' },
+              { icon: <FileText className="w-4 h-4" />, label: 'Characters', value: reportMeta.chars.toLocaleString() },
+            ].map(s => (
+              <div key={s.label} className={`rounded-xl border p-4 flex items-center gap-3 ${
+                darkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}>
+                <div className={darkMode ? 'text-emerald-400' : 'text-emerald-600'}>{s.icon}</div>
+                <div>
+                  <div className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{s.label}</div>
+                  <div className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{s.value}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className={`mt-8 rounded-xl border p-8 ${
           darkMode

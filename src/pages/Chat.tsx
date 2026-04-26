@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2, Search, Filter } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2, Search, Filter, BarChart2, Clock } from 'lucide-react';
 import { marked } from 'marked';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage } from '../lib/supabase';
@@ -221,16 +221,55 @@ export default function Chat() {
 
   const providerMeta = PROVIDER_META[activeProvider] ?? PROVIDER_META.mock;
 
+  // Sidebar stats
+  const sidebarStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayCount = conversations.filter(c => new Date(c.created_at) >= today).length;
+    return { total: conversations.length, filtered: filteredConversations.length, today: todayCount };
+  }, [conversations, filteredConversations]);
+
+  const clearAllConversations = useCallback(async () => {
+    if (!user || conversations.length === 0) return;
+    const ids = conversations.map(c => c.id);
+    await supabase.from('ai_conversations').delete().in('id', ids);
+    setConversations([]);
+    setActiveId(null);
+    setMessages([]);
+  }, [user, conversations]);
+
+  const relativeConvTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  };
+
   return (
     <div className="h-screen flex">
       <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col">
         <div className="p-3 border-b border-slate-800 space-y-2">
-          <button
-            onClick={newConversation}
-            className="w-full inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900 text-sm text-slate-300 transition"
-          >
-            <Plus className="w-4 h-4" /> New chat
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={newConversation}
+              className="flex-1 inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900 text-sm text-slate-300 transition"
+            >
+              <Plus className="w-4 h-4" /> New chat
+            </button>
+            {conversations.length > 0 && (
+              <button
+                onClick={clearAllConversations}
+                aria-label="Clear all conversations"
+                className="ml-1.5 p-2 rounded-md border border-slate-800 hover:border-red-500/40 hover:bg-red-500/5 hover:text-red-400 text-slate-500 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
@@ -247,6 +286,8 @@ export default function Chat() {
             <Filter className="w-3.5 h-3.5 text-slate-500" />
             <select
               value={dateFilter}
+              aria-label="Filter by date"
+              title="Filter by date"
               onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
               className="w-full px-2 py-1 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-300 focus:border-emerald-500 focus:outline-none"
             >
@@ -258,6 +299,20 @@ export default function Chat() {
           </div>
         </div>
         <div className="flex-1 overflow-auto p-2 space-y-1">
+          {/* Stats bar */}
+          {sidebarStats.total > 0 && (
+            <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
+              <BarChart2 className="w-3 h-3 text-slate-600" />
+              <span className="text-[10px] text-slate-600">
+                {sidebarStats.filtered === sidebarStats.total
+                  ? `${sidebarStats.total} chats`
+                  : `${sidebarStats.filtered} of ${sidebarStats.total}`}
+              </span>
+              {sidebarStats.today > 0 && (
+                <span className="ml-auto text-[10px] text-emerald-600">{sidebarStats.today} today</span>
+              )}
+            </div>
+          )}
           {filteredConversations.map((c) => (
             <div
               key={c.id}
@@ -267,7 +322,13 @@ export default function Chat() {
               onClick={() => setActiveId(c.id)}
             >
               <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate flex-1">{c.title}</span>
+              <div className="flex-1 min-w-0">
+                <div className="truncate">{c.title}</div>
+                <div className="text-[10px] text-slate-600 group-hover:text-slate-500 flex items-center gap-1 mt-0.5">
+                  <Clock className="w-2.5 h-2.5" />
+                  {relativeConvTime(c.created_at)}
+                </div>
+              </div>
               <button
                 onClick={(e) => deleteConversation(c.id, e)}
                 aria-label="Delete conversation"
