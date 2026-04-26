@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X } from 'lucide-react';
+import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X, BarChart2, ShieldOff, ShieldCheck, Clock } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -16,6 +16,7 @@ export default function OsintAnalyzer() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScanHistory[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [showRiskChart, setShowRiskChart] = useState(false);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
   const toast = useToast();
@@ -35,6 +36,32 @@ export default function OsintAnalyzer() {
     });
   }, [results, sevFilter, sortBy]);
 
+  // Session persistence
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('osintScanHistory');
+      if (saved) setResults(JSON.parse(saved) as ScanHistory[]);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('osintScanHistory', JSON.stringify(results.slice(0, 50)));
+    } catch { /* ignore */ }
+  }, [results]);
+
+  // Summary stats
+  const stats = useMemo(() => ({
+    total:    results.length,
+    errors:   results.filter(r => r.error).length,
+    clean:    results.filter(r => !r.error && (r.result.breachCount ?? 0) === 0).length,
+    critical: results.filter(r => !r.error && r.result.riskLevel === 'critical').length,
+    high:     results.filter(r => !r.error && r.result.riskLevel === 'high').length,
+    medium:   results.filter(r => !r.error && r.result.riskLevel === 'medium').length,
+    low:      results.filter(r => !r.error && r.result.riskLevel === 'low').length,
+    totalBreaches: results.reduce((acc, r) => acc + (!r.error ? (r.result.breachCount ?? 0) : 0), 0),
+  }), [results]);
+
   const exportCsv = useCallback(() => {
     const rows = ['Query,BreachCount,RiskScore,RiskLevel,ScannedAt'];
     for (const r of results) {
@@ -48,6 +75,18 @@ export default function OsintAnalyzer() {
       ].join(','));
     }
     downloadFile(`osint-results-${new Date().toISOString().split('T')[0]}.csv`, rows.join('\n'), 'text/csv');
+  }, [results]);
+
+  const exportJson = useCallback(() => {
+    const payload = results.filter(r => !r.error).map(r => ({
+      query: r.query,
+      riskLevel: r.result.riskLevel,
+      riskScore: r.result.riskScore,
+      breachCount: r.result.breachCount,
+      scannedAt: r.result.scannedAt,
+      breaches: r.result.breaches ?? [],
+    }));
+    downloadFile(`osint-results-${new Date().toISOString().split('T')[0]}.json`, JSON.stringify(payload, null, 2), 'application/json');
   }, [results]);
 
   useEffect(() => {
@@ -148,6 +187,64 @@ export default function OsintAnalyzer() {
 
       {results.length > 0 && (
         <div className="space-y-4">
+          {/* Summary stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Total scanned', value: stats.total,         icon: Search,      color: 'text-sky-400',     dot: 'bg-sky-400'     },
+              { label: 'Total breaches', value: stats.totalBreaches, icon: ShieldOff,   color: 'text-red-400',     dot: 'bg-red-400'     },
+              { label: 'Clean',          value: stats.clean,         icon: ShieldCheck, color: 'text-emerald-400', dot: 'bg-emerald-400' },
+              { label: 'Critical',       value: stats.critical,      icon: AlertTriangle, color: 'text-red-400',  dot: 'bg-red-500'     },
+              { label: 'High risk',      value: stats.high,          icon: AlertTriangle, color: 'text-orange-400', dot: 'bg-orange-400' },
+              { label: 'Errors',         value: stats.errors,        icon: Clock,       color: 'text-amber-400',  dot: 'bg-amber-400'   },
+            ].map(({ label, value, icon: Icon, color, dot }) => (
+              <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{label}</span>
+                </div>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Risk distribution chart */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+            <button
+              onClick={() => setShowRiskChart(p => !p)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              <BarChart2 className="w-4 h-4 text-violet-400" />
+              <span className="text-sm font-semibold text-slate-200">Risk Distribution</span>
+              <span className="ml-auto text-xs text-slate-500">{showRiskChart ? '▲ collapse' : '▼ expand'}</span>
+            </button>
+            {showRiskChart && (
+              <div className="mt-4 space-y-2">
+                {([
+                  { key: 'critical', label: 'Critical', bar: 'bg-red-500',    text: 'text-red-400'    },
+                  { key: 'high',     label: 'High',     bar: 'bg-orange-500', text: 'text-orange-400' },
+                  { key: 'medium',   label: 'Medium',   bar: 'bg-amber-500',  text: 'text-amber-400'  },
+                  { key: 'low',      label: 'Low',      bar: 'bg-sky-500',    text: 'text-sky-400'    },
+                  { key: 'clean',    label: 'Clean',    bar: 'bg-emerald-500',text: 'text-emerald-400'},
+                ] as const).map(({ key, label, bar, text }) => {
+                  const val = stats[key];
+                  const pct = stats.total > 0 ? (val / stats.total) * 100 : 0;
+                  return (
+                    <div key={key} className="flex items-center gap-3">
+                      <span className={`w-16 text-xs font-medium ${text} text-right shrink-0`}>{label}</span>
+                      <div className="flex-1 h-2 rounded-full bg-slate-800">
+                        <div
+                          className={`h-full rounded-full ${bar}`}
+                          ref={(el) => { if (el) el.style.width = `${pct}%`; }}
+                        />
+                      </div>
+                      <span className="w-8 text-xs text-slate-400 text-right shrink-0">{val}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-white">Analysis Results</h2>
             <div className="flex items-center gap-2">
@@ -185,7 +282,13 @@ export default function OsintAnalyzer() {
                 onClick={exportCsv}
                 className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
               >
-                <Download className="w-3.5 h-3.5" /> Export CSV
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+              <button
+                onClick={exportJson}
+                className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-slate-500 px-2.5 py-1.5 rounded-md transition text-slate-300"
+              >
+                <Download className="w-3.5 h-3.5" /> JSON
               </button>
               {(sevFilter !== 'all' || sortBy !== 'newest') && (
                 <button
