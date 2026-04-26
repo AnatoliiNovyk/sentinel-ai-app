@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader } from 'lucide-react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader, CheckSquare, Square, BarChart2 } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -26,6 +26,14 @@ export default function Reports() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [confirmTitle, setConfirmTitle] = useState('');
   const { sentinelRef, stuck } = useStickyHeader();
+
+  // Bulk selection
+  const [bulkIds, setBulkIds] = useState<Set<string>>(new Set());
+  const toggleBulk = (id: string) => setBulkIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setBulkIds(new Set(visible.map(r => r.id)));
+  const clearBulk = () => setBulkIds(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   const remove = useCallback(async (id: string) => {
     await supabase.from('reports').delete().eq('id', id);
@@ -69,6 +77,43 @@ export default function Reports() {
     setLoading(false);
   }, [user]);
 
+  // Stats derived from all reports
+  const stats = useMemo(() => ({
+    total:     reports.length,
+    executive: reports.filter(r => r.kind === 'executive').length,
+    technical: reports.filter(r => r.kind === 'technical').length,
+    shared:    reports.filter(r => r.is_public).length,
+    // last 7 days per day
+    byDay: (() => {
+      const days: { label: string; count: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        const next = new Date(d.getTime() + 86400000);
+        days.push({
+          label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          count: reports.filter(r => {
+            const t = new Date(r.created_at).getTime();
+            return t >= d.getTime() && t < next.getTime();
+          }).length,
+        });
+      }
+      return days;
+    })(),
+  }), [reports]);
+
+  const bulkDelete = useCallback(async () => {
+    if (bulkIds.size === 0) return;
+    setBulkDeleting(true);
+    await supabase.from('reports').delete().in('id', Array.from(bulkIds));
+    setReports(prev => prev.filter(r => !bulkIds.has(r.id)));
+    setBulkIds(new Set());
+    setBulkDeleting(false);
+    setConfirmBulk(false);
+    toast.success(`Deleted ${bulkIds.size} report${bulkIds.size !== 1 ? 's' : ''}.`);
+  }, [bulkIds, toast]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -94,6 +139,49 @@ export default function Reports() {
       </div>
       <div ref={sentinelRef} className="h-0" />
       <div className="px-8 pb-8">
+
+      {/* Stat cards + 7-day chart */}
+      {!loading && reports.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          {[
+            { label: 'Total reports',  value: stats.total,     color: 'text-sky-400',     dot: 'bg-sky-400'     },
+            { label: 'Executive',      value: stats.executive, color: 'text-emerald-400', dot: 'bg-emerald-400' },
+            { label: 'Technical',      value: stats.technical, color: 'text-violet-400',  dot: 'bg-violet-400'  },
+            { label: 'Shared',         value: stats.shared,    color: 'text-amber-400',   dot: 'bg-amber-400'   },
+            {
+              label: 'Last 7 days',
+              value: stats.byDay.reduce((s, d) => s + d.count, 0),
+              color: 'text-slate-200',
+              dot:   'bg-slate-400',
+              chart: stats.byDay,
+            },
+          ].map(({ label, value, color, dot, chart }) => (
+            <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                <span className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{label}</span>
+              </div>
+              <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              {chart && (
+                <div className="flex items-end gap-0.5 mt-2 h-[24px]">
+                  {chart.map((d, i) => {
+                    const maxC = Math.max(...chart.map(x => x.count), 1);
+                    const pct = (d.count / maxC) * 100;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center justify-end h-full" title={`${d.label}: ${d.count}`}>
+                        <div
+                          className="w-full rounded-sm bg-slate-500 min-h-[2px]"
+                          ref={(el) => { if (el) el.style.height = `${Math.max(2, pct * 0.24)}px`; }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {!loading && reports.length > 0 && (
         <div className="space-y-3 mb-6">
@@ -158,6 +246,15 @@ export default function Reports() {
                 <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
             )}
+            {visible.length > 0 && (
+              <button
+                onClick={bulkIds.size === visible.length ? clearBulk : selectAll}
+                className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:border-slate-600 transition"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                {bulkIds.size === visible.length && visible.length > 0 ? 'Deselect all' : 'Select all'}
+              </button>
+            )}
             {(search || kindFilter !== 'all' || sortBy !== 'date-desc') && (
               <button
                 onClick={() => { setSearch(''); setKindFilter('all'); setSortBy('date-desc'); }}
@@ -167,6 +264,22 @@ export default function Reports() {
               </button>
             )}
           </div>
+
+          {/* Bulk action bar */}
+          {bulkIds.size > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-red-500/30 bg-red-500/5">
+              <span className="text-sm text-slate-300">{bulkIds.size} selected</span>
+              <button
+                onClick={() => setConfirmBulk(true)}
+                className="ml-auto inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete selected
+              </button>
+              <button onClick={clearBulk} className="text-xs text-slate-500 hover:text-white transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -198,11 +311,25 @@ export default function Reports() {
             </div>
           ) : visible.map((r) => {
             const project = projects.find((p) => p.id === r.project_id);
+            const isBulkSelected = bulkIds.has(r.id);
             return (
               <div key={r.id} className="group relative">
+                {/* Bulk checkbox */}
+                <button
+                  onClick={e => { e.stopPropagation(); toggleBulk(r.id); }}
+                  aria-label={isBulkSelected ? 'Deselect report' : 'Select report'}
+                  className={`absolute top-3 left-3 z-10 transition opacity-0 group-hover:opacity-100 ${isBulkSelected ? 'opacity-100' : ''}`}
+                >
+                  {isBulkSelected
+                    ? <CheckSquare className="w-4 h-4 text-emerald-400" />
+                    : <Square className="w-4 h-4 text-slate-600" />
+                  }
+                </button>
                 <button
                   onClick={() => setSelected(r)}
-                  className="w-full text-left rounded-xl border border-slate-800 bg-slate-900/30 p-5 hover:border-emerald-500/50 hover:bg-slate-900/60 transition"
+                  className={`w-full text-left rounded-xl border bg-slate-900/30 p-5 hover:bg-slate-900/60 transition pl-9 ${
+                    isBulkSelected ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800 hover:border-emerald-500/50'
+                  }`}
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span
@@ -249,6 +376,14 @@ export default function Reports() {
         confirmLabel="Delete report"
         onConfirm={() => confirmId && remove(confirmId)}
         onCancel={() => setConfirmId(null)}
+      />
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`Delete ${bulkIds.size} report${bulkIds.size !== 1 ? 's' : ''}`}
+        message={`Are you sure you want to permanently delete ${bulkIds.size} selected report${bulkIds.size !== 1 ? 's' : ''}? This cannot be undone.`}
+        confirmLabel={bulkDeleting ? 'Deleting…' : `Delete ${bulkIds.size} report${bulkIds.size !== 1 ? 's' : ''}`}
+        onConfirm={bulkDelete}
+        onCancel={() => setConfirmBulk(false)}
       />
       </div>
     </div>
