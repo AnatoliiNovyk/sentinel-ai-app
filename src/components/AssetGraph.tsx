@@ -32,6 +32,10 @@ export default function AssetGraph({ projectName, vulns }: AssetGraphProps) {
     return Array.from(map.entries()).map(([asset, data]) => ({ asset, ...data }));
   }, [vulns]);
 
+  const criticalCount = assets.filter(a => a.severity === 'critical').length;
+  const highCount     = assets.filter(a => a.severity === 'high').length;
+  const safeCount     = assets.filter(a => a.severity === 'low' || a.severity === 'info').length;
+
   const nodes = useMemo(() => {
     const center = { x: 300, y: 250 };
     const radius = 180;
@@ -66,6 +70,26 @@ export default function AssetGraph({ projectName, vulns }: AssetGraphProps) {
   }
 
   return (
+    <div className="space-y-3">
+      {/* Stat cards */}
+      <div className="grid grid-cols-4 gap-2">
+        <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+          <div className="text-lg font-bold text-white">{assets.length}</div>
+          <div className="text-[10px] text-slate-500">Assets</div>
+        </div>
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+          <div className="text-lg font-bold text-red-400">{criticalCount}</div>
+          <div className="text-[10px] text-slate-500">Critical</div>
+        </div>
+        <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 px-3 py-2">
+          <div className="text-lg font-bold text-orange-400">{highCount}</div>
+          <div className="text-[10px] text-slate-500">High risk</div>
+        </div>
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+          <div className="text-lg font-bold text-emerald-400">{safeCount}</div>
+          <div className="text-[10px] text-slate-500">Low/Safe</div>
+        </div>
+      </div>
     <div className="relative w-full h-[500px] border border-slate-800 rounded-xl bg-slate-950/50 overflow-hidden">
       <div className="absolute top-4 left-4 flex flex-col gap-1 z-10">
         <h3 className="text-sm font-semibold text-white">Asset Topology</h3>
@@ -104,6 +128,7 @@ export default function AssetGraph({ projectName, vulns }: AssetGraphProps) {
         {/* Assets */}
         {nodes.map(n => (
           <g key={n.id} className="group transition-all duration-500 cursor-default">
+            <title>{n.type === 'project' ? `Project: ${n.label}` : `${n.label} · ${assets.find(a => a.asset === n.id)?.count ?? 0} finding(s) · ${n.severity ?? 'safe'}`}</title>
             {n.type === 'asset' && n.severity === 'critical' && (
               <circle
                 cx={n.x} cy={n.y} r={24}
@@ -153,6 +178,7 @@ export default function AssetGraph({ projectName, vulns }: AssetGraphProps) {
           to { stroke-dashoffset: -1000; }
         }
       `}</style>
+    </div>
     </div>
   );
 }

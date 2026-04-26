@@ -26,6 +26,10 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
+  const activeCount  = schedules.filter(s => s.enabled).length;
+  const pausedCount  = schedules.filter(s => !s.enabled).length;
+  const overdueCount = schedules.filter(s => s.enabled && new Date(s.next_run_at) < new Date()).length;
+
   const load = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -67,6 +71,24 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
         </button>
       </div>
 
+      {/* Stat cards */}
+      {!loading && schedules.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+            <div className="text-xl font-bold text-white">{schedules.length}</div>
+            <div className="text-[10px] text-slate-500">Total</div>
+          </div>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+            <div className="text-xl font-bold text-emerald-400">{activeCount}</div>
+            <div className="text-[10px] text-slate-500">Active</div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/30 px-4 py-3">
+            <div className="text-xl font-bold text-slate-400">{pausedCount}</div>
+            <div className="text-[10px] text-slate-500">Paused</div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-slate-500 text-sm">Loading...</div>
       ) : schedules.length === 0 ? (
@@ -95,6 +117,9 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       {cadenceLabel(s.cadence_hours)} · next {new Date(s.next_run_at).toLocaleString()}
+                      {s.enabled && new Date(s.next_run_at) < new Date() && (
+                        <span className="ml-1.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">overdue</span>
+                      )}
                     </div>
                   </div>
                 </div>
