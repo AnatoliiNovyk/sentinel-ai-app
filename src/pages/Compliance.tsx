@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, AlertTriangle, CheckCircle2, Activity,
-  TrendingUp, Zap, BookOpen, AlertCircle, Download, FileText, Printer
+  TrendingUp, Zap, BookOpen, AlertCircle, Download, FileText, Printer, Search, X, Trophy
 } from 'lucide-react';
 import { supabase, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -33,28 +33,49 @@ export default function Compliance() {
   const [cisStatus, setCisStatus] = useState<'all' | 'passing' | 'failing'>('all');
   const [nistStatus, setNistStatus] = useState<'all' | 'passing' | 'failing'>('all');
   const [mitreStatus, setMitreStatus] = useState<'all' | 'active' | 'quiet'>('all');
+  const [controlSearch, setControlSearch] = useState('');
 
   const sortedCisRows = useMemo(() => {
+    const q = controlSearch.trim().toLowerCase();
     return [...result.cisRows]
       .filter(r => cisStatus === 'all' ? true : cisStatus === 'passing' ? r.score >= 60 : r.score < 60)
+      .filter(r => !q || r.id.toLowerCase().includes(q) || r.label.toLowerCase().includes(q))
       .sort((a, b) =>
         cisSort === 'score_desc' ? b.score - a.score :
         cisSort === 'score_asc' ? a.score - b.score :
         a.label.localeCompare(b.label)
       );
-  }, [result.cisRows, cisSort, cisStatus]);
+  }, [result.cisRows, cisSort, cisStatus, controlSearch]);
 
   const filteredNistRows = useMemo(() => {
+    const q = controlSearch.trim().toLowerCase();
     return result.nistRows.filter(r =>
-      nistStatus === 'all' ? true : nistStatus === 'passing' ? r.score >= 60 : r.score < 60
+      (nistStatus === 'all' ? true : nistStatus === 'passing' ? r.score >= 60 : r.score < 60) &&
+      (!q || r.id.toLowerCase().includes(q) || r.label.toLowerCase().includes(q))
     );
-  }, [result.nistRows, nistStatus]);
+  }, [result.nistRows, nistStatus, controlSearch]);
 
   const filteredMitreRows = useMemo(() => {
+    const q = controlSearch.trim().toLowerCase();
     return result.mitreRows.filter(r =>
-      mitreStatus === 'all' ? true : mitreStatus === 'active' ? r.openCount > 0 : r.openCount === 0
+      (mitreStatus === 'all' ? true : mitreStatus === 'active' ? r.openCount > 0 : r.openCount === 0) &&
+      (!q || r.id.toLowerCase().includes(q) || r.label.toLowerCase().includes(q))
     );
-  }, [result.mitreRows, mitreStatus]);
+  }, [result.mitreRows, mitreStatus, controlSearch]);
+
+  const filteredSoc2Rows = useMemo(() => {
+    const q = controlSearch.trim().toLowerCase();
+    return !q ? result.soc2Rows : result.soc2Rows.filter(r => r.id.toLowerCase().includes(q) || r.label.toLowerCase().includes(q));
+  }, [result.soc2Rows, controlSearch]);
+
+  const worstControls = useMemo(() => {
+    const all: { id: string; label: string; score: number; framework: string; openCount: number }[] = [];
+    result.soc2Rows.forEach(r => all.push({ id: r.id, label: r.label, score: r.score, framework: 'SOC 2', openCount: r.openCount }));
+    result.nistRows.forEach(r => all.push({ id: r.id, label: r.label, score: r.score, framework: 'NIST', openCount: r.openCount }));
+    result.cisRows.forEach(r => all.push({ id: r.id, label: r.label, score: r.score, framework: 'CIS', openCount: r.openCount }));
+    result.mitreRows.forEach(r => all.push({ id: r.id, label: r.label, score: r.score, framework: 'MITRE', openCount: r.openCount }));
+    return all.filter(c => c.score < 80).sort((a, b) => a.score - b.score).slice(0, 5);
+  }, [result]);
 
   if (loading) {
     return (
@@ -218,12 +239,74 @@ export default function Compliance() {
         })}
       </div>
 
+      {/* ── Global control search ── */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            value={controlSearch}
+            onChange={e => setControlSearch(e.target.value)}
+            placeholder="Search controls by ID or name…"
+            className="w-full pl-9 pr-8 py-2 bg-slate-900 border border-slate-800 rounded-md text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none transition"
+          />
+          {controlSearch && (
+            <button onClick={() => setControlSearch('')} aria-label="Clear search" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {controlSearch && (
+          <span className="text-xs text-slate-500">
+            {filteredSoc2Rows.length + filteredNistRows.length + sortedCisRows.length + filteredMitreRows.length} controls match
+          </span>
+        )}
+      </div>
+
+      {/* ── Worst controls quick-action panel ── */}
+      {!controlSearch && worstControls.length > 0 && (
+        <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <h3 className="font-semibold text-amber-300 text-sm">Priority Action Items</h3>
+            <span className="text-xs text-amber-400/60 ml-1">— lowest-scoring controls across all frameworks</span>
+          </div>
+          <div className="space-y-2">
+            {worstControls.map((c, i) => (
+              <div key={`${c.framework}-${c.id}`} className="flex items-center gap-3 rounded-lg bg-slate-900/50 border border-slate-800 px-4 py-2.5">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-slate-800 text-slate-400 shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{c.framework}</span>
+                    <span className="text-[10px] font-mono text-slate-600">{c.id}</span>
+                  </div>
+                  <div className="text-sm text-slate-200 truncate">{c.label}</div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {c.openCount > 0 && (
+                    <span className="text-xs text-red-400 font-mono">{c.openCount} open</span>
+                  )}
+                  <div className="w-20 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${ c.score >= 60 ? 'bg-yellow-400' : c.score >= 40 ? 'bg-orange-400' : 'bg-red-500' }`}
+                      ref={(el) => { if (el) el.style.width = `${c.score}%`; }}
+                    />
+                  </div>
+                  <span className={`text-sm font-bold w-10 text-right ${ c.score >= 60 ? 'text-yellow-400' : c.score >= 40 ? 'text-orange-400' : 'text-red-400' }`}>{c.score}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── SOC 2 Criteria breakdown ── */}
       {(framework === 'all' || framework === 'soc2') && (
       <section>
         <SectionHeader icon={BookOpen} title="SOC 2 Trust Services Criteria" color="text-sky-400" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-4">
-          {result.soc2Rows.map(row => <Soc2Card key={row.id} row={row} />)}
+          {filteredSoc2Rows.map(row => <Soc2Card key={row.id} row={row} />)}
+          {filteredSoc2Rows.length === 0 && <div className="col-span-4 text-center text-sm text-slate-500 py-6">No controls match search.</div>}
         </div>
       </section>
       )}
@@ -253,6 +336,7 @@ export default function Compliance() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
           {filteredNistRows.map(row => <NistCard key={row.id} row={row} />)}
+          {filteredNistRows.length === 0 && <div className="col-span-5 text-center text-sm text-slate-500 py-6">No controls match search.</div>}
         </div>
       </section>
       )}
@@ -306,6 +390,9 @@ export default function Compliance() {
           </div>
           <div className="divide-y divide-slate-800/50">
             {sortedCisRows.map(row => <CisRowItem key={row.id} row={row} />)}
+            {sortedCisRows.length === 0 && (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">No controls match search.</div>
+            )}
           </div>
         </div>
       </section>
@@ -336,6 +423,7 @@ export default function Compliance() {
         </div>
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {filteredMitreRows.map(row => <MitreCard key={row.id} row={row} />)}
+          {filteredMitreRows.length === 0 && <div className="col-span-6 text-center text-sm text-slate-500 py-6">No tactics match search.</div>}
         </div>
       </section>
       )}
@@ -366,7 +454,7 @@ function FrameworkBar({ label, score, icon: Icon }: { label: string; score: numb
       <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
         <div
           className={`h-full ${barColor} transition-all duration-700 rounded-full`}
-          style={{ width: `${score}%` }}
+          ref={(el) => { if (el) el.style.width = `${score}%`; }}
         />
       </div>
     </div>
@@ -421,7 +509,7 @@ function Soc2Card({ row }: { row: Soc2Row }) {
       <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
         <div
           className={`h-full ${color.bar} transition-all duration-700 rounded-full`}
-          style={{ width: `${row.score}%` }}
+          ref={(el) => { if (el) el.style.width = `${row.score}%`; }}
         />
       </div>
     </div>
@@ -456,7 +544,7 @@ function NistCard({ row }: { row: NistRow }) {
         <div className="h-1.5 rounded-full bg-slate-900 overflow-hidden">
           <div
             className={`h-full ${barColor} transition-all duration-700 rounded-full`}
-            style={{ width: `${row.score}%` }}
+            ref={(el) => { if (el) el.style.width = `${row.score}%`; }}
           />
         </div>
       </div>
@@ -500,7 +588,7 @@ function CisRowItem({ row }: { row: CisRow }) {
           <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
             <div
               className={`h-full ${barColor} transition-all duration-700 rounded-full`}
-              style={{ width: `${row.score}%` }}
+              ref={(el) => { if (el) el.style.width = `${row.score}%`; }}
             />
           </div>
           <span className={`text-xs font-bold ${scoreColor} w-9 text-right`}>{row.score}%</span>
