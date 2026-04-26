@@ -4,6 +4,7 @@ import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import ProjectDetail from './ProjectDetail';
 import { useToast } from '../lib/toastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { riskBand } from '../lib/riskScore';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
@@ -42,6 +43,7 @@ export default function Projects() {
     await supabase.from('projects').delete().eq('id', id);
     if (selected?.id === id) setSelected(null);
     toast.success('Project deleted.');
+    setConfirmId(null);
     load();
   };
 
@@ -207,7 +209,8 @@ export default function Projects() {
                       aria-label="Delete project"
                       onClick={(e) => {
                         e.stopPropagation();
-                        remove(p.id);
+                        setConfirmId(p.id);
+                        setConfirmName(p.name);
                       }}
                       className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition cursor-pointer"
                     >
@@ -226,6 +229,14 @@ export default function Projects() {
       )}
 
       {modalOpen && <ProjectModal onClose={() => setModalOpen(false)} onCreated={load} />}
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete project"
+        message={`Are you sure you want to delete "${confirmName}"? This will permanently remove the project and all associated data.`}
+        confirmLabel="Delete project"
+        onConfirm={() => confirmId && remove(confirmId)}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }

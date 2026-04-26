@@ -9,6 +9,7 @@ import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { useToast } from '../lib/toastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { errorToUserMessage } from '../lib/errors';
 
 const CADENCES = [
@@ -47,6 +48,7 @@ export default function SchedulerPage() {
   const schedSearchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(schedSearchRef, () => setSchedSearch(''));
   const toast = useToast();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   // New schedule form state
   const [formProject, setFormProject] = useState('');
@@ -114,6 +116,7 @@ export default function SchedulerPage() {
     await supabase.from('scan_schedules').delete().eq('id', id);
     setSchedules(prev => prev.filter(x => x.id !== id));
     toast.success('Schedule deleted.');
+    setConfirmId(null);
   };
 
   const create = async () => {
@@ -385,7 +388,7 @@ export default function SchedulerPage() {
                       {s.enabled ? <Power className="w-3.5 h-3.5" /> : <PowerOff className="w-3.5 h-3.5" />}
                     </button>
                     <button
-                      onClick={() => remove(s.id)}
+                      onClick={() => setConfirmId(s.id)}
                       title="Delete"
                       className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition"
                     >
@@ -403,6 +406,14 @@ export default function SchedulerPage() {
         Schedules are checked every 5 minutes while you have Sentinel AI open.
         Close the app to pause execution.
       </p>
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete schedule"
+        message={`Are you sure you want to delete the schedule for "${schedules.find(s => s.id === confirmId) ? projectName(schedules.find(s => s.id === confirmId)!.project_id) : ''}"? This cannot be undone.`}
+        confirmLabel="Delete schedule"
+        onConfirm={() => confirmId && remove(confirmId)}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }

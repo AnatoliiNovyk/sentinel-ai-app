@@ -6,6 +6,7 @@ import { buildReport } from '../lib/reportBuilder';
 import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { useToast } from '../lib/toastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -20,12 +21,15 @@ export default function Reports() {
   const searchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(searchRef, () => setSearch(''));
   const toast = useToast();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmTitle, setConfirmTitle] = useState('');
 
-  const remove = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const remove = useCallback(async (id: string) => {
     await supabase.from('reports').delete().eq('id', id);
     setReports(prev => prev.filter(r => r.id !== id));
-  }, []);
+    setConfirmId(null);
+    toast.success('Report deleted.');
+  }, [toast]);
 
   const exportReportsList = useCallback(() => {
     const date = new Date().toISOString().split('T')[0];
@@ -209,7 +213,7 @@ export default function Reports() {
                   <p className="mt-1 text-sm text-slate-500">{project?.name ?? 'Project'}</p>
                 </button>
                 <button
-                  onClick={e => remove(r.id, e)}
+                  onClick={e => { e.stopPropagation(); setConfirmId(r.id); setConfirmTitle(r.title); }}
                   title="Delete report"
                   className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition"
                 >
@@ -231,6 +235,14 @@ export default function Reports() {
           }}
         />
       )}
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="Delete report"
+        message={`Are you sure you want to delete "${confirmTitle}"? This action cannot be undone.`}
+        confirmLabel="Delete report"
+        onConfirm={() => confirmId && remove(confirmId)}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }
