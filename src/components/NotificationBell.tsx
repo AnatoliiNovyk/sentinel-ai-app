@@ -167,7 +167,7 @@ export default function NotificationBell() {
               <CheckCheck className="w-3.5 h-3.5" /> Mark all read
             </button>
           </div>
-          <div className="max-h-[26rem] overflow-auto">
+          <div className="max-h-[24rem] overflow-auto">
             {items.length === 0 ? (
               <div className="p-10 text-center">
                 <Bell className="w-8 h-8 text-slate-700 mx-auto mb-2" />
@@ -213,6 +213,18 @@ export default function NotificationBell() {
                 })}
               </ul>
             )}
+          </div>
+          {/* Footer — view all link */}
+          <div className="border-t border-slate-800 px-4 py-2.5 flex justify-center">
+            <button
+              onClick={() => { setOpen(false); navigate('/notifications'); }}
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1"
+            >
+              View all notifications
+              <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 6h8M6 2l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       )}

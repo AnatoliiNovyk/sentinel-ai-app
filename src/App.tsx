@@ -22,6 +22,7 @@ import SupplyChain from './pages/SupplyChain';
 import KillChain from './pages/KillChain';
 import Integrations from './pages/Integrations';
 import ApiDocs from './pages/ApiDocs';
+import Notifications from './pages/Notifications';
 import { Shield } from 'lucide-react';
 import { ToastProvider } from './lib/toastContext';
 import ToastContainer from './components/ToastContainer';
@@ -77,6 +78,7 @@ function Shell() {
         <Route path="kill-chain" element={<KillChain />} />
         <Route path="integrations" element={<Integrations />} />
         <Route path="api" element={<ApiDocs />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<Settings />} />
         <Route path="auth" element={<Navigate to="/landing" replace />} />
         <Route path="landing" element={<Landing />} />

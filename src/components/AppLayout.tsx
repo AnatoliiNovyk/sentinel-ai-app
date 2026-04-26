@@ -1,4 +1,4 @@
-import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command, Menu, X as XIcon } from 'lucide-react';
+import { Shield, LayoutDashboard, MessageSquare, Radar, FileText, Settings, LogOut, FolderKanban, ShieldCheck, CalendarClock, Network, Eye, Search, Terminal, Code, Box, Crosshair, ArrowUp, Command, Menu, X as XIcon, Bell } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
@@ -93,6 +93,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/kill-chain': 'AI Red Team',
   '/integrations':'CI/CD Integrations',
   '/api':        'REST API & CLI',
+  '/notifications': 'Notifications',
   '/settings':   'Settings',
 };
 
@@ -111,6 +112,7 @@ const nav: { id: string; label: string; icon: typeof LayoutDashboard; path: stri
   { id: 'kill-chain',  label: 'AI Red Team',   icon: Crosshair,       path: '/kill-chain' },
   { id: 'integrations',label: 'Integrations',  icon: Terminal,        path: '/integrations' },
   { id: 'api',         label: 'API & CLI',     icon: Code,            path: '/api' },
+  { id: 'notifications', label: 'Notifications', icon: Bell,            path: '/notifications' },
   { id: 'settings',    label: 'Settings',     icon: Settings,        path: '/settings' },
 ];
 
