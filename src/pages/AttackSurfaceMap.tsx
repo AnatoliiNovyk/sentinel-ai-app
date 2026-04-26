@@ -165,6 +165,23 @@ export default function AttackSurfaceMap() {
   const totalMedium     = useMemo(() => vulns.filter(v => v.severity === 'medium'    && v.status !== 'resolved').length, [vulns]);
   const exposedAssets   = useMemo(() => new Set(vulns.filter(v => v.status !== 'resolved' && v.asset).map(v => v.asset)).size, [vulns]);
 
+  const nodeCounts = useMemo(() => ({
+    all:     nodes.filter(n => n.type !== 'hub').length,
+    project: nodes.filter(n => n.type === 'project').length,
+    vuln:    nodes.filter(n => n.type === 'vuln').length,
+  }), [nodes]);
+
+  const visibleNodeCount = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return nodes.filter(n => {
+      if (n.type === 'hub') return false;
+      const matchesSearch = !q || n.label.toLowerCase().includes(q);
+      const matchesType = nodeFilter === 'all' || n.type === nodeFilter;
+      const matchesSev = sevFilter === 'all' || n.type !== 'vuln' || n.severity === sevFilter;
+      return matchesSearch && matchesType && matchesSev;
+    }).length;
+  }, [nodes, searchQuery, nodeFilter, sevFilter]);
+
   // Vuln breakdown per project node (for tooltip)
   const vulnsByProject = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
@@ -321,9 +338,16 @@ export default function AttackSurfaceMap() {
               }`}
             >
               {t === 'all' ? 'All nodes' : t === 'project' ? 'Projects' : 'Findings'}
+              <span className="ml-1 text-[10px] opacity-60">({nodeCounts[t]})</span>
             </button>
           ))}
         </div>
+        {/* Visible count badge */}
+        {nodes.length > 1 && (searchQuery || nodeFilter !== 'all' || sevFilter !== 'all') && (
+          <span className="text-[10px] text-slate-500 bg-slate-800 border border-slate-700 px-2 py-1 rounded-full">
+            {visibleNodeCount} visible
+          </span>
+        )}
         {/* Severity filter — only when showing vulns */}
         {nodeFilter !== 'project' && (
           <div className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Search, Globe, AlertTriangle, Loader2, Info, Terminal, Copy, Check, Download, ArrowUpDown, Clock, History, ShieldAlert, X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { downloadFile } from '../lib/exporters';
@@ -45,6 +45,8 @@ export default function ActiveRecon() {
   const [copied, setCopied] = useState(false);
   const [portSearch, setPortSearch] = useState('');
   const [portSort, setPortSort] = useState<'port_asc' | 'port_desc' | 'service' | 'state' | 'risk'>('port_asc');
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [history, setHistory] = useState<ReconHistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem('reconHistory') ?? '[]'); } catch { return []; }
@@ -102,6 +104,9 @@ export default function ActiveRecon() {
     setLoading(true);
     setError(null);
     setStatus('queued');
+    setElapsedMs(0);
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => setElapsedMs(Date.now() - startTime), 100);
 
     try {
       // In a real implementation, this triggers a job on the VPS agent.
@@ -109,6 +114,7 @@ export default function ActiveRecon() {
       setStatus('running');
       await new Promise(r => setTimeout(r, 3000));
       setStatus('done');
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       // Save to history
       setHistory(prev => {
         const entry: ReconHistoryEntry = {
@@ -123,6 +129,7 @@ export default function ActiveRecon() {
       const message = err instanceof Error ? err.message : 'Failed to start active recon';
       setError(message);
       setStatus('idle');
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     } finally {
       setLoading(false);
     }
@@ -180,6 +187,14 @@ export default function ActiveRecon() {
                 <Terminal className="w-3.5 h-3.5 text-emerald-500" />
                 <span className="text-slate-400">sentinel-agent@node-1:~$</span>
               </div>
+              {status !== 'idle' && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  {status === 'done'
+                    ? `${(elapsedMs / 1000).toFixed(1)}s`
+                    : <span className="animate-pulse">{(elapsedMs / 1000).toFixed(1)}s…</span>
+                  }
+                </span>
+              )}
               {status === 'done' && (
                 <div className="flex items-center gap-1.5">
                   <button
