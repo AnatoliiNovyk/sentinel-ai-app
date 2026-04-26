@@ -1,4 +1,5 @@
-import { Layout, Plus, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
+import React from 'react';
+import { Layout, Plus, AlertTriangle, CheckCircle2, HelpCircle, FolderKanban } from 'lucide-react';
 import type { Project } from '../../lib/supabase';
 
 interface ScanHeaderProps {
@@ -20,7 +21,19 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Vulnerability Scans</h1>
-        <p className="text-slate-400">Manage and monitor security assessments across your infrastructure.</p>
+        <p className="text-slate-400">
+          {selectedProjectId
+            ? (() => {
+                const p = projects.find(pr => pr.id === selectedProjectId);
+                return p ? (
+                  <span className="flex items-center gap-1.5">
+                    <FolderKanban className="w-3.5 h-3.5 text-emerald-400" />
+                    Showing scans for <span className="text-emerald-300 font-medium">{p.name}</span>
+                  </span>
+                ) : 'Manage and monitor security assessments across your infrastructure.';
+              })()
+            : 'Manage and monitor security assessments across your infrastructure.'}
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -47,7 +60,7 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
             onChange={(e) => onSelectProject(e.target.value)}
             className="pl-10 pr-8 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none min-w-[200px]"
           >
-            <option value="">Select Project...</option>
+            <option value="">All projects ({projects.length})</option>
             {projects.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

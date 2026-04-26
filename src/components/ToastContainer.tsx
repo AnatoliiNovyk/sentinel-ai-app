@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { CheckCircle2, XCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { useToasts, ToastType } from '../lib/toastContext';
 
@@ -14,6 +15,32 @@ const ICONS: Record<ToastType, typeof CheckCircle2> = {
   info:    Info,
   warning: AlertTriangle,
 };
+
+const DURATION_MS = 4000;
+
+function ProgressBar({ type, id, onRemove }: { type: ToastType; id: string; onRemove: (id: string) => void }) {
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    // Start at 100%, animate to 0% over DURATION_MS
+    el.style.width = '100%';
+    el.style.transition = `width ${DURATION_MS}ms linear`;
+    // Trigger reflow so transition fires
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => { el.style.width = '0%'; });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [id]);
+
+  const s = STYLES[type];
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-800 overflow-hidden rounded-b-lg">
+      <div ref={barRef} className={`h-full ${s.bar} opacity-60`} />
+    </div>
+  );
+}
 
 export default function ToastContainer() {
   const { toasts, removeToast } = useToasts();
@@ -43,6 +70,7 @@ export default function ToastContainer() {
             >
               <X className="w-3.5 h-3.5" />
             </button>
+            <ProgressBar type={toast.type} id={toast.id} onRemove={removeToast} />
           </div>
         );
       })}
