@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, FolderKanban, Cloud, Globe, Server, FileCode, Trash2, X, ChevronRight, ShieldAlert, Search, SlidersHorizontal } from 'lucide-react';
 import { supabase, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -246,6 +246,13 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const { user, organizations } = useAuth();
   const [name, setName] = useState('');
   const [description] = useState('');
+
+  // Escape closes modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
   const [target, setTarget] = useState('');
   const [environment, setEnvironment] = useState<'external' | 'cloud' | 'internal' | 'iac'>('external');
   const [tagsInput] = useState('');
@@ -281,9 +288,20 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     setSaving(false);
   };
 
+  const firstInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setTimeout(() => firstInputRef.current?.focus(), 10); }, []);
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-950 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="font-semibold text-white">New project</h2>
           <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-white">
@@ -305,6 +323,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
               placeholder="Production AWS"
+            ref={firstInputRef}
             />
           </div>
           <div>
