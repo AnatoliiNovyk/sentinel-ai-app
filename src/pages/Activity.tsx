@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronDown,
   ExternalLink, Filter, Info, Loader2,
-  RefreshCcw, Search, XCircle,
+  RefreshCcw, Search, XCircle, Zap,
 } from 'lucide-react';
 import { supabase, AgentLog, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
+
+type ViewTab = 'logs' | 'anomalies';
 
 const PAGE_SIZE = 50;
 
@@ -113,6 +115,7 @@ export default function ActivityPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const [viewTab, setViewTab] = useState<ViewTab>('logs');
   const [logs, setLogs]       = useState<AgentLog[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,6 +246,22 @@ export default function ActivityPage() {
           </div>
           <span className="text-sm text-slate-500">Agent audit trail across all projects</span>
 
+          {/* View tabs */}
+          <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-1 border border-slate-700">
+            <button
+              onClick={() => setViewTab('logs')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${viewTab === 'logs' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Logs
+            </button>
+            <button
+              onClick={() => setViewTab('anomalies')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${viewTab === 'anomalies' ? 'bg-red-900/60 text-red-300 border border-red-700' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <Zap className="w-3.5 h-3.5" /> Anomalies
+            </button>
+          </div>
+
           <div className="ml-auto flex items-center gap-2 flex-wrap">
             {/* Search */}
             <div className="relative">
@@ -317,6 +336,7 @@ export default function ActivityPage() {
       </div>
 
       {/* Stat cards */}
+      {viewTab === 'logs' && (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map(c => (
           <button
@@ -336,8 +356,20 @@ export default function ActivityPage() {
           </button>
         ))}
       </div>
+      )}
+
+      {/* Anomaly tab */}
+      {viewTab === 'anomalies' && !loading && (
+        <AnomalyTab logs={logs} projectMap={projectMap} />
+      )}
+      {viewTab === 'anomalies' && loading && (
+        <div className="flex items-center justify-center py-20 gap-3 text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin" /> Analyzing anomalies…
+        </div>
+      )}
 
       {/* Log list */}
+      {viewTab === 'logs' && (
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-3 text-slate-500">
@@ -385,6 +417,310 @@ export default function ActivityPage() {
           </>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Anomaly Detection ────────────────────────────────────────────────────────
+
+interface Anomaly {
+  id: string;
+  severity: 'critical' | 'high' | 'medium';
+  title: string;
+  description: string;
+  count: number;
+  windowLabel: string;
+}
+
+function detectAnomalies(logs: AgentLog[]): Anomaly[] {
+  const anomalies: Anomaly[] = [];
+
+  // 1. Error spike: bucket by hour, find hours with errors > mean+2σ
+  const hourBuckets = new Map<string, number>();
+  for (const l of logs) {
+    if (l.level !== 'error') continue;
+    const d = new Date(l.created_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+    hourBuckets.set(key, (hourBuckets.get(key) ?? 0) + 1);
+  }
+  const counts = Array.from(hourBuckets.values());
+  if (counts.length > 1) {
+    const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+    const variance = counts.reduce((a, b) => a + (b - mean) ** 2, 0) / counts.length;
+    const std = Math.sqrt(variance);
+    for (const [key, cnt] of hourBuckets.entries()) {
+      if (cnt > mean + 2 * std && cnt >= 3) {
+        const [y, mo, d, h] = key.split('-').map(Number);
+        const dt = new Date(y, mo, d, h);
+        anomalies.push({
+          id: `error-spike-${key}`,
+          severity: cnt > mean + 3 * std ? 'critical' : 'high',
+          title: 'Error spike detected',
+          description: `${cnt} errors in 1 hour (mean: ${mean.toFixed(1)}, +${((cnt - mean) / std).toFixed(1)}σ)`,
+          count: cnt,
+          windowLabel: dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' }),
+        });
+      }
+    }
+  }
+
+  // 2. Repeated identical error messages
+  const msgCount = new Map<string, number>();
+  for (const l of logs) {
+    if (l.level !== 'error') continue;
+    const key = l.message.slice(0, 80);
+    msgCount.set(key, (msgCount.get(key) ?? 0) + 1);
+  }
+  for (const [msg, cnt] of msgCount.entries()) {
+    if (cnt >= 5) {
+      anomalies.push({
+        id: `repeat-err-${msg.slice(0, 30)}`,
+        severity: cnt >= 20 ? 'critical' : cnt >= 10 ? 'high' : 'medium',
+        title: 'Recurring error pattern',
+        description: `"${msg}${msg.length >= 80 ? '…' : ''}" occurred ${cnt} times`,
+        count: cnt,
+        windowLabel: 'All time',
+      });
+    }
+  }
+
+  // 3. High warn rate: last 6 hours
+  const sixH = Date.now() - 6 * 3600000;
+  const recentWarn = logs.filter(l => l.level === 'warn' && new Date(l.created_at).getTime() > sixH).length;
+  const recentTotal = logs.filter(l => new Date(l.created_at).getTime() > sixH).length;
+  if (recentTotal >= 10 && recentWarn / recentTotal > 0.4) {
+    anomalies.push({
+      id: 'high-warn-rate',
+      severity: 'medium',
+      title: 'Elevated warning rate',
+      description: `${Math.round((recentWarn / recentTotal) * 100)}% of last 6h logs are warnings (${recentWarn}/${recentTotal})`,
+      count: recentWarn,
+      windowLabel: 'Last 6 hours',
+    });
+  }
+
+  // 4. No success logs in last 2 hours while other logs exist
+  const twoH = Date.now() - 2 * 3600000;
+  const recentAll = logs.filter(l => new Date(l.created_at).getTime() > twoH);
+  const recentSuccess = recentAll.filter(l => l.level === 'success').length;
+  if (recentAll.length >= 5 && recentSuccess === 0) {
+    anomalies.push({
+      id: 'no-success-2h',
+      severity: 'high',
+      title: 'No successful operations',
+      description: `${recentAll.length} log entries in last 2 hours but 0 successes — agent may be stuck`,
+      count: recentAll.length,
+      windowLabel: 'Last 2 hours',
+    });
+  }
+
+  const order = { critical: 0, high: 1, medium: 2 };
+  return anomalies.sort((a, b) => order[a.severity] - order[b.severity]);
+}
+
+function buildHourlyHeatmap(logs: AgentLog[]): { day: string; hour: number; errors: number; warns: number; total: number }[] {
+  const cells: { day: string; hour: number; errors: number; warns: number; total: number }[] = [];
+  const now = new Date();
+  for (let d = 6; d >= 0; d--) {
+    const date = new Date(now.getTime() - d * 86400000);
+    const dayLabel = d === 0 ? 'Today' : d === 1 ? 'Yesterday' : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    for (let h = 0; h < 24; h++) {
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h).getTime();
+      const end = start + 3600000;
+      const inWindow = logs.filter(l => {
+        const t = new Date(l.created_at).getTime();
+        return t >= start && t < end;
+      });
+      cells.push({ day: dayLabel, hour: h, errors: inWindow.filter(l => l.level === 'error').length, warns: inWindow.filter(l => l.level === 'warn').length, total: inWindow.length });
+    }
+  }
+  return cells;
+}
+
+const ANOM_COLORS: Record<string, string> = {
+  critical: 'border-red-500/40 bg-red-900/20 text-red-300',
+  high:     'border-orange-500/40 bg-orange-900/20 text-orange-300',
+  medium:   'border-amber-500/40 bg-amber-900/20 text-amber-300',
+};
+const ANOM_DOT: Record<string, string> = { critical: 'bg-red-400', high: 'bg-orange-400', medium: 'bg-amber-400' };
+
+function AnomalyTab({ logs, projectMap }: { logs: AgentLog[]; projectMap: Map<string, string> }) {
+  const anomalies = useMemo(() => detectAnomalies(logs), [logs]);
+  const heatmap   = useMemo(() => buildHourlyHeatmap(logs), [logs]);
+  const days = useMemo(() => [...new Set(heatmap.map(c => c.day))], [heatmap]);
+  const maxTotal = useMemo(() => Math.max(...heatmap.map(c => c.total), 1), [heatmap]);
+
+  const topErrors = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of logs) {
+      if (l.level !== 'error') continue;
+      const k = l.message.slice(0, 60);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [logs]);
+
+  const errorMax = topErrors[0]?.[1] ?? 1;
+
+  if (logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-2 text-slate-500">
+        <Zap className="w-8 h-8 opacity-30" />
+        <p className="text-sm">No log data to analyze</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Anomaly cards */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="w-4 h-4 text-red-400" />
+          <h2 className="text-sm font-semibold text-slate-200">Detected Anomalies</h2>
+          {anomalies.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-900/40 border border-red-700 text-red-300 font-bold">{anomalies.length}</span>
+          )}
+        </div>
+        {anomalies.length === 0 ? (
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-8 flex flex-col items-center gap-2 text-slate-500">
+            <CheckCircle2 className="w-7 h-7 text-emerald-500 opacity-70" />
+            <p className="text-sm">No anomalies detected in current log sample</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {anomalies.map(a => (
+              <div key={a.id} className={`rounded-xl border p-4 ${ANOM_COLORS[a.severity]}`}>
+                <div className="flex items-start gap-3">
+                  <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${ANOM_DOT[a.severity]}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold">{a.title}</span>
+                      <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${ANOM_COLORS[a.severity]}`}>{a.severity}</span>
+                    </div>
+                    <p className="text-xs mt-1 opacity-80">{a.description}</p>
+                    <p className="text-[10px] mt-1 opacity-50 uppercase tracking-wide">{a.windowLabel}</p>
+                  </div>
+                  <span className="text-xl font-bold opacity-60 shrink-0">{a.count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 7-day hourly heatmap */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-4 h-4 text-violet-400" />
+          <h2 className="text-sm font-semibold text-slate-200">7-Day Hourly Activity Heatmap</h2>
+          <span className="text-xs text-slate-500 ml-auto">Red = errors · Orange = warnings · Blue = activity</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[640px]">
+            <thead>
+              <tr>
+                <th className="w-24 text-[10px] text-slate-600 font-normal text-left pb-1 pr-2">Day</th>
+                {Array.from({ length: 24 }, (_, h) => (
+                  <th key={h} className="text-[9px] text-slate-700 font-normal pb-1 text-center w-6">
+                    {h % 6 === 0 ? `${h}h` : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {days.map(day => (
+                <tr key={day}>
+                  <td className="text-[10px] text-slate-500 pr-2 py-0.5 whitespace-nowrap">{day}</td>
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const cell = heatmap.find(c => c.day === day && c.hour === h);
+                    const intensity = cell ? cell.total / maxTotal : 0;
+                    const hasErr = (cell?.errors ?? 0) > 0;
+                    const hasWarn = (cell?.warns ?? 0) > 0;
+                    const bg = hasErr
+                      ? `rgba(239,68,68,${0.15 + intensity * 0.7})`
+                      : hasWarn
+                      ? `rgba(245,158,11,${0.12 + intensity * 0.6})`
+                      : cell && cell.total > 0
+                      ? `rgba(99,102,241,${0.1 + intensity * 0.5})`
+                      : 'transparent';
+                    return (
+                      <td key={h} className="py-0.5">
+                        <div
+                          className="w-5 h-5 rounded-sm mx-auto"
+                          ref={(el) => { if (el) el.style.backgroundColor = bg; }}
+                          title={cell && cell.total > 0 ? `${day} ${h}:00 — ${cell.total} logs, ${cell.errors} errors, ${cell.warns} warns` : undefined}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Top error patterns */}
+      {topErrors.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <XCircle className="w-4 h-4 text-red-400" />
+            <h2 className="text-sm font-semibold text-slate-200">Top Error Patterns</h2>
+          </div>
+          <div className="space-y-2">
+            {topErrors.map(([msg, cnt], i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 w-4 text-right shrink-0">{i + 1}.</span>
+                <span className="flex-1 text-xs text-slate-300 font-mono truncate">{msg}{msg.length >= 60 ? '…' : ''}</span>
+                <span className="text-xs font-bold text-red-400 shrink-0 w-8 text-right">{cnt}×</span>
+                <div className="w-24 h-1.5 rounded-full bg-slate-800 shrink-0">
+                  <div
+                    className="h-full rounded-full bg-red-500"
+                    ref={(el) => { if (el) el.style.width = `${(cnt / errorMax) * 100}%`; }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Project error breakdown */}
+      {projectMap.size > 0 && (() => {
+        const projErr = new Map<string, number>();
+        for (const l of logs) {
+          if (l.level === 'error' && l.project_id) {
+            projErr.set(l.project_id, (projErr.get(l.project_id) ?? 0) + 1);
+          }
+        }
+        const sorted = [...projErr.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+        if (sorted.length === 0) return null;
+        const maxE = sorted[0][1];
+        return (
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <h2 className="text-sm font-semibold text-slate-200">Errors by Project</h2>
+            </div>
+            <div className="space-y-2">
+              {sorted.map(([pid, cnt]) => (
+                <div key={pid} className="flex items-center gap-3">
+                  <span className="flex-1 text-xs text-slate-300 truncate">{projectMap.get(pid) ?? pid.slice(0, 8)}</span>
+                  <span className="text-xs font-bold text-amber-400 w-8 text-right shrink-0">{cnt}</span>
+                  <div className="w-24 h-1.5 rounded-full bg-slate-800 shrink-0">
+                    <div
+                      className="h-full rounded-full bg-amber-500"
+                      ref={(el) => { if (el) el.style.width = `${(cnt / maxE) * 100}%`; }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
