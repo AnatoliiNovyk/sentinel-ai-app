@@ -957,3 +957,22 @@ This ensures that you're testing the behavior the user would see in the browser.
  [32mтЬУ[39m src/pages/__tests__/PassiveRecon.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 5861[2mms[22m[39m
    [33m[2mтЬУ[22m[39m ActiveRecon (PassiveRecon)[2m > [22mrenders "Start Active Recon" button disabled when input is empty [33m381[2mms[22m[39m
    [33m[2mтЬУ[22m[39m ActiveRecon (PassiveRecon)[2m > [22mshows scan complete message after scan finishes [33m5060[2mms[22m[39m
+node:events:502
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: Worker exited unexpectedly
+    at ChildProcess.onUnexpectedExit (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/tinypool/dist/index.js:118:30)
+    at ChildProcess.emit (node:events:536:35)
+    at ChildProcess._handle.onexit (node:internal/child_process:293:12)
+Emitted 'error' event on Tinypool instance at:
+    at EventEmitterReferencingAsyncResource.runInAsyncScope (node:async_hooks:206:9)
+    at Tinypool.emit (node:events:170:18)
+    at file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/tinypool/dist/index.js:594:30
+    at ChildProcess.<anonymous> (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/tinypool/dist/index.js:162:34)
+    at ChildProcess.emit (node:events:524:28)
+    at ChildProcess.onUnexpectedExit (file:///D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/node_modules/tinypool/dist/index.js:118:16)
+    at ChildProcess.emit (node:events:536:35)
+    at ChildProcess._handle.onexit (node:internal/child_process:293:12)
+
+Node.js v20.19.5
