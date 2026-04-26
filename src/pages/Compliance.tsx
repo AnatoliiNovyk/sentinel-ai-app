@@ -222,18 +222,26 @@ export default function Compliance() {
       {/* ── Framework filter tabs ── */}
       <div className="flex items-center gap-1.5 border border-slate-800 rounded-lg p-1 w-fit bg-slate-900/40">
         {(['all', 'soc2', 'nist', 'cis', 'mitre'] as const).map((f) => {
-          const labels: Record<typeof f, string> = { all: 'All frameworks', soc2: 'SOC 2', nist: 'NIST CSF', cis: 'CIS Controls', mitre: 'MITRE ATT\u0026CK' };
+          const labels: Record<typeof f, string> = { all: 'All', soc2: 'SOC 2', nist: 'NIST CSF', cis: 'CIS Controls', mitre: 'MITRE ATT\u0026CK' };
+          const counts: Record<typeof f, number> = {
+            all: filteredSoc2Rows.length + filteredNistRows.length + sortedCisRows.length + filteredMitreRows.length,
+            soc2: filteredSoc2Rows.length,
+            nist: filteredNistRows.length,
+            cis: sortedCisRows.length,
+            mitre: filteredMitreRows.length,
+          };
           return (
             <button
               key={f}
               onClick={() => setFramework(f)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${
                 framework === f
                   ? 'bg-slate-800 text-white shadow'
                   : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               {labels[f]}
+              <span className={`text-[9px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ${framework === f ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-slate-500'}`}>{counts[f]}</span>
             </button>
           );
         })}
@@ -256,11 +264,9 @@ export default function Compliance() {
             </button>
           )}
         </div>
-        {controlSearch && (
-          <span className="text-xs text-slate-500">
-            {filteredSoc2Rows.length + filteredNistRows.length + sortedCisRows.length + filteredMitreRows.length} controls match
-          </span>
-        )}
+        <span className="text-xs text-slate-500">
+          {filteredSoc2Rows.length + filteredNistRows.length + sortedCisRows.length + filteredMitreRows.length} controls{controlSearch ? ' match' : ' total'}
+        </span>
       </div>
 
       {/* ── Worst controls quick-action panel ── */}

@@ -182,6 +182,22 @@ export default function Dashboard() {
             Welcome back{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}
           </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Security posture</h1>
+          {(activeScans > 0 || overdueCount > 0) && (
+            <div className="mt-2 flex items-center gap-2">
+              {activeScans > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {activeScans} scanning…
+                </span>
+              )}
+              {overdueCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">
+                  <Timer className="w-3 h-3" />
+                  {overdueCount} SLA overdue
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <button
           onClick={() => navigate('/chat')}
