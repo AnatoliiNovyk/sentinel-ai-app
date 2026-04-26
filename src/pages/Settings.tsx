@@ -3,13 +3,52 @@ import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
   Webhook, Users, Plus, Trash2, Server, RefreshCw, WifiOff,
-  Eye, EyeOff, Key, Lock, Moon, Sun
+  Eye, EyeOff, Key, Lock, Moon, Sun,
+  Bell, Mail, Inbox, Database,
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { ApiRateLimitsPanel } from '../components/ApiRateLimitsPanel';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
+
+// ─── Data retention ──────────────────────────────────────────────────────────
+const RETENTION_PRESETS = [30, 60, 90, 180, 365] as const;
+
+interface RetentionPolicy {
+  scans: number;
+  logs: number;
+  reports: number;
+  vulnerabilities: number;
+}
+
+const DEFAULT_RETENTION: RetentionPolicy = { scans: 90, logs: 30, reports: 365, vulnerabilities: 180 };
+
+// ─── Notification preferences ─────────────────────────────────────────────────
+type DigestFrequency = 'realtime' | 'daily' | 'weekly';
+type MinSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+interface NotifPrefs {
+  channels: { email: boolean; inApp: boolean; webhook: boolean };
+  minSeverity: MinSeverity;
+  digest: DigestFrequency;
+}
+
+const DEFAULT_NOTIF_PREFS: NotifPrefs = {
+  channels: { email: true, inApp: true, webhook: false },
+  minSeverity: 'medium',
+  digest: 'realtime',
+};
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return { ...fallback, ...(JSON.parse(raw) as Partial<T>) } as T;
+  } catch {
+    return fallback;
+  }
+}
 
 type AgentHealthData = {
   status: 'starting' | 'ok' | 'error';
@@ -166,6 +205,25 @@ export default function Settings() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
+  // Data retention
+  const [retention, setRetention] = useState<RetentionPolicy>(() =>
+    loadFromStorage<RetentionPolicy>('sentinelRetention', DEFAULT_RETENTION)
+  );
+
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(() => {
+    try {
+      const raw = localStorage.getItem('sentinelNotifPrefs');
+      if (!raw) return DEFAULT_NOTIF_PREFS;
+      const saved = JSON.parse(raw) as Partial<NotifPrefs>;
+      return {
+        ...DEFAULT_NOTIF_PREFS,
+        ...saved,
+        channels: { ...DEFAULT_NOTIF_PREFS.channels, ...(saved.channels ?? {}) },
+      };
+    } catch { return DEFAULT_NOTIF_PREFS; }
+  });
+
   // Agent health
   const [agentUrl, setAgentUrl] = useState(() => localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_URL);
   const [agentHealth, setAgentHealth] = useState<AgentHealthData | null>(null);
@@ -225,6 +283,8 @@ export default function Settings() {
     setSaving(true);
     setSaved(false);
     localStorage.setItem('darkMode', String(darkMode));
+    localStorage.setItem('sentinelRetention', JSON.stringify(retention));
+    localStorage.setItem('sentinelNotifPrefs', JSON.stringify(notifPrefs));
     await supabase.from('profiles').update({ full_name: fullName, company, sla_config: sla }).eq('id', user.id);
     setSaving(false);
     setSaved(true);
@@ -471,6 +531,141 @@ export default function Settings() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Data Retention Policy */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Database className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">Data Retention Policy</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">Configure how long historical data is kept. Older records will be archived automatically.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {([
+            { key: 'scans',           label: 'Scan Results',             accent: 'text-sky-400',     focus: 'focus:border-sky-500 focus:ring-sky-500/20' },
+            { key: 'logs',            label: 'Activity Logs',            accent: 'text-violet-400',  focus: 'focus:border-violet-500 focus:ring-violet-500/20' },
+            { key: 'reports',         label: 'Reports',                  accent: 'text-amber-400',   focus: 'focus:border-amber-500 focus:ring-amber-500/20' },
+            { key: 'vulnerabilities', label: 'Resolved Vulnerabilities', accent: 'text-emerald-400', focus: 'focus:border-emerald-500 focus:ring-emerald-500/20' },
+          ] as const).map(({ key, label, accent, focus }) => (
+            <div key={key} className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <div className={`text-xs font-semibold uppercase tracking-wide ${accent} mb-3`}>{label}</div>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="number"
+                  value={retention[key]}
+                  onChange={e => setRetention(prev => ({ ...prev, [key]: Math.max(7, Math.min(3650, Number(e.target.value) || 30)) }))}
+                  min={7} max={3650}
+                  title={`${label} retention in days`}
+                  aria-label={`${label} retention in days`}
+                  className={`w-20 bg-slate-900 border border-slate-800 rounded-md px-2 py-1.5 text-sm text-white ${focus} focus:outline-none focus:ring-2`}
+                />
+                <span className="text-xs text-slate-500">days</span>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {RETENTION_PRESETS.map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setRetention(prev => ({ ...prev, [key]: d }))}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium border transition ${
+                      retention[key] === d
+                        ? 'bg-slate-600 border-slate-500 text-white'
+                        : 'border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {d >= 365 ? '1yr' : `${d}d`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Notification Preferences */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell className="w-4 h-4 text-emerald-400" />
+          <h2 className="font-semibold">Notification Preferences</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">Control how and when you receive security alerts.</p>
+        <div className="space-y-6">
+
+          {/* Channels */}
+          <div>
+            <div className="text-sm text-slate-300 font-medium mb-3">Alert Channels</div>
+            <div className="space-y-2">
+              {([
+                { key: 'email',   label: 'Email notifications', sub: 'Send alerts to your account email',       Icon: Mail    },
+                { key: 'inApp',   label: 'In-app notifications', sub: 'Show in the notification bell',          Icon: Inbox   },
+                { key: 'webhook', label: 'Webhook delivery',     sub: 'POST events to configured webhook URL',  Icon: Webhook },
+              ] as const).map(({ key, label, sub, Icon }) => (
+                <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-slate-800 hover:border-slate-700 transition">
+                  <div className="flex items-center gap-3">
+                    <Icon className="w-4 h-4 text-slate-500" />
+                    <div>
+                      <div className="text-sm text-white">{label}</div>
+                      <div className="text-xs text-slate-500">{sub}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setNotifPrefs(p => ({ ...p, channels: { ...p.channels, [key]: !p.channels[key] } }))}
+                    title={notifPrefs.channels[key] ? `Disable ${label}` : `Enable ${label}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${notifPrefs.channels[key] ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${notifPrefs.channels[key] ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Minimum severity */}
+          <div>
+            <div className="text-sm text-slate-300 font-medium mb-3">Minimum Alert Severity</div>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { key: 'low',      label: 'Low+',           active: 'bg-sky-500/20 border-sky-500/50 text-sky-300'       },
+                { key: 'medium',   label: 'Medium+',        active: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300' },
+                { key: 'high',     label: 'High+',          active: 'bg-orange-500/20 border-orange-500/50 text-orange-300' },
+                { key: 'critical', label: 'Critical only',  active: 'bg-red-500/20 border-red-500/50 text-red-300'        },
+              ] as const).map(({ key, label, active }) => (
+                <button
+                  key={key}
+                  onClick={() => setNotifPrefs(p => ({ ...p, minSeverity: key }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                    notifPrefs.minSeverity === key ? active : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Digest frequency */}
+          <div>
+            <div className="text-sm text-slate-300 font-medium mb-3">Alert Digest</div>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { key: 'realtime', label: 'Real-time' },
+                { key: 'daily',    label: 'Daily digest' },
+                { key: 'weekly',   label: 'Weekly digest' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setNotifPrefs(p => ({ ...p, digest: key }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                    notifPrefs.digest === key
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
