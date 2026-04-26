@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   Clock, Plus, Trash2, Power, PowerOff, Calendar,
-  Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown, Search,
+  Loader2, ChevronDown, Radar, Check, Play, ArrowUpDown, Search, Download, BarChart2,
 } from 'lucide-react';
 import { supabase, ScanSchedule, Project } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -163,6 +163,42 @@ export default function SchedulerPage() {
   const active  = schedules.filter(s => s.enabled).length;
   const overdue = schedules.filter(s => s.enabled && s.next_run_at && new Date(s.next_run_at) < new Date()).length;
 
+  const next24h = useMemo(() =>
+    schedules.filter(s =>
+      s.enabled && s.next_run_at &&
+      new Date(s.next_run_at).getTime() > Date.now() &&
+      new Date(s.next_run_at).getTime() - Date.now() < 86_400_000
+    ).length,
+  [schedules]);
+
+  const cadenceDist = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const s of schedules) map[s.cadence_hours] = (map[s.cadence_hours] ?? 0) + 1;
+    return CADENCES
+      .map(c => ({ label: c.label, hours: c.hours, count: map[c.hours] ?? 0 }))
+      .filter(c => c.count > 0);
+  }, [schedules]);
+
+  const exportCsv = useCallback(() => {
+    const rows = [
+      ['Project', 'Scanner', 'Frequency', 'Enabled', 'Last Run', 'Next Run'],
+      ...schedules.map(s => [
+        projectName(s.project_id),
+        scannerLabel(s.scanner),
+        CADENCES.find(c => c.hours === s.cadence_hours)?.label ?? `${s.cadence_hours}h`,
+        s.enabled ? 'Yes' : 'No',
+        s.last_run_at ?? '',
+        s.next_run_at ?? '',
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'schedules.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [schedules, projects]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="p-8 max-w-5xl space-y-8">
       {/* Header */}
@@ -173,21 +209,62 @@ export default function SchedulerPage() {
             Automate recurring security scans across your projects.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(v => !v)}
-          className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          New schedule
-        </button>
+        <div className="flex items-center gap-2">
+          {schedules.length > 0 && (
+            <button
+              onClick={exportCsv}
+              className="inline-flex items-center gap-1.5 border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white px-3 py-2 rounded-md text-sm transition"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(v => !v)}
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            New schedule
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Total schedules" value={schedules.length} icon={Calendar} color="text-slate-400 bg-slate-800 border-slate-700" />
         <Stat label="Active" value={active} icon={Power} color="text-emerald-400 bg-emerald-500/10 border-emerald-500/20" />
+        <Stat label="Next 24 h" value={next24h} icon={Clock} color={next24h > 0 ? 'text-sky-400 bg-sky-500/10 border-sky-500/20' : 'text-slate-500 bg-slate-900 border-slate-800'} />
         <Stat label="Overdue" value={overdue} icon={Clock} color={overdue > 0 ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-slate-500 bg-slate-900 border-slate-800'} />
       </div>
+
+      {/* Cadence distribution */}
+      {cadenceDist.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 className="w-4 h-4 text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-300">Cadence Distribution</h3>
+            <span className="text-xs text-slate-600 ml-1">— {schedules.length} total schedule{schedules.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="space-y-2.5">
+            {cadenceDist.map(c => {
+              const pct = Math.round((c.count / schedules.length) * 100);
+              return (
+                <div key={c.hours} className="flex items-center gap-3">
+                  <div className="w-28 text-xs text-slate-400 shrink-0">{c.label}</div>
+                  <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                      ref={(el) => { if (el) el.style.width = `${pct}%`; }}
+                    />
+                  </div>
+                  <div className="text-xs text-slate-400 w-6 text-right shrink-0">{c.count}</div>
+                  <div className="text-xs text-slate-600 w-8 text-right shrink-0">{pct}%</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Create form */}
       {showForm && (
