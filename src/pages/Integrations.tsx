@@ -837,9 +837,12 @@ export default function Integrations() {
     });
   }, []);
 
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'services', label: 'Services', icon: <Link2 className="w-4 h-4" /> },
-    { id: 'webhooks', label: 'Webhooks', icon: <Globe className="w-4 h-4" /> },
+  const connectedServicesCount = Object.values(services).filter((s) => s.connected).length;
+  const activeWebhooksCount = webhooks.filter((w) => w.enabled).length;
+
+  const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: string }[] = [
+    { id: 'services', label: 'Services', icon: <Link2 className="w-4 h-4" />, badge: `${connectedServicesCount}/${SERVICES.length}` },
+    { id: 'webhooks', label: 'Webhooks', icon: <Globe className="w-4 h-4" />, badge: webhooks.length > 0 ? `${activeWebhooksCount} active` : undefined },
     { id: 'cicd', label: 'CI/CD', icon: <Shield className="w-4 h-4" /> },
   ];
 
@@ -869,6 +872,11 @@ export default function Integrations() {
             }`}
           >
             {t.icon} {t.label}
+            {t.badge && (
+              <span className={`text-[9px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ${
+                tab === t.id ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'
+              }`}>{t.badge}</span>
+            )}
           </button>
         ))}
       </div>

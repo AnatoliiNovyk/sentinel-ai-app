@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
@@ -331,6 +331,15 @@ export default function Settings() {
     if (STRIPE_PORTAL_URL) window.open(STRIPE_PORTAL_URL, '_blank');
     else window.open('mailto:billing@santinelai.online', '_blank');
   };
+
+  // ── Unsaved changes tracking ─────────────────────────────────────────────
+  const hasChanges = useMemo(() => {
+    if (!profile) return false;
+    const origSla = { ...DEFAULT_SLA_CONFIG, ...(profile.sla_config ?? {}) };
+    return fullName !== (profile.full_name ?? '') ||
+      company !== (profile.company ?? '') ||
+      JSON.stringify(sla) !== JSON.stringify(origSla);
+  }, [profile, fullName, company, sla]);
 
   // ── Account overview stats ────────────────────────────────────────────────
   const slaRulesCount  = Object.keys(sla).length;
@@ -904,10 +913,20 @@ export default function Settings() {
 
       {/* Save */}
       <div className="flex items-center justify-end gap-3">
+        {hasChanges && !saving && !saved && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-amber-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Unsaved changes
+          </span>
+        )}
         <button
           onClick={save}
           disabled={saving}
-          className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-semibold px-5 py-2.5 rounded-md text-sm transition"
+          className={`inline-flex items-center gap-2 font-semibold px-5 py-2.5 rounded-md text-sm transition disabled:opacity-60 ${
+            saved ? 'bg-emerald-400 text-slate-950' :
+            hasChanges ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 ring-2 ring-emerald-500/40' :
+            'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+          }`}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
           {saving ? 'Saving...' : saved ? 'Saved!' : 'Save changes'}
