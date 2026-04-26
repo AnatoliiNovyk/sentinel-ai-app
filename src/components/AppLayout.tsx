@@ -249,8 +249,18 @@ export default function AppLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="text-sm font-medium text-slate-300">
-              {PAGE_TITLES[location.pathname] || 'Sentinel AI'}
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+              {(() => {
+                const match = nav.find(n => n.path === location.pathname);
+                if (!match) return PAGE_TITLES[location.pathname] || 'Sentinel AI';
+                const Icon = match.icon;
+                return (
+                  <>
+                    <Icon className="w-4 h-4 text-emerald-400 shrink-0" />
+                    {match.label}
+                  </>
+                );
+              })()}
             </div>
           </div>
           <div className="flex items-center gap-2">

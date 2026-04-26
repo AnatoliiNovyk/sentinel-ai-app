@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, ArrowLeft, Loader2, Check, X } from 'lucide-react';
+import { Shield, ArrowLeft, Loader2, Check, X, Eye, EyeOff, Lock, Zap, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
@@ -14,6 +14,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
 
   const isSignup = mode === 'signup';
+  const [showPassword, setShowPassword] = useState(false);
 
   const getPasswordStrength = (pwd: string): { level: 'weak' | 'fair' | 'strong'; score: number } => {
     if (!pwd) return { level: 'weak', score: 0 };
@@ -95,15 +96,25 @@ export default function Auth() {
             </div>
             <div>
               <label className="block text-sm text-slate-300 mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
-                placeholder="Minimum 6 characters"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 pr-10 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
+                  placeholder="Minimum 6 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {isSignup && password && pwdStrength && (
                 <div className="mt-2 space-y-2">
                   <div className="flex items-center gap-2">
@@ -163,6 +174,20 @@ export default function Auth() {
             <button onClick={() => setMode(isSignup ? 'signin' : 'signup')} className="text-emerald-400 hover:text-emerald-300 font-medium">
               {isSignup ? 'Sign in' : 'Create one'}
             </button>
+          </div>
+
+          {/* Security badges */}
+          <div className="mt-8 flex items-center justify-center gap-5 flex-wrap">
+            {[
+              { icon: Lock, label: 'AES-256 encrypted' },
+              { icon: Zap, label: 'Zero-knowledge' },
+              { icon: ShieldCheck, label: 'SOC 2 compliant' },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <Icon className="w-3 h-3" />
+                {label}
+              </div>
+            ))}
           </div>
         </div>
       </div>
