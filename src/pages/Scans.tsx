@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
@@ -9,6 +9,42 @@ import { supabase } from '../api/client';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
+
+const SCAN_STATUS_META: Record<string, { label: string; dotClass: string; textClass: string; bgClass: string; borderClass: string; pulse: boolean }> = {
+  running:   { label: 'Running',   dotClass: 'bg-emerald-400', textClass: 'text-emerald-300', bgClass: 'bg-emerald-500/10', borderClass: 'border-emerald-500/30', pulse: true  },
+  pending:   { label: 'Pending',   dotClass: 'bg-amber-400',   textClass: 'text-amber-300',   bgClass: 'bg-amber-500/10',   borderClass: 'border-amber-500/30',   pulse: true  },
+  completed: { label: 'Done',      dotClass: 'bg-sky-400',     textClass: 'text-sky-300',     bgClass: 'bg-sky-500/10',     borderClass: 'border-sky-500/30',     pulse: false },
+  failed:    { label: 'Failed',    dotClass: 'bg-red-500',     textClass: 'text-red-400',     bgClass: 'bg-red-500/10',     borderClass: 'border-red-500/30',     pulse: false },
+};
+
+function ScanStatusBadge({ status, active }: { status: string; active: boolean }) {
+  const meta = SCAN_STATUS_META[status] ?? { label: status, dotClass: 'bg-slate-500', textClass: 'text-slate-400', bgClass: 'bg-slate-800', borderClass: 'border-slate-700', pulse: false };
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide transition-colors ${
+      active ? 'bg-white/10 border-white/20 text-white' : `${meta.bgClass} ${meta.borderClass} ${meta.textClass}`
+    }`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-white' : meta.dotClass} ${meta.pulse ? 'animate-pulse' : ''}`} />
+      {meta.label}
+    </span>
+  );
+}
+
+function RunningProgressBar() {
+  const barRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef(12);
+  useEffect(() => {
+    const id = setInterval(() => {
+      progressRef.current = progressRef.current >= 95 ? progressRef.current : progressRef.current + Math.random() * 3;
+      if (barRef.current) barRef.current.style.width = `${progressRef.current}%`;
+    }, 800);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="mt-1.5 h-0.5 w-full rounded-full bg-white/10 overflow-hidden">
+      <div ref={barRef} className="h-full rounded-full bg-emerald-400 transition-all duration-700" />
+    </div>
+  );
+}
 
 const Scans = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -359,11 +395,12 @@ Respond ONLY with valid JSON in this exact format:
                   <span className="text-[10px] opacity-60">{new Date(scan.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold opacity-80">{scan.status}</span>
+                  <ScanStatusBadge status={scan.status} active={selectedScanId === scan.id} />
                   {scan.is_mock && (
                     <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">DEMO</span>
                   )}
                 </div>
+                {scan.status === 'running' && <RunningProgressBar />}
               </button>
             ))}
           </div>
