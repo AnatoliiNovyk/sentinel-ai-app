@@ -8,6 +8,7 @@ import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../l
 import { useAuth } from '../context/useAuth';
 import Sparkline from '../components/Sparkline';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
+import { SkeletonList } from '../components/Skeleton';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -356,7 +357,7 @@ export default function Dashboard() {
             </button>
           </div>
           {loading ? (
-            <div className="py-10 text-center text-slate-500 text-sm">Loading...</div>
+            <SkeletonList count={4} />
           ) : scans.length === 0 ? (
             <div className="py-10 text-center">
               <Radar className="w-8 h-8 text-slate-700 mx-auto mb-2" />

@@ -4,6 +4,7 @@ import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { callAiGateway } from '../lib/aiGateway';
 import { useToast } from '../lib/toastContext';
+import { SkeletonSidebar, SkeletonBlock } from '../components/Skeleton';
 import { supabase } from '../api/client';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
@@ -227,8 +228,21 @@ Respond ONLY with valid JSON in this exact format:
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="lg:w-64 flex-shrink-0 space-y-2">
+            <SkeletonBlock className="h-4 w-28 mb-3" />
+            <SkeletonBlock className="h-8 w-full rounded-lg mb-2" />
+            <SkeletonSidebar count={6} />
+          </div>
+          <div className="flex-1 space-y-4">
+            <SkeletonBlock className="h-32 w-full rounded-xl" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => <SkeletonBlock key={i} className="h-24 rounded-xl" />)}
+            </div>
+            <SkeletonBlock className="h-64 w-full rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }

@@ -7,6 +7,7 @@ import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { useToast } from '../lib/toastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { SkeletonCardGrid } from '../components/Skeleton';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -164,7 +165,7 @@ export default function Reports() {
       )}
 
       {loading ? (
-        <div className="text-slate-500 text-sm">Loading...</div>
+        <SkeletonCardGrid cols={2} count={4} height="h-36" />
       ) : reports.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-16 text-center">
           <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
