@@ -362,19 +362,32 @@ export default function OsintAnalyzer() {
               {!r.error && r.result.breaches && r.result.breaches.length > 0 && (
                 <>
                   <div className="border-t border-slate-800 px-5 py-3 bg-slate-900/20">
-                    <div className="text-xs text-slate-400 mb-2">Risk Score: {r.result.riskScore}/100</div>
-                    <div
-                      className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold border capitalize ${
-                        r.result.riskLevel === 'critical'
-                          ? 'text-red-400 border-red-500/30 bg-red-500/10'
-                          : r.result.riskLevel === 'high'
-                            ? 'text-orange-400 border-orange-500/30 bg-orange-500/10'
-                            : r.result.riskLevel === 'medium'
-                              ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'
-                              : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
-                      }`}
-                    >
-                      {r.result.riskLevel} Risk
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border capitalize ${
+                          r.result.riskLevel === 'critical'
+                            ? 'text-red-400 border-red-500/30 bg-red-500/10'
+                            : r.result.riskLevel === 'high'
+                              ? 'text-orange-400 border-orange-500/30 bg-orange-500/10'
+                              : r.result.riskLevel === 'medium'
+                                ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'
+                                : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                        }`}
+                      >
+                        {r.result.riskLevel} Risk
+                      </div>
+                      <span className="text-xs font-mono font-bold text-slate-300">{r.result.riskScore}<span className="text-slate-600 font-normal">/100</span></span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          r.result.riskLevel === 'critical' ? 'bg-red-500' :
+                          r.result.riskLevel === 'high'     ? 'bg-orange-500' :
+                          r.result.riskLevel === 'medium'   ? 'bg-yellow-500' :
+                                                              'bg-sky-500'
+                        }`}
+                        ref={(el) => { if (el) el.style.width = `${r.result.riskScore ?? 0}%`; }}
+                      />
                     </div>
                   </div>
 

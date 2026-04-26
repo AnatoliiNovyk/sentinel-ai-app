@@ -365,9 +365,14 @@ export default function KillChain() {
 
                   {/* Right side */}
                   <div className="md:w-5/12 ml-6 md:ml-0 rounded-xl border border-red-500/20 bg-red-500/5 p-5 shadow-lg">
-                    <div className="md:hidden mb-2">
-                      <div className="text-sm font-bold text-red-400 uppercase tracking-wider">{step.phase}</div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">MITRE TACTIC: {step.tactic}</div>
+                    <div className="flex items-start justify-between mb-2 md:mb-0">
+                      <div className="md:hidden">
+                        <div className="text-sm font-bold text-red-400 uppercase tracking-wider">{step.phase}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">MITRE TACTIC: {step.tactic}</div>
+                      </div>
+                      <span className="ml-auto shrink-0 text-[10px] font-bold text-slate-500 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full tabular-nums">
+                        {idx + 1}/{chain!.length}
+                      </span>
                     </div>
                     
                     <p className="text-sm text-slate-300 leading-relaxed">
