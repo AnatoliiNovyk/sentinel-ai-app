@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Terminal, Copy, Check, Info, Code, Search } from 'lucide-react';
+import { Terminal, Copy, Check, Info, Code, Search, Zap, Clock, ShieldCheck, AlertCircle } from 'lucide-react';
 
 type Method = 'GET' | 'POST';
 
@@ -130,12 +130,37 @@ fi`;
           Programmatic access to Sentinel AI for your custom automation workflows.
         </p>
       </div>
-
-      <div className="flex items-start gap-2 text-sm text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded-lg p-4">
-        <Info className="w-4 h-4 shrink-0 mt-0.5" />
-        <p>
-          Authenticate with your Personal Access Token from the <strong>Settings</strong> page via the <code>Authorization: Bearer</code> header.
-        </p>
+      {/* API overview stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { icon: <Code className="w-4 h-4" />,        label: 'Total Endpoints', value: ENDPOINTS.length,                                     color: 'text-emerald-400' },
+          { icon: <Zap className="w-4 h-4" />,         label: 'POST Endpoints',  value: ENDPOINTS.filter(e => e.method === 'POST').length,    color: 'text-orange-400' },
+          { icon: <ShieldCheck className="w-4 h-4" />, label: 'GET Endpoints',   value: ENDPOINTS.filter(e => e.method === 'GET').length,     color: 'text-sky-400'    },
+          { icon: <Clock className="w-4 h-4" />,       label: 'Rate Limit',      value: '100/min',                                            color: 'text-amber-400'  },
+        ].map(s => (
+          <div key={s.label} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 flex items-center gap-3">
+            <div className={s.color}>{s.icon}</div>
+            <div>
+              <div className="text-xs text-slate-500">{s.label}</div>
+              <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Rate limits & auth info */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="flex items-start gap-3 text-sm text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded-lg p-4">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>
+            Authenticate with your Personal Access Token from the <strong>Settings</strong> page via the <code>Authorization: Bearer</code> header.
+          </p>
+        </div>
+        <div className="flex items-start gap-3 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>
+            <strong>Rate limits:</strong> 100 requests/minute per API key. Scan endpoints are additionally limited to 10 concurrent jobs. Exceeds return <code>429 Too Many Requests</code>.
+          </p>
+        </div>
       </div>
 
       {/* Endpoint list */}
@@ -143,6 +168,7 @@ fi`;
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Code className="w-5 h-5 text-emerald-400" /> Endpoints
+            <span className="text-xs font-normal text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{visibleEndpoints.length} of {ENDPOINTS.length}</span>
           </h2>
           <div className="flex items-center gap-2">
             {/* Method filter */}

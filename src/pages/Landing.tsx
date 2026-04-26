@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Shield, Zap, Lock, Globe, ChevronRight, Activity, Server, FileCode, CheckCircle2, Mail, ChevronDown } from 'lucide-react';
+import { Shield, Zap, Lock, Globe, ChevronRight, Activity, Server, FileCode, CheckCircle2, Mail, ChevronDown, Users, Bug, TrendingUp, Clock } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Landing() {
@@ -77,6 +77,46 @@ export default function Landing() {
             <a href="#features" className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500 text-white text-base font-semibold px-8 py-4 rounded-lg transition bg-slate-900/50">
               View Features
             </a>
+          </div>
+
+          {/* Social proof stats */}
+          <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl mx-auto">
+            {[
+              { icon: <Users className="w-5 h-5" />, value: '2,500+', label: 'Active users' },
+              { icon: <Bug className="w-5 h-5" />,   value: '180K+',  label: 'Vulns found' },
+              { icon: <Shield className="w-5 h-5" />,value: '12K+',   label: 'Scans run' },
+              { icon: <TrendingUp className="w-5 h-5" />, value: '99.9%', label: 'Uptime SLA' },
+            ].map(s => (
+              <div key={s.label} className="text-center">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-2 mx-auto">{s.icon}</div>
+                <div className="text-2xl font-bold text-white">{s.value}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it Works */}
+      <section className="py-24 border-t border-slate-800/50 bg-slate-900/30 px-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl font-bold text-white mb-4">Up and running in minutes</h2>
+            <p className="text-slate-400">No agents to install, no firewall rules to change. Just connect and scan.</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { step: '01', icon: <Globe className="w-6 h-6" />, title: 'Connect your infrastructure', desc: 'Add your domains, IPs, cloud accounts, or upload a package.json. Sentinel AI automatically maps your attack surface.' },
+              { step: '02', icon: <Zap className="w-6 h-6" />,   title: 'AI scans & detects threats', desc: 'Our scanners run Nmap, tfsec, Prowler, and dark web checks in parallel. Results appear in real-time with risk scoring.' },
+              { step: '03', icon: <Clock className="w-6 h-6" />,  title: 'Remediate & track SLAs', desc: 'Get AI-generated fix scripts, assign ownership, and track SLA compliance. Close findings in one click.' },
+            ].map(s => (
+              <div key={s.step} className="relative">
+                <div className="text-6xl font-black text-slate-800/60 mb-3 leading-none">{s.step}</div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">{s.icon}</div>
+                <h3 className="text-lg font-semibold text-white mb-2">{s.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
