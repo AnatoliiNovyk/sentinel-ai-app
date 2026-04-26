@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { riskBand } from '../lib/riskScore';
-import { ShieldAlert, RefreshCw, Info, Download, Search, SlidersHorizontal } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Info, Download, Search, SlidersHorizontal, Target } from 'lucide-react';
 import { downloadFile } from '../lib/exporters';
+
+type SevFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
 // ─── Physics types ────────────────────────────────────────────────────────────
 type SimNode = {
@@ -154,10 +156,29 @@ export default function AttackSurfaceMap() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [nodeFilter, setNodeFilter] = useState<'all' | 'project' | 'vuln'>('all');
+  const [sevFilter, setSevFilter] = useState<SevFilter>('all');
   const animRef = useRef<number>(0);
   const nodesRef = useRef<SimNode[]>([]);
   const edgesRef = useRef<SimEdge[]>([]);
   const tickRef = useRef(0);
+
+  const totalMedium     = useMemo(() => vulns.filter(v => v.severity === 'medium'    && v.status !== 'resolved').length, [vulns]);
+  const exposedAssets   = useMemo(() => new Set(vulns.filter(v => v.status !== 'resolved' && v.asset).map(v => v.asset)).size, [vulns]);
+
+  // Vuln breakdown per project node (for tooltip)
+  const vulnsByProject = useMemo(() => {
+    const map = new Map<string, Record<string, number>>();
+    nodes.filter(n => n.type === 'project').forEach(p => {
+      const connected = edges
+        .filter(e => e.source === p.id)
+        .map(e => nodes.find(n => n.id === e.target))
+        .filter((n): n is SimNode => n?.type === 'vuln');
+      const counts: Record<string, number> = {};
+      connected.forEach(n => { counts[n.severity ?? 'info'] = (counts[n.severity ?? 'info'] ?? 0) + 1; });
+      map.set(p.id, counts);
+    });
+    return map;
+  }, [nodes, edges]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -260,12 +281,14 @@ export default function AttackSurfaceMap() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
         {[
-          { label: 'Projects', value: projects.length, color: 'text-emerald-400' },
-          { label: 'Total Findings', value: vulns.filter(v => v.status !== 'resolved').length, color: 'text-slate-200' },
-          { label: 'Critical', value: totalCritical, color: 'text-red-400' },
-          { label: 'High', value: totalHigh, color: 'text-orange-400' },
+          { label: 'Projects',       value: projects.length,                                              color: 'text-emerald-400' },
+          { label: 'Open Findings',  value: vulns.filter(v => v.status !== 'resolved').length,            color: 'text-slate-200'   },
+          { label: 'Critical',       value: totalCritical,                                                color: 'text-red-400'     },
+          { label: 'High',           value: totalHigh,                                                    color: 'text-orange-400'  },
+          { label: 'Medium',         value: totalMedium,                                                  color: 'text-yellow-400'  },
+          { label: 'Exposed Assets', value: exposedAssets,                                                color: 'text-sky-400'     },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
             <div className="text-xs text-slate-500 mb-1">{s.label}</div>
@@ -275,7 +298,7 @@ export default function AttackSurfaceMap() {
       </div>
 
       {/* Search + node type filter bar */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
           <input
@@ -301,6 +324,34 @@ export default function AttackSurfaceMap() {
             </button>
           ))}
         </div>
+        {/* Severity filter — only when showing vulns */}
+        {nodeFilter !== 'project' && (
+          <div className="flex items-center gap-1">
+            <Target className="w-3.5 h-3.5 text-slate-500" />
+            {(['all', 'critical', 'high', 'medium', 'low'] as const).map(sev => {
+              const sevColors: Record<SevFilter, string> = {
+                all: 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white',
+                critical: 'border-red-500/50 bg-red-500/10 text-red-300',
+                high: 'border-orange-500/50 bg-orange-500/10 text-orange-300',
+                medium: 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300',
+                low: 'border-sky-500/50 bg-sky-500/10 text-sky-300',
+              };
+              return (
+                <button
+                  key={sev}
+                  onClick={() => setSevFilter(sev)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                    sevFilter === sev
+                      ? sevColors[sev]
+                      : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {sev === 'all' ? 'All sev.' : sev}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Graph canvas */}
@@ -357,7 +408,8 @@ export default function AttackSurfaceMap() {
               const q = searchQuery.trim().toLowerCase();
               const matchesSearch = !q || n.label.toLowerCase().includes(q);
               const matchesType = nodeFilter === 'all' || n.type === nodeFilter || n.type === 'hub';
-              const dimmed = (!matchesSearch || !matchesType) && n.type !== 'hub';
+              const matchesSev = sevFilter === 'all' || n.type !== 'vuln' || n.severity === sevFilter;
+              const dimmed = (!matchesSearch || !matchesType || !matchesSev) && n.type !== 'hub';
               const nodeOpacity = dimmed ? 0.15 : 1;
               if (n.type === 'hub') {
                 return (
@@ -385,7 +437,7 @@ export default function AttackSurfaceMap() {
                     {(isHov || isSel) && <circle r={r + 8} fill={color} opacity={0.12} />}
                     <circle r={r} fill="#0f172a" stroke={color} strokeWidth={isHov || isSel ? 2.5 : 1.5} filter={filter} />
                     <text textAnchor="middle" dy="4" fontSize="9" fill="#e2e8f0" fontWeight="bold">{n.riskScore}</text>
-                    <text textAnchor="middle" dy={r + 14} fontSize="8.5" fill="#94a3b8" style={{ maxWidth: 80 }}>
+                    <text textAnchor="middle" dy={r + 14} fontSize="8.5" fill="#94a3b8">
                       {n.label.slice(0, 18)}{n.label.length > 18 ? '…' : ''}
                     </text>
                   </g>
@@ -426,7 +478,10 @@ export default function AttackSurfaceMap() {
             { color: '#4ade80', label: 'Low risk' },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: l.color }} />
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                ref={(el) => { if (el) el.style.background = l.color; }}
+              />
               <span className="text-[10px] text-slate-400">{l.label}</span>
             </div>
           ))}
@@ -445,17 +500,47 @@ export default function AttackSurfaceMap() {
             <div className="text-sm font-medium text-white mb-1">{selected.label}</div>
             {selected.type === 'project' && (
               <div className="mt-2 space-y-1 text-xs text-slate-400">
-                <div>Risk score: <span className="font-semibold" style={{ color: RISK_COLOR(selected.riskScore) }}>{selected.riskScore}</span></div>
+                <div>Risk score: <span className="font-semibold" ref={(el) => { if (el) el.style.color = RISK_COLOR(selected.riskScore); }}>{selected.riskScore}</span></div>
                 <div>{riskBand(selected.riskScore).label} risk level</div>
+                {(() => {
+                  const breakdown = vulnsByProject.get(selected.id);
+                  if (!breakdown || Object.keys(breakdown).length === 0) return null;
+                  const SEV_CLS: Record<string, string> = { critical: 'text-red-400', high: 'text-orange-400', medium: 'text-yellow-400', low: 'text-sky-400', info: 'text-slate-400' };
+                  const sevOrder = ['critical', 'high', 'medium', 'low', 'info'];
+                  return (
+                    <div className="mt-2 pt-2 border-t border-slate-800">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Findings in graph</div>
+                      <div className="space-y-1">
+                        {sevOrder.filter(s => breakdown[s]).map(s => (
+                          <div key={s} className="flex items-center justify-between">
+                            <span className={`capitalize ${SEV_CLS[s] ?? 'text-slate-400'}`}>{s}</span>
+                            <span className={`font-bold tabular-nums ${SEV_CLS[s] ?? 'text-slate-400'}`}>{breakdown[s]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
-            {selected.type === 'vuln' && (
-              <div className="mt-2 text-xs">
-                <span className="px-1.5 py-0.5 rounded border text-[10px] capitalize" style={{ color: SEV_COLOR[selected.severity ?? 'info'], borderColor: SEV_COLOR[selected.severity ?? 'info'] + '50', background: SEV_COLOR[selected.severity ?? 'info'] + '15' }}>
-                  {selected.severity}
-                </span>
-              </div>
-            )}
+            {selected.type === 'vuln' && (() => {
+              const SEV_BADGE: Record<string, string> = {
+                critical: 'text-red-300 border-red-500/30 bg-red-500/10',
+                high:     'text-orange-300 border-orange-500/30 bg-orange-500/10',
+                medium:   'text-yellow-300 border-yellow-500/30 bg-yellow-500/10',
+                low:      'text-sky-300 border-sky-500/30 bg-sky-500/10',
+                info:     'text-slate-400 border-slate-600 bg-slate-800',
+              };
+              return (
+                <div className="mt-2 text-xs">
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] capitalize ${
+                    SEV_BADGE[selected.severity ?? 'info'] ?? SEV_BADGE.info
+                  }`}>
+                    {selected.severity}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
