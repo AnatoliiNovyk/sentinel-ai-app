@@ -31,6 +31,8 @@ export default function Compliance() {
   const result = useMemo(() => computeCompliance(vulns), [vulns]);
   const [cisSort, setCisSort] = useState<'score_desc' | 'score_asc' | 'name'>('score_desc');
   const [cisStatus, setCisStatus] = useState<'all' | 'passing' | 'failing'>('all');
+  const [nistStatus, setNistStatus] = useState<'all' | 'passing' | 'failing'>('all');
+  const [mitreStatus, setMitreStatus] = useState<'all' | 'active' | 'quiet'>('all');
 
   const sortedCisRows = useMemo(() => {
     return [...result.cisRows]
@@ -41,6 +43,18 @@ export default function Compliance() {
         a.label.localeCompare(b.label)
       );
   }, [result.cisRows, cisSort, cisStatus]);
+
+  const filteredNistRows = useMemo(() => {
+    return result.nistRows.filter(r =>
+      nistStatus === 'all' ? true : nistStatus === 'passing' ? r.score >= 60 : r.score < 60
+    );
+  }, [result.nistRows, nistStatus]);
+
+  const filteredMitreRows = useMemo(() => {
+    return result.mitreRows.filter(r =>
+      mitreStatus === 'all' ? true : mitreStatus === 'active' ? r.openCount > 0 : r.openCount === 0
+    );
+  }, [result.mitreRows, mitreStatus]);
 
   if (loading) {
     return (
@@ -170,6 +184,20 @@ export default function Compliance() {
         <StatCard label="Total assessed" value={result.totalVulns} icon={Activity} accent="sky" />
       </div>
 
+      {/* ── Framework compliance bars ── */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-300">Framework Compliance Overview</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+          <FrameworkBar label="SOC 2" score={result.soc2Overall} icon={BookOpen} />
+          <FrameworkBar label="ISO 27001" score={result.iso27001Overall} icon={ShieldCheck} />
+          <FrameworkBar label="NIST CSF" score={result.nistOverall} icon={ShieldCheck} />
+          <FrameworkBar label="CIS Controls" score={result.cisOverall} icon={TrendingUp} />
+          <FrameworkBar label="PCI DSS" score={result.pciDssOverall} icon={Zap} />
+          <FrameworkBar label="HIPAA" score={result.hipaaOverall} icon={FileText} />
+          <FrameworkBar label="MITRE ATT&CK" score={result.mitreOverall} icon={Zap} />
+        </div>
+      </section>
+
       {/* ── Framework filter tabs ── */}
       <div className="flex items-center gap-1.5 border border-slate-800 rounded-lg p-1 w-fit bg-slate-900/40">
         {(['all', 'soc2', 'nist', 'cis', 'mitre'] as const).map((f) => {
@@ -203,9 +231,28 @@ export default function Compliance() {
       {/* ── NIST CSF ── */}
       {(framework === 'all' || framework === 'nist') && (
       <section>
-        <SectionHeader icon={ShieldCheck} title="NIST Cybersecurity Framework (CSF)" color="text-emerald-400" />
+        <div className="flex items-center justify-between">
+          <SectionHeader icon={ShieldCheck} title="NIST Cybersecurity Framework (CSF)" color="text-emerald-400" />
+          <div className="flex items-center gap-2">
+            {(['all', 'passing', 'failing'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setNistStatus(s)}
+                className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                  nistStatus === s
+                    ? s === 'passing' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                      : s === 'failing' ? 'border-red-500/50 bg-red-500/10 text-red-300'
+                      : 'border-slate-600 bg-slate-800 text-white'
+                    : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                {s === 'all' ? 'All' : s === 'passing' ? '≥60% Passing' : '<60% Failing'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
-          {result.nistRows.map(row => <NistCard key={row.id} row={row} />)}
+          {filteredNistRows.map(row => <NistCard key={row.id} row={row} />)}
         </div>
       </section>
       )}
@@ -267,9 +314,28 @@ export default function Compliance() {
       {/* ── MITRE ATT&CK Heatmap ── */}
       {(framework === 'all' || framework === 'mitre') && (
       <section>
-        <SectionHeader icon={Zap} title="MITRE ATT&CK Tactics" color="text-red-400" />
+        <div className="flex items-center justify-between">
+          <SectionHeader icon={Zap} title="MITRE ATT&CK Tactics" color="text-red-400" />
+          <div className="flex items-center gap-2">
+            {(['all', 'active', 'quiet'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setMitreStatus(s)}
+                className={`text-xs px-2.5 py-1.5 rounded-md border transition capitalize ${
+                  mitreStatus === s
+                    ? s === 'active' ? 'border-red-500/50 bg-red-500/10 text-red-300'
+                      : s === 'quiet' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                      : 'border-slate-600 bg-slate-800 text-white'
+                    : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                {s === 'all' ? 'All' : s === 'active' ? 'Active threats' : 'Mitigated'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {result.mitreRows.map(row => <MitreCard key={row.id} row={row} />)}
+          {filteredMitreRows.map(row => <MitreCard key={row.id} row={row} />)}
         </div>
       </section>
       )}
@@ -278,6 +344,34 @@ export default function Compliance() {
 }
 
 /* ── Sub-components ──────────────────────────────────────────────────────────── */
+
+function FrameworkBar({ label, score, icon: Icon }: { label: string; score: number; icon: typeof ShieldCheck }) {
+  const scoreColor =
+    score >= 80 ? 'text-emerald-400' :
+    score >= 60 ? 'text-yellow-400' :
+    score >= 40 ? 'text-orange-400' : 'text-red-400';
+  const barColor =
+    score >= 80 ? 'bg-emerald-500' :
+    score >= 60 ? 'bg-yellow-400' :
+    score >= 40 ? 'bg-orange-400' : 'bg-red-500';
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5 text-slate-500" />
+          <span className="text-xs font-semibold text-slate-300">{label}</span>
+        </div>
+        <span className={`text-sm font-bold ${scoreColor}`}>{score}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className={`h-full ${barColor} transition-all duration-700 rounded-full`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function SectionHeader({ icon: Icon, title, color }: { icon: typeof ShieldCheck; title: string; color: string }) {
   return (

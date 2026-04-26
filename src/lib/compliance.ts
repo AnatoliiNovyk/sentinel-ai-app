@@ -101,6 +101,12 @@ export type Soc2Row = {
 
 export type ComplianceResult = {
   soc2Overall: number;
+  nistOverall: number;
+  cisOverall: number;
+  mitreOverall: number;
+  iso27001Overall: number;
+  pciDssOverall: number;
+  hipaaOverall: number;
   cisRows: CisRow[];
   mitreRows: MitreRow[];
   nistRows: NistRow[];
@@ -187,8 +193,34 @@ export function computeCompliance(vulns: Vulnerability[]): ComplianceResult {
     soc2Rows.reduce((acc, r) => acc + r.weight, 0)
   );
 
+  // ── Other frameworks (ISO 27001, PCI DSS, HIPAA) ─────────────────────────
+  const nistOverall = nistRows.length > 0
+    ? Math.round(nistRows.reduce((acc, r) => acc + r.score, 0) / nistRows.length)
+    : 0;
+  const cisOverall = cisRows.length > 0
+    ? Math.round(cisRows.reduce((acc, r) => acc + r.score, 0) / cisRows.length)
+    : 0;
+  const mitreOverall = mitreRows.length > 0
+    ? Math.round(100 - (mitreRows.reduce((acc, r) => acc + r.openCount, 0) / mitreRows.length) * 5)
+    : 100;
+
+  // ISO 27001 (based on NIST + CIS avg)
+  const iso27001Overall = Math.round((nistOverall + cisOverall) / 2);
+
+  // PCI DSS (based on CIS + SOC2 avg)
+  const pciDssOverall = Math.round((cisOverall + soc2Overall) / 2);
+
+  // HIPAA (based on SOC2 + NIST avg)
+  const hipaaOverall = Math.round((soc2Overall + nistOverall) / 2);
+
   return {
     soc2Overall,
+    nistOverall,
+    cisOverall,
+    mitreOverall,
+    iso27001Overall,
+    pciDssOverall,
+    hipaaOverall,
     cisRows,
     mitreRows,
     nistRows,
