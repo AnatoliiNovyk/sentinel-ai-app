@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown } from 'lucide-react';
+import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -336,9 +336,18 @@ function ReportView({ report: initial, onBack }: { report: Report; onBack: () =>
 
   return (
     <div className="p-8 max-w-4xl">
-      <button onClick={onBack} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> Back to reports
-      </button>
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-slate-500 hover:text-white transition"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          Reports
+        </button>
+        <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+        <span className="text-slate-300 truncate max-w-sm">{report.title}</span>
+      </nav>
       <div className="flex items-start justify-between mb-8 gap-4">
         <div>
           <div className="text-xs text-slate-500 uppercase tracking-wider">{report.kind} report</div>
