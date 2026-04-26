@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Shield, AlertTriangle, Download, Moon, Sun, Copy, Check, Printer, BookOpen, FileText, Hash } from 'lucide-react';
 import { supabase, Report } from '../lib/supabase';
 
@@ -7,6 +7,19 @@ export default function PublicReport({ token }: { token: string }) {
   const [status, setStatus] = useState<'loading' | 'notfound' | 'ok'>('loading');
   const [darkMode, setDarkMode] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [scrollPct, setScrollPct] = useState(0);
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement;
+      const pct = el.scrollHeight <= el.clientHeight ? 0 : Math.min(100, (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100);
+      setScrollPct(pct);
+      if (progressRef.current) progressRef.current.style.width = `${pct}%`;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -82,6 +95,10 @@ export default function PublicReport({ token }: { token: string }) {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
+      {/* Scroll progress bar */}
+      <div className="fixed top-0 left-0 right-0 h-0.5 bg-transparent z-50">
+        <div ref={progressRef} className="h-full bg-emerald-400 transition-none" />
+      </div>
       <header className={`border-b ${darkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-white/80'} backdrop-blur`}>
         <div className="max-w-4xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className={`flex items-center gap-2 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -142,7 +159,14 @@ export default function PublicReport({ token }: { token: string }) {
         <div className={`text-xs font-semibold uppercase tracking-wider ${darkMode ? 'text-slate-500' : 'text-slate-600'}`}>{report.kind} report</div>
         <h1 className={`mt-1 text-3xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>{report.title}</h1>
         <div className={`mt-3 flex flex-wrap items-center gap-4 text-sm ${darkMode ? 'text-slate-500' : 'text-slate-600'}`}>
-          <div>Generated {new Date(report.created_at).toLocaleString()}</div>
+          <div>Generated {(() => {
+            const diff = Date.now() - new Date(report.created_at).getTime();
+            if (diff < 60_000) return 'just now';
+            if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+            if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+            if (diff < 30 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+            return new Date(report.created_at).toLocaleString();
+          })()}</div>
           <span className={darkMode ? 'text-slate-700' : 'text-slate-300'}>·</span>
           <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${
             darkMode

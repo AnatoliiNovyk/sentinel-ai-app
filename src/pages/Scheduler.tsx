@@ -160,6 +160,18 @@ export default function SchedulerPage() {
     setRunning(null);
   };
 
+  const nearestUpcoming = useMemo(() => {
+    const upcoming = schedules
+      .filter(s => s.enabled && s.next_run_at && new Date(s.next_run_at).getTime() > Date.now())
+      .sort((a, b) => new Date(a.next_run_at!).getTime() - new Date(b.next_run_at!).getTime());
+    if (!upcoming.length) return null;
+    const diff = new Date(upcoming[0].next_run_at!).getTime() - Date.now();
+    const h = Math.floor(diff / 3_600_000);
+    const m = Math.floor((diff % 3_600_000) / 60_000);
+    const proj = projects.find(p => p.id === upcoming[0].project_id)?.name ?? '…';
+    return { label: h > 0 ? `${h}h ${m}m` : `${m}m`, project: proj };
+  }, [schedules, projects]);
+
   const active  = schedules.filter(s => s.enabled).length;
   const overdue = schedules.filter(s => s.enabled && s.next_run_at && new Date(s.next_run_at) < new Date()).length;
 
@@ -208,6 +220,14 @@ export default function SchedulerPage() {
           <p className="mt-1 text-sm text-slate-500">
             Automate recurring security scans across your projects.
           </p>
+          {nearestUpcoming && (
+            <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-0.5 rounded-full">
+              <Clock className="w-3 h-3" />
+              Next scan in <span className="font-bold tabular-nums">{nearestUpcoming.label}</span>
+              <span className="text-sky-600">·</span>
+              <span className="text-sky-500 truncate max-w-[120px]">{nearestUpcoming.project}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {schedules.length > 0 && (
