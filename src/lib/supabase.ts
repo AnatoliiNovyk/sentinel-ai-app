@@ -225,3 +225,26 @@ export type ApiUsage = {
   reset_at: string;
   created_at: string;
 };
+
+// AI Remediation
+export type RemediationStep = {
+  order: number;
+  title: string;
+  description: string;
+  command?: string;
+  language?: string;
+  note?: string;
+};
+
+export type RemediationSuggestionRecord = {
+  id: string;
+  vulnerability_id: string;
+  user_id: string;
+  summary: string;
+  priority: 'immediate' | 'high' | 'medium' | 'low';
+  effort: 'quick-win' | 'moderate' | 'complex';
+  estimated_time: string;
+  steps: RemediationStep[];
+  references: { label: string; url: string }[];
+  generated_at: string;
+};

@@ -457,5 +457,43 @@ CREATE INDEX IF NOT EXISTS idx_api_usage_user_metric ON api_usage(user_id, metri
 CREATE INDEX IF NOT EXISTS idx_api_usage_reset ON api_usage(reset_at DESC);
 
 -- =============================================================================
+-- REMEDIATION SUGGESTIONS (Batch-149)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS remediation_suggestions (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vulnerability_id uuid NOT NULL REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+  user_id         uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  summary         text NOT NULL,
+  priority        text NOT NULL CHECK (priority IN ('immediate', 'high', 'medium', 'low')),
+  effort          text NOT NULL CHECK (effort IN ('quick-win', 'moderate', 'complex')),
+  estimated_time  text,
+  steps           jsonb NOT NULL DEFAULT '[]',
+  references      jsonb NOT NULL DEFAULT '[]',
+  generated_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT remediation_suggestions_vuln_unique UNIQUE (vulnerability_id)
+);
+
+ALTER TABLE remediation_suggestions ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='remediation_suggestions' AND policyname='Users read own suggestions') THEN
+    CREATE POLICY "Users read own suggestions" ON remediation_suggestions FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='remediation_suggestions' AND policyname='Users can insert suggestions') THEN
+    CREATE POLICY "Users can insert suggestions" ON remediation_suggestions FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='remediation_suggestions' AND policyname='Users can update own suggestions') THEN
+    CREATE POLICY "Users can update own suggestions" ON remediation_suggestions FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='remediation_suggestions' AND policyname='Users can delete own suggestions') THEN
+    CREATE POLICY "Users can delete own suggestions" ON remediation_suggestions FOR DELETE TO authenticated USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_remediation_vuln ON remediation_suggestions(vulnerability_id);
+CREATE INDEX IF NOT EXISTS idx_remediation_user ON remediation_suggestions(user_id);
+CREATE INDEX IF NOT EXISTS idx_remediation_priority ON remediation_suggestions(priority);
+
+-- =============================================================================
 -- DONE ✓
 -- =============================================================================

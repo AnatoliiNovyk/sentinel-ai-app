@@ -7,6 +7,7 @@ import { useAuth } from '../context/useAuth';
 import { usePresence } from '../context/PresenceContext';
 import { PresenceAvatars } from './PresenceAvatars';
 import { CommentThread } from './CommentThread';
+import { RemediationAssistant } from './RemediationAssistant';
 
 type SlaFilter = 'all' | 'overdue' | 'at_risk';
 
@@ -479,6 +480,9 @@ function FindingRow({
               <p className="text-sm text-slate-300 leading-relaxed">{vuln.remediation}</p>
             </div>
           )}
+
+          {/* AI-powered Remediation Assistant */}
+          <RemediationAssistant vuln={vuln} />
 
           <div>
             <div className="flex items-center justify-between mb-1">
