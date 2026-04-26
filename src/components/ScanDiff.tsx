@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { TrendingDown, TrendingUp, Minus, GitCompare, Search } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, GitCompare, Search, Download } from 'lucide-react';
+import { downloadFile } from '../lib/exporters';
 import { Scan, Vulnerability } from '../lib/supabase';
 
 type DiffEntry = {
@@ -119,25 +120,42 @@ export default function ScanDiff({
             {new Date(previous.created_at).toLocaleDateString()} → {new Date(latest.created_at).toLocaleDateString()}
           </span>
         </div>
+        <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            const rows = [['Status','Severity','Title','Asset'], ...diff.map(d => [d.status, d.severity, d.title, d.asset])];
+            downloadFile('scan-diff.csv', rows.map(r => r.join(',')).join('\n'), 'text/csv');
+          }}
+          className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white border border-slate-800 hover:border-slate-600 rounded px-2 py-1 transition"
+          aria-label="Export diff as CSV" title="Export diff as CSV"
+        >
+          <Download className="w-3 h-3" /> Export CSV
+        </button>
         <div className={`flex items-center gap-1.5 text-sm font-semibold ${
           trend > 0 ? 'text-red-400' : trend < 0 ? 'text-emerald-400' : 'text-slate-400'
         }`}>
           {trend > 0 ? <TrendingUp className="w-4 h-4" /> : trend < 0 ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
           {trend > 0 ? `+${trend} new risks` : trend < 0 ? `${Math.abs(trend)} fewer risks` : 'No change'}
         </div>
+        </div>
       </div>
 
-      {/* Summary pills */}
-      <div className="flex gap-2 text-xs">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-red-500/30 bg-red-500/10 text-red-300">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> {newCount} New
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {fixedCount} Fixed
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-600 bg-slate-800/40 text-slate-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> {persistedCount} Persisted
-        </span>
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-2">
+        {(
+          [['new', newCount, 'New', 'border-red-500/30 bg-red-500/5', 'text-red-400'],
+           ['fixed', fixedCount, 'Fixed', 'border-emerald-500/30 bg-emerald-500/5', 'text-emerald-400'],
+           ['persisted', persistedCount, 'Persisted', 'border-slate-700 bg-slate-800/30', 'text-slate-400']] as const
+        ).map(([val, count, label, border, textCls]) => (
+          <button
+            key={val}
+            onClick={() => setDiffStatus(diffStatus === val ? 'all' : val)}
+            className={`rounded-lg border px-3 py-2 text-left transition ${border} ${diffStatus === val ? 'ring-1 ring-inset ring-white/10' : 'hover:opacity-80'}`}
+          >
+            <div className={`text-lg font-bold ${textCls}`}>{count}</div>
+            <div className="text-[10px] text-slate-500">{label}</div>
+          </button>
+        ))}
       </div>
 
       {/* Search + status filter */}

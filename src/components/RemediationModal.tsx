@@ -103,7 +103,13 @@ export default function RemediationModal({ vuln, onClose }: { vuln: Vulnerabilit
             <span className={progress === 100 ? 'text-emerald-400 font-semibold' : ''}>{progress}%</span>
           </div>
           <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-400' : 'bg-emerald-500'}`} style={{ width: `${progress}%` }} />
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-400' : 'bg-emerald-500'}`}
+              ref={(el) => { if (el) el.style.width = `${progress}%`; }}
+            />
+          </div>
+          <div className="flex justify-end mt-1">
+            <span className="text-[10px] text-slate-500">{completed.size} of {steps.length} steps completed</span>
           </div>
         </div>
 
