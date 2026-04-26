@@ -414,10 +414,19 @@ Respond ONLY with valid JSON in this exact format:
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recent Scans</h2>
               {filteredScans.length !== scans.length && (
-                <span className="text-[10px] text-slate-500">{filteredScans.length}/{scans.length}</span>
+                <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-bold tabular-nums">{filteredScans.length}/{scans.length}</span>
               )}
             </div>
             <div className="flex items-center gap-1">
+              {(scanSearch || scannerFilter !== 'all' || statusFilter !== 'all') && (
+                <button
+                  onClick={() => { setScanSearch(''); setScannerFilter('all'); setStatusFilter('all'); }}
+                  title="Clear all filters"
+                  className="text-[10px] text-slate-400 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 px-1.5 py-1 rounded-md transition"
+                >
+                  ✕ Clear
+                </button>
+              )}
               {vulnerabilities.length > 0 && (
                 <button
                   onClick={exportVulnsCsv}

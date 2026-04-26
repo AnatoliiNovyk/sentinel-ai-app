@@ -398,19 +398,33 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       </div>
 
       <div className="flex items-center gap-1 mb-6 border-b border-slate-800">
-        {(['overview', 'topology', 'findings', 'scans', 'reports', 'activity'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize -mb-px border-b-2 transition ${
-              tab === t
-                ? 'border-emerald-500 text-white'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {(['overview', 'topology', 'findings', 'scans', 'reports', 'activity'] as Tab[]).map((t) => {
+          const counts: Partial<Record<Tab, number>> = {
+            findings: vulns.length,
+            scans: scans.length,
+            reports: reports.length,
+            activity: activity.length,
+          };
+          const count = counts[t];
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium capitalize -mb-px border-b-2 transition ${
+                tab === t
+                  ? 'border-emerald-500 text-white'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t}
+              {count !== undefined && count > 0 && (
+                <span className={`text-[9px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ${
+                  tab === t ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'
+                }`}>{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'overview' && (
