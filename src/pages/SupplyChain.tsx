@@ -109,6 +109,14 @@ export default function SupplyChain() {
   const vulnerableDeps = results?.filter(r => r.vulns.length > 0) || [];
   const safeDeps = results?.filter(r => r.vulns.length === 0) || [];
 
+  // Severity breakdown across all vulns
+  const sevBreakdown = useMemo(() => {
+    const allVulns = (results ?? []).flatMap(r => r.vulns);
+    const count = (sev: string) => allVulns.filter(v => v.severity === sev).length;
+    const fixable = allVulns.filter(v => v.fixed_in).length;
+    return { total: allVulns.length, critical: count('critical'), high: count('high'), medium: count('medium'), low: count('low'), fixable };
+  }, [results]);
+
   const SEV_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
   const filteredVulnDeps = sevFilter === 'all'
@@ -238,18 +246,30 @@ export default function SupplyChain() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
-              <div className="text-sm text-slate-500 mb-1">Total Dependencies</div>
-              <div className="text-3xl font-bold text-white">{results.length}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+              <div className="text-xs text-slate-500 mb-1">Total Packages</div>
+              <div className="text-2xl font-bold text-white">{results.length}</div>
             </div>
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5">
-              <div className="text-sm text-red-400 mb-1">Vulnerable Packages</div>
-              <div className="text-3xl font-bold text-red-400">{vulnerableDeps.length}</div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <div className="text-xs text-red-400 mb-1">Vulnerable</div>
+              <div className="text-2xl font-bold text-red-400">{vulnerableDeps.length}</div>
             </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
-              <div className="text-sm text-emerald-400 mb-1">Safe Packages</div>
-              <div className="text-3xl font-bold text-emerald-400">{safeDeps.length}</div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <div className="text-xs text-emerald-400 mb-1">Safe</div>
+              <div className="text-2xl font-bold text-emerald-400">{safeDeps.length}</div>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <div className="text-xs text-red-400 mb-1">Critical CVEs</div>
+              <div className="text-2xl font-bold text-red-400">{sevBreakdown.critical}</div>
+            </div>
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+              <div className="text-xs text-orange-400 mb-1">High CVEs</div>
+              <div className="text-2xl font-bold text-orange-400">{sevBreakdown.high}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <div className="text-xs text-emerald-400 mb-1">Fix Available</div>
+              <div className="text-2xl font-bold text-emerald-400">{sevBreakdown.fixable}</div>
             </div>
           </div>
 

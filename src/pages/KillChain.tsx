@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown, X } from 'lucide-react';
+import { Target, Zap, ShieldAlert, ArrowDown, Activity, Bug, Copy, Check, Download, FileText, Filter, Search, ArrowUpDown, X, BarChart2, Crosshair, Server, AlertCircle } from 'lucide-react';
 import { supabase, Project, Vulnerability } from '../lib/supabase';
 import { generateKillChain } from '../lib/aiRedTeam';
 import { downloadFile } from '../lib/exporters';
@@ -54,6 +54,20 @@ export default function KillChain() {
     }
     return result;
   }, [chain, phaseFilter, stepSearch, stepSort]);
+
+  // Chain summary stats
+  const chainStats = useMemo(() => {
+    if (!chain) return null;
+    const phasesCovered = new Set(chain.map(s => s.phase)).size;
+    const uniqueAssets  = new Set(chain.map(s => s.asset).filter(Boolean)).size;
+    const cveCount      = chain.filter(s => /cve-\d/i.test(s.exploited_vuln)).length;
+    // steps per MITRE phase for distribution chart
+    const phaseDist = PHASES.map(p => ({
+      phase: p,
+      count: chain.filter(s => s.phase.toLowerCase().includes(p.toLowerCase())).length,
+    })).filter(p => p.count > 0);
+    return { total: chain.length, phasesCovered, uniqueAssets, cveCount, phaseDist };
+  }, [chain]);
 
   const buildMarkdown = useCallback((steps: KillChainStep[], name: string) => {
     const lines = [
@@ -169,6 +183,54 @@ export default function KillChain() {
 
       {chain && (
         <div className="space-y-6">
+
+          {/* Summary stat cards */}
+          {chainStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Steps',      value: chainStats.total,         icon: <Zap className="w-4 h-4" />,        color: 'text-red-400',    border: 'border-red-500/20',    bg: 'bg-red-500/5'    },
+                { label: 'Phases Covered',   value: chainStats.phasesCovered, icon: <BarChart2 className="w-4 h-4" />,  color: 'text-orange-400', border: 'border-orange-500/20', bg: 'bg-orange-500/5' },
+                { label: 'Unique Assets',    value: chainStats.uniqueAssets,  icon: <Server className="w-4 h-4" />,     color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+                { label: 'CVEs Referenced',  value: chainStats.cveCount,      icon: <AlertCircle className="w-4 h-4" />,color: 'text-slate-200',  border: 'border-slate-700',     bg: 'bg-slate-900/30' },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl border ${s.border} ${s.bg} p-4 flex items-center gap-3`}>
+                  <div className={s.color}>{s.icon}</div>
+                  <div>
+                    <div className="text-xs text-slate-500">{s.label}</div>
+                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Phase distribution mini-chart */}
+          {chainStats && chainStats.phaseDist.length > 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Crosshair className="w-4 h-4 text-red-400" />
+                <span className="text-sm font-semibold text-slate-300">MITRE Phase Distribution</span>
+                <span className="ml-auto text-xs text-slate-500">{chain!.length} total steps</span>
+              </div>
+              <div className="space-y-2">
+                {chainStats.phaseDist.map(({ phase, count }) => {
+                  const pct = Math.round((count / chain!.length) * 100);
+                  return (
+                    <div key={phase} className="grid grid-cols-[130px_1fr_28px] items-center gap-2">
+                      <span className="text-xs text-slate-400 truncate">{phase}</span>
+                      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-red-500/60"
+                          ref={(el) => { if (el) el.style.width = `${pct}%`; }}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-500 text-right tabular-nums">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Zap className="w-5 h-5 text-red-400" /> Attack Vector Generated
