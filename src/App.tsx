@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { PresenceProvider } from './context/PresenceContext';
 import { useAuth } from './context/useAuth';
 import AppLayout from './components/AppLayout';
 import Landing from './pages/Landing';
@@ -88,12 +89,14 @@ function Shell() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <ToastProvider>
-          <Shell />
-          <ToastContainer />
-        </ToastProvider>
-      </BrowserRouter>
+      <PresenceProvider>
+        <BrowserRouter>
+          <ToastProvider>
+            <Shell />
+            <ToastContainer />
+          </ToastProvider>
+        </BrowserRouter>
+      </PresenceProvider>
     </AuthProvider>
   );
 }

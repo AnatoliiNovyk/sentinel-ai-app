@@ -160,3 +160,25 @@ export type AgentLog = {
   message: string;
   created_at: string;
 };
+
+// Real-time collaboration types
+export type Presence = {
+  id: string;
+  user_id: string;
+  org_id: string;
+  context_type: 'project' | 'scan' | 'report' | 'finding';
+  context_id: string;
+  last_seen_at: string;
+  cursor_x?: number;
+  cursor_y?: number;
+};
+
+export type FindingComment = {
+  id: string;
+  vulnerability_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  replies?: FindingComment[];
+};

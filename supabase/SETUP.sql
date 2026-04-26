@@ -351,5 +351,81 @@ CREATE INDEX IF NOT EXISTS idx_scan_jobs_pending ON scan_jobs(status, created_at
 CREATE INDEX IF NOT EXISTS idx_scan_jobs_scan ON scan_jobs(scan_id);
 
 -- =============================================================================
+-- 11. PRESENCE (Real-time collaboration — who's viewing what)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS presence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  context_type text NOT NULL,
+  context_id text NOT NULL,
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  cursor_x integer,
+  cursor_y integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT presence_context_check CHECK (context_type IN ('project', 'scan', 'report', 'finding')),
+  UNIQUE (user_id, org_id, context_type, context_id)
+);
+
+ALTER TABLE presence ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='presence' AND policyname='Users can view org presence') THEN
+    CREATE POLICY "Users can view org presence" ON presence FOR SELECT TO authenticated 
+      USING (org_id IN (SELECT org_id FROM team_members WHERE user_id = auth.uid()));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='presence' AND policyname='Users can update own presence') THEN
+    CREATE POLICY "Users can update own presence" ON presence FOR UPDATE TO authenticated 
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='presence' AND policyname='Users can insert own presence') THEN
+    CREATE POLICY "Users can insert own presence" ON presence FOR INSERT TO authenticated 
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_presence_org_context ON presence(org_id, context_type, context_id);
+CREATE INDEX IF NOT EXISTS idx_presence_last_seen ON presence(last_seen_at DESC);
+
+-- =============================================================================
+-- 12. FINDING COMMENTS (Team discussion on vulnerabilities)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS finding_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vulnerability_id uuid NOT NULL REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content text NOT NULL DEFAULT '',
+  parent_id uuid REFERENCES finding_comments(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finding_comments ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='finding_comments' AND policyname='Users can read org comments') THEN
+    CREATE POLICY "Users can read org comments" ON finding_comments FOR SELECT TO authenticated 
+      USING (user_id IN (SELECT user_id FROM team_members WHERE org_id IN (SELECT org_id FROM projects WHERE id IN (SELECT project_id FROM scans WHERE id IN (SELECT scan_id FROM vulnerabilities WHERE id = finding_comments.vulnerability_id)))));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='finding_comments' AND policyname='Users can insert comments') THEN
+    CREATE POLICY "Users can insert comments" ON finding_comments FOR INSERT TO authenticated 
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='finding_comments' AND policyname='Users can update own comments') THEN
+    CREATE POLICY "Users can update own comments" ON finding_comments FOR UPDATE TO authenticated 
+      USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='finding_comments' AND policyname='Users can delete own comments') THEN
+    CREATE POLICY "Users can delete own comments" ON finding_comments FOR DELETE TO authenticated 
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_finding_comments_vulnerability ON finding_comments(vulnerability_id);
+CREATE INDEX IF NOT EXISTS idx_finding_comments_user ON finding_comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_finding_comments_parent ON finding_comments(parent_id);
+CREATE INDEX IF NOT EXISTS idx_finding_comments_created ON finding_comments(created_at DESC);
+
+-- =============================================================================
 -- DONE ✓
 -- =============================================================================

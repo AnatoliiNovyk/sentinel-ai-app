@@ -1,9 +1,12 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, Search, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
 import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
 import { useAuth } from '../context/useAuth';
+import { usePresence } from '../context/PresenceContext';
+import { PresenceAvatars } from './PresenceAvatars';
+import { CommentThread } from './CommentThread';
 
 type SlaFilter = 'all' | 'overdue' | 'at_risk';
 
@@ -345,9 +348,17 @@ function FindingRow({
   onSelect: () => void;
   onUpdated: (next: Vulnerability) => void;
 }) {
+  const { updatePresence } = usePresence();
   const [editing, setEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState(vuln.note);
   const [saving, setSaving] = useState(false);
+
+  // Track presence when expanded
+  useEffect(() => {
+    if (expanded) {
+      updatePresence('finding', vuln.id);
+    }
+  }, [expanded, vuln.id, updatePresence]);
 
   const changeStatus = async (status: StatusValue) => {
     setSaving(true);
@@ -517,6 +528,11 @@ function FindingRow({
 
           <div className="text-[11px] text-slate-600">
             Last updated {new Date(vuln.status_updated_at).toLocaleString()}
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+            <PresenceAvatars contextType="finding" contextId={vuln.id} />
+            <CommentThread vulnerabilityId={vuln.id} vulnerabilityTitle={vuln.title} />
           </div>
         </div>
       )}
