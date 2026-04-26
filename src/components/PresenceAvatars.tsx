@@ -26,8 +26,11 @@ export function PresenceAvatars({ contextType, contextId }: PresenceAvatarsProps
   if (members.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-slate-400">Viewing:</span>
+    <div className="flex items-center gap-2">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+      </span>
       <div className="flex -space-x-2">
         {members.map((member, idx) => (
           <div
@@ -39,6 +42,9 @@ export function PresenceAvatars({ contextType, contextId }: PresenceAvatarsProps
           </div>
         ))}
       </div>
+      <span className="text-xs text-slate-400">
+        {members.length} viewing
+      </span>
     </div>
   );
 }
