@@ -162,18 +162,28 @@ export default function Reports() {
       {loading ? (
         <div className="text-slate-500 text-sm">Loading...</div>
       ) : reports.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
-          <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <div className="text-slate-300 font-medium">No reports yet</div>
-          <div className="text-slate-500 text-sm mt-1">Generate your first report from a completed scan.</div>
+        <div className="rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-slate-500" />
+          </div>
+          <div className="text-slate-200 font-semibold text-lg">No reports yet</div>
+          <div className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">Generate executive or technical audit reports from your completed scans.</div>
+          <button
+            onClick={() => setModalOpen(true)}
+            disabled={projects.length === 0}
+            className="mt-6 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition shadow-lg shadow-emerald-500/20"
+          >
+            <Sparkles className="w-4 h-4" /> Generate first report
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {visible.length === 0 ? (
-            <div className="col-span-2 rounded-xl border border-dashed border-slate-800 p-12 text-center">
-              <Search className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-              <div className="text-sm text-slate-400">No reports match your filters.</div>
-              <button onClick={() => { setSearch(''); setKindFilter('all'); }} className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 transition">Clear filters</button>
+            <div className="col-span-2 rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-12 text-center">
+              <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+              <div className="text-slate-300 font-medium">No reports match your filters</div>
+              <div className="text-sm text-slate-500 mt-1">Try a different search term or report type.</div>
+              <button onClick={() => { setSearch(''); setKindFilter('all'); }} className="mt-4 inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 rounded-md px-3 py-1.5 transition">Clear filters</button>
             </div>
           ) : visible.map((r) => {
             const project = projects.find((p) => p.id === r.project_id);

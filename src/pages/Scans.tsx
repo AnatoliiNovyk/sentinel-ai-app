@@ -324,7 +324,11 @@ Respond ONLY with valid JSON in this exact format:
 
           <div className="space-y-2">
             {filteredScans.length === 0 && (
-              <div className="text-xs text-slate-500 text-center py-4">No scans match filters.</div>
+              <div className="py-8 text-center">
+                <Search className="w-6 h-6 text-slate-600 mx-auto mb-2" />
+                <div className="text-xs font-medium text-slate-400">No scans match filters</div>
+                <div className="text-xs text-slate-600 mt-0.5">Adjust scanner or status filter.</div>
+              </div>
             )}
             {filteredScans.map(scan => (
               <button

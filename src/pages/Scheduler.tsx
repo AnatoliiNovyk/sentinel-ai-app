@@ -267,10 +267,18 @@ export default function SchedulerPage() {
           <Loader2 className="w-5 h-5 animate-spin" /> Loading schedules...
         </div>
       ) : schedules.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
-          <Radar className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-          <div className="text-sm font-medium text-slate-300">No schedules yet</div>
-          <div className="text-xs text-slate-600 mt-1">Create your first scheduled scan above.</div>
+        <div className="rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
+            <Radar className="w-8 h-8 text-slate-500" />
+          </div>
+          <div className="text-slate-200 font-semibold text-lg">No schedules yet</div>
+          <div className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">Automate your security scans by creating a recurring schedule for any project.</div>
+          <button
+            onClick={() => setShowForm(true)}
+            className="mt-6 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition shadow-lg shadow-emerald-500/20"
+          >
+            <Plus className="w-4 h-4" /> Create first schedule
+          </button>
         </div>
       ) : (
         <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
@@ -326,7 +334,11 @@ export default function SchedulerPage() {
           {/* Table rows */}
           <div className="divide-y divide-slate-800/50">
             {sortedSchedules.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-slate-500">No schedules match the search.</div>
+              <div className="px-5 py-10 text-center">
+                <Search className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+                <div className="text-sm font-medium text-slate-400">No schedules match the search</div>
+                <div className="text-xs text-slate-600 mt-1">Try a different project name or scanner.</div>
+              </div>
             )}
             {sortedSchedules.map(s => {
               const cadenceLabel = CADENCES.find(c => c.hours === s.cadence_hours)?.label ?? `${s.cadence_hours}h`;

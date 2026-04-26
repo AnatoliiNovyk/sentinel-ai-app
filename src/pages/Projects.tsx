@@ -159,24 +159,27 @@ export default function Projects() {
       {loading ? (
         <div className="text-slate-500 text-sm">Loading projects...</div>
       ) : projects.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-16 text-center">
-          <FolderKanban className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <div className="text-slate-300 font-medium">No projects found</div>
-          <div className="text-slate-500 text-sm mt-1">Create your first project to start auditing.</div>
+        <div className="rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
+            <FolderKanban className="w-8 h-8 text-slate-500" />
+          </div>
+          <div className="text-slate-200 font-semibold text-lg">No projects yet</div>
+          <div className="text-slate-500 text-sm mt-2 max-w-xs mx-auto">Create your first project to start tracking assets and running security scans.</div>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-5 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md text-sm transition"
+            className="mt-6 inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition shadow-lg shadow-emerald-500/20"
           >
-            <Plus className="w-4 h-4" /> New project
+            <Plus className="w-4 h-4" /> Create first project
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visible.length === 0 ? (
-            <div className="col-span-3 rounded-xl border border-dashed border-slate-800 p-12 text-center">
-              <Search className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-              <div className="text-sm text-slate-400">No projects match your filters.</div>
-              <button onClick={() => { setSearch(''); setEnvFilter('all'); }} className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 transition">Clear filters</button>
+            <div className="col-span-3 rounded-xl border border-dashed border-slate-700/50 bg-slate-900/20 p-12 text-center">
+              <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+              <div className="text-slate-300 font-medium">No projects match your filters</div>
+              <div className="text-sm text-slate-500 mt-1">Try adjusting the search query or environment filter.</div>
+              <button onClick={() => { setSearch(''); setEnvFilter('all'); }} className="mt-4 inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 rounded-md px-3 py-1.5 transition">Clear filters</button>
             </div>
           ) : (
             visible.map((p) => {
