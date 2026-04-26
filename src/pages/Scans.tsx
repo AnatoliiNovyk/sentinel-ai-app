@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Shield, Play, X, FileText, Lock, Loader2, AlertTriangle, Search, Download, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import type { Scan, Vulnerability, Project } from '../lib/supabase';
 import { ScansService } from '../api/scans.service';
 import { callAiGateway } from '../lib/aiGateway';
@@ -262,6 +262,42 @@ Respond ONLY with valid JSON in this exact format:
     return stats;
   };
 
+  const scanSummary = useMemo(() => ({
+    total: scans.length,
+    running: scans.filter(s => s.status === 'running').length,
+    completed: scans.filter(s => s.status === 'completed').length,
+    failed: scans.filter(s => s.status === 'failed').length,
+  }), [scans]);
+
+  const exportVulnsCsv = useCallback(() => {
+    if (!vulnerabilities.length) return;
+    const headers = ['Title', 'Severity', 'Asset', 'CVE', 'Status', 'Description', 'Detected'];
+    const rows = vulnerabilities.map(v => [
+      v.title, v.severity, v.asset, v.cve_id ?? '', v.status,
+      (v.description ?? '').replace(/\n/g, ' '),
+      new Date(v.created_at).toLocaleDateString(),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `vulnerabilities-${selectedScanId?.slice(0, 8) ?? 'scan'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [vulnerabilities, selectedScanId]);
+
+  function relativeTime(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Yesterday';
+    if (days < 30) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString();
+  }
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -328,10 +364,55 @@ Respond ONLY with valid JSON in this exact format:
         totalVulnerabilities={vulnerabilities.length}
       />
 
+      {/* Project scan summary strip */}
+      {scans.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3 flex items-center gap-3">
+            <Shield className="w-5 h-5 text-slate-500" />
+            <div>
+              <div className="text-lg font-bold text-white">{scanSummary.total}</div>
+              <div className="text-xs text-slate-500">Total scans</div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500/70" />
+            <div>
+              <div className="text-lg font-bold text-emerald-300">{scanSummary.completed}</div>
+              <div className="text-xs text-emerald-400/60">Completed</div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-amber-500/70" />
+            <div>
+              <div className="text-lg font-bold text-amber-300">{scanSummary.running}</div>
+              <div className="text-xs text-amber-400/60">Running</div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 flex items-center gap-3">
+            <XCircle className="w-5 h-5 text-red-500/70" />
+            <div>
+              <div className="text-lg font-bold text-red-300">{scanSummary.failed}</div>
+              <div className="text-xs text-red-400/60">Failed</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Scans Sidebar */}
         <div className="lg:w-64 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Recent Scans</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recent Scans</h2>
+            {vulnerabilities.length > 0 && (
+              <button
+                onClick={exportVulnsCsv}
+                title="Export vulnerabilities CSV"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 px-2 py-1 rounded-md transition"
+              >
+                <Download className="w-3 h-3" /> CSV
+              </button>
+            )}
+          </div>
 
           {/* Search */}
           <div className="relative mb-2">
@@ -392,7 +473,7 @@ Respond ONLY with valid JSON in this exact format:
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-medium text-sm capitalize">{scan.scanner}</span>
-                  <span className="text-[10px] opacity-60">{new Date(scan.created_at).toLocaleDateString()}</span>
+                  <span className="text-[10px] opacity-60">{relativeTime(scan.created_at)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <ScanStatusBadge status={scan.status} active={selectedScanId === scan.id} />
