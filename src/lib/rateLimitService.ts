@@ -1,4 +1,4 @@
-import { supabase, ApiRateLimit, ApiUsage, DEFAULT_RATE_LIMITS } from './supabase';
+import { supabase, ApiRateLimit, DEFAULT_RATE_LIMITS } from './supabase';
 
 export async function getRateLimitConfig(planId: string): Promise<ApiRateLimit> {
   return DEFAULT_RATE_LIMITS[planId] || DEFAULT_RATE_LIMITS.free;

@@ -362,7 +362,12 @@ export default function Vulnerabilities() {
   const hasActiveFilter = sevFilter !== 'all' || statusFilter !== 'all' || projectFilter !== 'all' || hasCve || slaBreached || search;
 
   // ── Selection helpers ─────────────────────────────────────────────────────
-  const toggleOne  = (id: string) => setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const toggleOne  = (id: string) => setSelected(prev => {
+    const s = new Set(prev);
+    if (s.has(id)) s.delete(id);
+    else s.add(id);
+    return s;
+  });
   const toggleAll  = () => setSelected(prev => prev.size === paged.length ? new Set() : new Set(paged.map(v => v.id)));
   const clearSel   = () => setSelected(new Set());
 

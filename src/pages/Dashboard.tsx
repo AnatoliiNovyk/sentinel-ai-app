@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Activity,
   ArrowRight, Clock, Timer, Radar, TrendingDown, TrendingUp, Minus, Zap, Search, ArrowUpDown, ShieldAlert, ExternalLink,
-  Users, Target, CheckCheck, UserCheck,
+  Users, Target, CheckCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
@@ -10,6 +10,12 @@ import { useAuth } from '../context/useAuth';
 import Sparkline from '../components/Sparkline';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { SkeletonList } from '../components/Skeleton';
+
+type TeamMember = {
+  id: string;
+  role: string;
+  auth?: { users?: { email?: string } };
+};
 
 export default function Dashboard() {
   const { user, profile, organizations } = useAuth();
@@ -19,7 +25,7 @@ export default function Dashboard() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [findingsSearch, setFindingsSearch] = useState('');
   const [findingsSort, setFindingsSort] = useState<'severity' | 'newest' | 'oldest' | 'title'>('severity');
@@ -40,7 +46,7 @@ export default function Dashboard() {
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
       setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
-      setTeamMembers((teamRes.data ?? []) as any[]);
+      setTeamMembers((teamRes.data ?? []) as TeamMember[]);
       setLoading(false);
     };
     fetchAll();
@@ -531,7 +537,7 @@ export default function Dashboard() {
             <div className="space-y-3 flex-1">
               <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Active members</div>
               <div className="flex flex-wrap gap-2">
-                {teamMembers.slice(0, 5).map((tm, i) => (
+                {teamMembers.slice(0, 5).map((tm) => (
                   <div key={tm.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-slate-800/50 border border-slate-700 hover:border-emerald-500/40 transition">
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-xs font-semibold text-slate-950">
                       {tm.role === 'owner' ? '👤' : tm.role === 'admin' ? '⚙️' : '👥'}

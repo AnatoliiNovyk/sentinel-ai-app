@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MessageCircle, Send, Trash2, Edit2, X, Clock } from 'lucide-react';
-import { useAuth } from '../api/client';
+import { useAuth } from '../context/useAuth';
 import { FindingComment } from '../lib/supabase';
 import { getComments, addComment, updateComment, deleteComment, subscribeToComments } from '../lib/commentService';
 
@@ -20,7 +20,7 @@ interface CommentThreadProps {
 }
 
 export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentThreadProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [comments, setComments] = useState<FindingComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');

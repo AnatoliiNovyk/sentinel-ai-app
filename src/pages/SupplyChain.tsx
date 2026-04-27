@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Filter, Search, ArrowUpDown, X } from 'lucide-react';
+import { PackageSearch, Upload, AlertTriangle, CheckCircle2, Shield, RefreshCw, FileJson, Download, Search, ArrowUpDown, X } from 'lucide-react';
 import { getGlobalScaAnalyzer, type DependencyRisk } from '../lib/supplyChain';
 import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -16,6 +16,8 @@ interface ScanResultUI {
     fixed_in?: string;
   }>;
 }
+
+const SEV_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
 export default function SupplyChain() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -116,8 +118,6 @@ export default function SupplyChain() {
     const fixable = allVulns.filter(v => v.fixed_in).length;
     return { total: allVulns.length, critical: count('critical'), high: count('high'), medium: count('medium'), low: count('low'), fixable };
   }, [results]);
-
-  const SEV_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
   const filteredVulnDeps = sevFilter === 'all'
     ? vulnerableDeps

@@ -1,6 +1,7 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useEffect, useRef, useState, ReactNode, useCallback, useContext } from 'react';
 import { supabase, Presence } from '../lib/supabase';
-import { useAuth } from '../api/client';
+import { useAuth } from './useAuth';
 
 type PresenceContextValue = {
   activePresence: Record<string, Presence[]>; // context_id -> Presence[]
@@ -14,7 +15,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user, profile, organizations } = useAuth();
   const [activePresence, setActivePresence] = useState<Record<string, Presence[]>>({});
   const presenceRef = useRef<{ type: Presence['context_type']; id: string } | null>(null);
-  const subscriptionRef = useRef<any>(null);
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
   // Update user's presence
   const updatePresence = useCallback(

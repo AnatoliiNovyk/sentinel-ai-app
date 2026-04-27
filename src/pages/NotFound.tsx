@@ -1,4 +1,4 @@
-import { ShieldAlert, Shield, ArrowLeft, Home, Navigation, BarChart3, FileText, Settings, HelpCircle } from 'lucide-react';
+import { ShieldAlert, Shield, ArrowLeft, Home, Navigation, BarChart3, FileText, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function NotFound() {

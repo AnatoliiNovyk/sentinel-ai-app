@@ -121,7 +121,7 @@ export default function Projects() {
         if (sort === 'name') return a.name.localeCompare(b.name);
         return 0;
       });
-  }, [projects, search, envFilter, riskFilter, sort]);
+  }, [projects, search, envFilter, riskFilter, tagFilter, sort]);
 
   const { sentinelRef, stuck } = useStickyHeader();
 
@@ -249,7 +249,13 @@ export default function Projects() {
               className="w-full bg-slate-900 border border-slate-800 rounded-md pl-8 pr-8 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none transition"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
+              <button
+                type="button"
+                title="Clear search"
+                aria-label="Clear search"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -289,6 +295,8 @@ export default function Projects() {
             ))}
           </div>
           <select
+            title="Sort projects"
+            aria-label="Sort projects"
             value={sort}
             onChange={e => setSort(e.target.value as typeof sort)}
             className="bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-xs text-slate-300 focus:border-emerald-500 focus:outline-none"
@@ -662,6 +670,9 @@ function KanbanBoard({
                         <p className="text-xs text-slate-500 truncate">{p.target}</p>
                       </button>
                       <button
+                        type="button"
+                        title="Delete project"
+                        aria-label="Delete project"
                         onClick={() => onDelete(p)}
                         className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition shrink-0"
                       >

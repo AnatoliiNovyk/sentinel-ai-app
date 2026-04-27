@@ -128,7 +128,7 @@ async function consultOllama(prompt: string): Promise<string> {
 function sanitizeTarget(target: string): string {
   const trimmed = target.trim();
   // Allow: IPv4, IPv6, CIDR, hostnames (letters/digits/dots/hyphens), optionally with port range
-  if (!/^[a-zA-Z0-9.\-:/\[\]]+$/.test(trimmed)) {
+  if (!/^[a-zA-Z0-9.\-:/[\]]+$/.test(trimmed)) {
     throw new Error(`Invalid scan target: "${trimmed}"`);
   }
   return trimmed;
@@ -144,16 +144,6 @@ function portSeverity(port: number, service: string): Finding['severity'] {
   if (medium.includes(port)) return 'medium';
   if (service === 'unknown' || service === '') return 'low';
   return 'info';
-}
-
-interface NmapPort {
-  portid: string;
-  protocol: string;
-  state: string;
-  service: string;
-  product: string;
-  version: string;
-  cve?: string;
 }
 
 /**

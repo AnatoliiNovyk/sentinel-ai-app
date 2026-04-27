@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  ArrowLeft,
   Cloud,
   Globe,
   Server,
@@ -28,7 +27,6 @@ import {
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
-import { AVAILABLE_SCANNERS } from '../lib/scanMock';
 import { dispatchScan } from '../lib/scanDispatch';
 import { errorToUserMessage } from '../lib/errors';
 import { buildReport } from '../lib/reportBuilder';

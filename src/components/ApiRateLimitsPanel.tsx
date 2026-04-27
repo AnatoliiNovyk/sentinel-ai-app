@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { AlertCircle, Zap, TrendingUp } from 'lucide-react';
-import { ApiRateLimit, ApiUsage } from '../lib/supabase';
-import { getRateLimitConfig, getCurrentUsage, checkRateLimit } from '../lib/rateLimitService';
+import { ApiRateLimit } from '../lib/supabase';
+import { getRateLimitConfig, getCurrentUsage } from '../lib/rateLimitService';
 
 interface ApiRateLimitsPanelProps {
   userId: string;

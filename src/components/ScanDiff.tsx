@@ -80,6 +80,18 @@ export default function ScanDiff({
     });
   }, [latestVulns, previousVulns]);
 
+  const [diffSearch, setDiffSearch] = useState('');
+  const [diffStatus, setDiffStatus] = useState<'all' | 'new' | 'fixed' | 'persisted'>('all');
+
+  const visibleDiff = useMemo(() => {
+    const q = diffSearch.trim().toLowerCase();
+    return diff.filter(d => {
+      if (diffStatus !== 'all' && d.status !== diffStatus) return false;
+      if (q && !d.title.toLowerCase().includes(q) && !d.asset.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [diff, diffSearch, diffStatus]);
+
   if (!latest || !previous) {
     return (
       <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center">
@@ -96,18 +108,6 @@ export default function ScanDiff({
   const fixedCount     = diff.filter(d => d.status === 'fixed').length;
   const persistedCount = diff.filter(d => d.status === 'persisted').length;
   const trend          = newCount - fixedCount;
-
-  const [diffSearch, setDiffSearch] = useState('');
-  const [diffStatus, setDiffStatus] = useState<'all' | 'new' | 'fixed' | 'persisted'>('all');
-
-  const visibleDiff = useMemo(() => {
-    const q = diffSearch.trim().toLowerCase();
-    return diff.filter(d => {
-      if (diffStatus !== 'all' && d.status !== diffStatus) return false;
-      if (q && !d.title.toLowerCase().includes(q) && !d.asset.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [diff, diffSearch, diffStatus]);
 
   return (
     <div className="space-y-4">

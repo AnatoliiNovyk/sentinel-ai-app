@@ -7,14 +7,12 @@ export default function PublicReport({ token }: { token: string }) {
   const [status, setStatus] = useState<'loading' | 'notfound' | 'ok'>('loading');
   const [darkMode, setDarkMode] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [scrollPct, setScrollPct] = useState(0);
   const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
       const el = document.documentElement;
       const pct = el.scrollHeight <= el.clientHeight ? 0 : Math.min(100, (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100);
-      setScrollPct(pct);
       if (progressRef.current) progressRef.current.style.width = `${pct}%`;
     };
     window.addEventListener('scroll', onScroll, { passive: true });

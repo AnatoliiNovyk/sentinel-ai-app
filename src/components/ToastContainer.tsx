@@ -18,7 +18,7 @@ const ICONS: Record<ToastType, typeof CheckCircle2> = {
 
 const DURATION_MS = 4000;
 
-function ProgressBar({ type, id, onRemove }: { type: ToastType; id: string; onRemove: (id: string) => void }) {
+function ProgressBar({ type, id }: { type: ToastType; id: string }) {
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function ToastContainer() {
             >
               <X className="w-3.5 h-3.5" />
             </button>
-            <ProgressBar type={toast.type} id={toast.id} onRemove={removeToast} />
+            <ProgressBar type={toast.type} id={toast.id} />
           </div>
         );
       })}

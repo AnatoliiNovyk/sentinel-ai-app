@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, X, Download, ArrowLeft, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, Loader, CheckSquare, Square, BarChart2, Clock } from 'lucide-react';
+import { FileText, X, Download, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, CheckSquare, Square, Clock } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { buildReport } from '../lib/reportBuilder';
@@ -9,6 +9,9 @@ import { useToast } from '../lib/toastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonCardGrid } from '../components/Skeleton';
 import { useStickyHeader } from '../lib/useStickyHeader';
+
+const EXEC_FIELDS = ['summary', 'risk_assessment', 'top_findings', 'recommendations'] as const;
+const TECH_FIELDS = ['vulnerabilities', 'assets_scanned', 'severity_distribution', 'remediation_guidance'] as const;
 
 export default function Reports() {
   const { user } = useAuth();
@@ -63,7 +66,7 @@ export default function Reports() {
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let filtered = reports
+    const filtered = reports
       .filter(r => kindFilter === 'all' || r.kind === kindFilter)
       .filter(r => !q || r.title.toLowerCase().includes(q) || (projects.find(p => p.id === r.project_id)?.name ?? '').toLowerCase().includes(q));
     
@@ -75,7 +78,12 @@ export default function Reports() {
     return filtered;
   }, [reports, kindFilter, search, projects, sortBy]);
 
-  const toggleBulk = (id: string) => setBulkIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleBulk = (id: string) => setBulkIds(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
   const selectAll = () => setBulkIds(new Set(visible.map(r => r.id)));
   const clearBulk = () => setBulkIds(new Set());
 
@@ -288,7 +296,13 @@ export default function Reports() {
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete selected
               </button>
-              <button onClick={clearBulk} className="text-xs text-slate-500 hover:text-white transition">
+              <button
+                type="button"
+                title="Clear selection"
+                aria-label="Clear selection"
+                onClick={clearBulk}
+                className="text-xs text-slate-500 hover:text-white transition"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -799,8 +813,6 @@ function GenerateModal({
   const [generating, setGenerating] = useState(false);
   
   // Field selection
-  const EXEC_FIELDS = ['summary', 'risk_assessment', 'top_findings', 'recommendations'] as const;
-  const TECH_FIELDS = ['vulnerabilities', 'assets_scanned', 'severity_distribution', 'remediation_guidance'] as const;
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS));
   const [templateName, setTemplateName] = useState('');
   const [templates, setTemplates] = useState<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>(

@@ -14,6 +14,8 @@ type KillChainStep = {
   asset: string;
 };
 
+const PHASES = ['Recon', 'Weaponize', 'Delivery', 'Exploitation', 'Installation', 'Command & Control', 'Exfiltration'];
+
 export default function KillChain() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string>('');
@@ -29,8 +31,6 @@ export default function KillChain() {
   const toast = useToast();
 
   const projectName = projects.find(p => p.id === projectId)?.name ?? 'Unknown';
-
-  const PHASES = ['Recon', 'Weaponize', 'Delivery', 'Exploitation', 'Installation', 'Command & Control', 'Exfiltration'];
 
   const filteredChain = useMemo(() => {
     if (!chain) return null;
@@ -112,7 +112,7 @@ export default function KillChain() {
     setCopied(true);
     toast.success('Kill chain copied to clipboard.');
     setTimeout(() => setCopied(false), 2000);
-  }, [filteredChain, projectName, buildMarkdown]);
+  }, [filteredChain, projectName, buildMarkdown, toast]);
 
   useEffect(() => {
     supabase.from('projects').select('*').order('name').then(({ data }) => {

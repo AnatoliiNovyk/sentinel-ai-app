@@ -28,7 +28,6 @@ export default function SchedulesPanel({ projects }: { projects: Project[] }) {
 
   const activeCount  = schedules.filter(s => s.enabled).length;
   const pausedCount  = schedules.filter(s => !s.enabled).length;
-  const overdueCount = schedules.filter(s => s.enabled && new Date(s.next_run_at) < new Date()).length;
 
   const load = useCallback(async () => {
     if (!user) return;

@@ -11,6 +11,8 @@ interface ScanHistory {
   error?: string;
 }
 
+const RISK_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
+
 export default function OsintAnalyzer() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,8 +22,6 @@ export default function OsintAnalyzer() {
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
   const toast = useToast();
-
-  const RISK_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
 
   const visibleResults = useMemo(() => {
     const filtered = sevFilter === 'all'
@@ -199,6 +199,7 @@ export default function OsintAnalyzer() {
             ].map(({ label, value, icon: Icon, color, dot }) => (
               <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
                 <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className="w-3.5 h-3.5 text-slate-500" />
                   <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
                   <span className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{label}</span>
                 </div>
