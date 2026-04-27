@@ -5,13 +5,18 @@ import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockNavigate, mockChannel } = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
-  mockChannel: {
+const { mockNavigate, mockRemoveChannel, mockMakeChannel } = vi.hoisted(() => {
+  const makeChannel = () => ({
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
-  },
-}));
+  });
+
+  return {
+    mockNavigate: vi.fn(),
+    mockRemoveChannel: vi.fn(),
+    mockMakeChannel: vi.fn(makeChannel),
+  };
+});
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
@@ -62,14 +67,14 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
           insert: () => Promise.resolve({ data: null, error: null }),
         };
       },
-      channel: () => mockChannel,
-      removeChannel: vi.fn(),
+      channel: () => mockMakeChannel(),
+      removeChannel: mockRemoveChannel,
     },
   };
 });
 
 vi.mock('../../context/useAuth', () => {
-  const _user = { id: 'user-1' };
+  const _user = null;
   const _profile = {
     id: 'user-1',
     email: 'test@example.com',
@@ -120,12 +125,13 @@ describe('Dashboard — layout', () => {
     ).toBeInTheDocument();
   });
 
-  it.skip('navigates to /chat when "Launch AI audit" clicked', () => {
+  it('navigates to /chat when "Launch AI audit" clicked', async () => {
     renderDashboard();
-    const launchButton = screen.getByRole('button', { name: /launch ai audit/i });
+    const launchButton = await screen.findByRole('button', { name: /launch ai audit/i }, { timeout: 5000 });
     fireEvent.click(launchButton);
     expect(mockNavigate).toHaveBeenCalledWith('/chat');
   });
+
 });
 
 describe('Dashboard — KPI cards', () => {
