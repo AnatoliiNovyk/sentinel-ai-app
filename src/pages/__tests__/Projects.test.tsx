@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Projects from '../Projects';
 import type { Project } from '../../lib/supabase';
 
@@ -64,6 +64,11 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('Projects — empty state', () => {
   beforeEach(() => {
