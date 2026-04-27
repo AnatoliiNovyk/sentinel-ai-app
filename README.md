@@ -96,6 +96,7 @@ For long or repeated Vitest runs (especially on Windows), use the heap-safe comm
 
 | Command | Purpose |
 |---|---|
+| `npm run test:dashboard:stable` | Runs only Dashboard suite with increased Node heap |
 | `npm run test:trio:stable` | Runs the critical trio: Dashboard, Projects, Reports with increased Node heap |
 | `npm run test:full:stability:heap` | Runs full stability suite with increased Node heap |
 

@@ -14,6 +14,7 @@
     "test:run": "vitest run",
     "test:targeted:stability": "vitest run src/pages/__tests__/Dashboard.test.tsx src/pages/__tests__/Chat.integration.test.tsx src/pages/__tests__/Scans.integration.test.tsx --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:full:stability": "vitest run --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
+    "test:dashboard:stable": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run src/pages/__tests__/Dashboard.test.tsx --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:trio:stable": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run src/pages/__tests__/Dashboard.test.tsx src/pages/__tests__/Projects.test.tsx src/pages/__tests__/Reports.test.tsx --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:full:stability:heap": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:coverage": "vitest run --coverage",
