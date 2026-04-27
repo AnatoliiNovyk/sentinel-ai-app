@@ -1,5 +1,32 @@
 import { supabase } from './client';
 
+async function getFunctionErrorMessage(error: unknown): Promise<string> {
+  if (error instanceof Error) {
+    const maybeContext = error as Error & { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } };
+    if (maybeContext.context?.json) {
+      try {
+        const payload = await maybeContext.context.json() as { error?: string; message?: string };
+        if (payload?.error) return payload.error;
+        if (payload?.message) return payload.message;
+      } catch {
+        // Ignore JSON parse failures and continue fallback chain.
+      }
+    }
+    if (maybeContext.context?.text) {
+      try {
+        const text = await maybeContext.context.text();
+        if (text?.trim()) return text.trim();
+      } catch {
+        // Ignore text read failures and continue fallback chain.
+      }
+    }
+    if (error.message?.trim()) return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'Scan dispatch failed due to an unknown service error.';
+}
+
 export const ScansService = {
   /**
    * Fetches all projects the user has access to via RLS.
@@ -75,6 +102,7 @@ export const ScansService = {
     });
 
     if (error) {
+      const message = await getFunctionErrorMessage(error);
       await supabase
         .from('scans')
         .update({
@@ -84,7 +112,7 @@ export const ScansService = {
           completed_at: new Date().toISOString(),
         })
         .eq('id', scan.id);
-      throw error;
+      throw new Error(message);
     }
 
     await supabase

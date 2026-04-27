@@ -188,12 +188,20 @@ const Scans = () => {
     const project = projects.find(p => p.id === selectedProjectId);
     if (!project) return;
 
+    const effectiveTarget = (newScanConfig.target || project.target || '').trim();
+    if (!effectiveTarget) {
+      const targetError = 'Failed to start scan: Target is required. Provide a host, IP, or URL.';
+      toast.error(targetError);
+      setAiGenError(targetError);
+      return;
+    }
+
     setIsDispatching(true);
     try {
       await ScansService.dispatchScan(
         project.id,
         newScanConfig.scanner,
-        newScanConfig.target || project.target,
+        effectiveTarget,
         project.org_id
       );
       setShowNewScanModal(false);
@@ -338,7 +346,7 @@ Respond ONLY with valid JSON in this exact format:
         <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
           <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span className="flex-1">
-            <strong>Demo Mode:</strong> The real scanner agent is unavailable. Results shown are simulated and do not reflect your actual infrastructure.
+            <strong>Demo Mode:</strong> The selected scan is a simulated historical run. Its findings do not represent a live scan of your current infrastructure.
           </span>
           <button
             onClick={() => setShowMockWarning(false)}
