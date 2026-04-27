@@ -437,6 +437,7 @@ export default function Projects() {
 
 function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { user, organizations } = useAuth();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [description] = useState('');
 
@@ -453,23 +454,26 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || organizations.length === 0) {
+    if (!user) {
       toast.warning('You must be a member of an organization to create a project.');
       return;
     }
     setSaving(true);
     
     const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const primaryOrgId = organizations[0]?.id;
 
-    const { error } = await supabase.from('projects').insert({
+    const payload = {
       user_id: user.id,
-      org_id: organizations[0].id,
       name,
       description,
       target,
       environment,
       tags,
-    });
+      ...(primaryOrgId ? { org_id: primaryOrgId } : {}),
+    };
+
+    const { error } = await supabase.from('projects').insert(payload);
 
     if (error) {
       toast.error(`Error creating project: ${error.message}`);
@@ -505,7 +509,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <div>
             <label className="block text-sm text-slate-300 mb-1.5">Organization</label>
             <div className="text-xs text-emerald-400 bg-emerald-400/5 border border-emerald-400/10 px-3 py-2 rounded-md">
-              {organizations[0]?.name || 'Loading organization...'}
+              {organizations[0]?.name || 'Personal workspace (no organization)'}
             </div>
           </div>
           <div>
