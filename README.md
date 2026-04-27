@@ -105,6 +105,9 @@ For long or repeated Vitest runs (especially on Windows), use the heap-safe comm
 
 CI also runs `test:trio:stable` as a dedicated stability job.
 
+Do not use raw `npx vitest run ...` for Dashboard/Trio suites in this repository.
+Use `test:safe:*` commands to avoid worker OOM on Windows.
+
 If `quality:check` passes locally, the branch is ready for CI review.
 
 ---
