@@ -766,7 +766,7 @@ jobs:
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function Integrations() {
+function IntegrationsLegacy() {
   const [tab, setTab] = useState<Tab>('services');
   const [services, setServices] = useState<Record<string, ServiceConfig>>(loadServices);
   const [webhooks, setWebhooks] = useState<Webhook[]>(loadWebhooks);

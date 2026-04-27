@@ -61,6 +61,19 @@ vi.mock('../../lib/supabase', () => ({
           }),
         };
       }
+      if (table === 'scan_jobs') {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: () => ({
+                order: () => ({
+                  limit: () => Promise.resolve({ data: [], error: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
       return {
         select: () => ({
           eq: () => ({
@@ -69,6 +82,11 @@ vi.mock('../../lib/supabase', () => ({
         }),
       };
     },
+    channel: () => ({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis(),
+    }),
+    removeChannel: vi.fn(),
   },
 }));
 
@@ -136,17 +154,19 @@ describe('ProjectDetail', () => {
 
   it('renders project name as heading', async () => {
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
-    await waitFor(() => expect(screen.getByText('Beta Project')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Beta Project' })).toBeInTheDocument(),
+    );
   });
 
-  it('renders "Back to projects" button', () => {
+  it('renders breadcrumb "Projects" button', () => {
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
-    expect(screen.getByText(/Back to projects/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /projects/i })).toBeInTheDocument();
   });
 
-  it('calls onBack when "Back to projects" is clicked', () => {
+  it('calls onBack when breadcrumb "Projects" is clicked', () => {
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
-    fireEvent.click(screen.getByText(/Back to projects/i));
+    fireEvent.click(screen.getByRole('button', { name: /projects/i }));
     expect(mockOnBack).toHaveBeenCalledTimes(1);
   });
 

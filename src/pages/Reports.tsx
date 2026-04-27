@@ -41,9 +41,6 @@ export default function Reports() {
 
   // Bulk selection
   const [bulkIds, setBulkIds] = useState<Set<string>>(new Set());
-  const toggleBulk = (id: string) => setBulkIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const selectAll = () => setBulkIds(new Set(visible.map(r => r.id)));
-  const clearBulk = () => setBulkIds(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
 
@@ -54,7 +51,7 @@ export default function Reports() {
     toast.success('Report deleted.');
   }, [toast]);
 
-  const exportReportsList = useCallback(() => {
+  const exportReportsList = () => {
     const date = new Date().toISOString().split('T')[0];
     const rows = ['Title,Project,Type,Created Date'];
     for (const r of visible) {
@@ -62,7 +59,7 @@ export default function Reports() {
       rows.push(`"${r.title}","${projectName}",${r.kind},"${new Date(r.created_at).toLocaleDateString()}"`);
     }
     downloadFile(`reports-list-${date}.csv`, rows.join('\n'), 'text/csv');
-  }, [visible, projects]);
+  };
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -77,6 +74,10 @@ export default function Reports() {
     
     return filtered;
   }, [reports, kindFilter, search, projects, sortBy]);
+
+  const toggleBulk = (id: string) => setBulkIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setBulkIds(new Set(visible.map(r => r.id)));
+  const clearBulk = () => setBulkIds(new Set());
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -728,7 +729,6 @@ function escapeXml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
-}
 }
 
 function renderPrintableHtml(report: Report): string {

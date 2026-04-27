@@ -1,6 +1,23 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+if (!('IntersectionObserver' in globalThis)) {
+  class MockIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+    root = null;
+    rootMargin = '0px';
+    thresholds = [0];
+  }
+
+  (globalThis as unknown as { IntersectionObserver: typeof MockIntersectionObserver }).IntersectionObserver =
+    MockIntersectionObserver;
+}
+
 if (!HTMLElement.prototype.scrollTo) {
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
     value: vi.fn(),

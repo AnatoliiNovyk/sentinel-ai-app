@@ -145,8 +145,10 @@ export default function AgentLogsPanel({ projectId }: Props) {
         {loading ? (
           <div className="text-slate-600 italic">Loading logs...</div>
         ) : logs.length === 0 ? (
-          <div className="text-slate-600 italic">No logs yet. Logs will appear here when a scan runs.</div>
-          <div className="text-slate-600 italic">No {levelFilter !== 'all' ? levelFilter : ''} logs to display.</div>
+          <>
+            <div className="text-slate-600 italic">No logs yet. Logs will appear here when a scan runs.</div>
+            <div className="text-slate-600 italic">No {levelFilter !== 'all' ? levelFilter : ''} logs to display.</div>
+          </>
         ) : (
           visibleLogs.map((log) => (
             <div key={log.id} className="flex gap-3 leading-5">

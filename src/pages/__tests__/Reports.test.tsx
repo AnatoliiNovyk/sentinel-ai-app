@@ -122,10 +122,10 @@ describe('Reports — with reports', () => {
     );
   });
 
-  it('shows kind badge (executive)', async () => {
+  it('shows kind badge (Executive)', async () => {
     render(<Reports />);
     await waitFor(() =>
-      expect(screen.getByText('executive')).toBeInTheDocument(),
+      expect(screen.getByText('Executive')).toBeInTheDocument(),
     );
   });
 

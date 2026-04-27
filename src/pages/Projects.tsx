@@ -18,6 +18,7 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
 
 export default function Projects() {
   const { user } = useAuth();
+  const toast = useToast();
 
   const relTime = (iso: string) => {
     const diff = Date.now() - new Date(iso).getTime();
@@ -41,6 +42,8 @@ export default function Projects() {
   const [viewMode, setViewMode] = useState<'grid' | 'kanban'>('grid');
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmName, setConfirmName] = useState('');
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -412,7 +415,8 @@ export default function Projects() {
                   <Clock className="w-3 h-3" />{relTime(p.created_at)}
                 </div>
               </button>
-            );})}
+            );
+            })
           )}
         </div>
       )}
