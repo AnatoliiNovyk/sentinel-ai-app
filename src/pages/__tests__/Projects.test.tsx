@@ -98,13 +98,14 @@ describe('Projects — with projects', () => {
     await waitFor(() => expect(screen.getByText('Alpha Project')).toBeInTheDocument());
   });
 
-  it.skip('renders environment badge', async () => {
+  it('renders environment badge', async () => {
     mockOrder.mockResolvedValue({
       data: [makeProject({ environment: 'cloud' })],
       error: null,
     });
     render(<Projects />);
-    await waitFor(() => expect(screen.getByText(/cloud/i)).toBeInTheDocument());
+    const matches = await screen.findAllByText(/cloud/i);
+    expect(matches.length).toBeGreaterThan(0);
   });
 
   it('renders target address on card', async () => {
@@ -139,13 +140,13 @@ describe('Projects — delete', () => {
     mockOrder
       .mockResolvedValueOnce({ data: [makeProject()], error: null })
       .mockResolvedValue({ data: [], error: null });
-    const { container } = render(<Projects />);
+    render(<Projects />);
     await waitFor(() => screen.getByText('Alpha Project'));
-    const deleteBtn = container.querySelector('[aria-label="Delete project"]') as Element;
-    expect(deleteBtn).toBeTruthy();
+    const deleteBtn = screen.getByLabelText('Delete project');
     fireEvent.click(deleteBtn);
-    await waitFor(() => screen.getByRole('button', { name: /delete project/i }));
-    fireEvent.click(screen.getByRole('button', { name: /delete project/i }));
+
+    const confirmBtn = await screen.findByRole('button', { name: /^delete project$/i });
+    fireEvent.click(confirmBtn);
     await waitFor(() => expect(mockDeleteEq).toHaveBeenCalledWith('id', 'proj-1'));
   });
 });
