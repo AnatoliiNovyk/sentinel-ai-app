@@ -73,6 +73,7 @@ describe('Projects — empty state', () => {
   it('renders "Projects" heading', async () => {
     render(<Projects />);
     expect(screen.getByText('Projects')).toBeInTheDocument();
+    await screen.findByText('No projects yet');
   });
 
   it('shows "No projects yet" empty state', async () => {
@@ -82,8 +83,9 @@ describe('Projects — empty state', () => {
     );
   });
 
-  it('shows "New project" button', () => {
+  it('shows "New project" button', async () => {
     render(<Projects />);
+    await screen.findByText('No projects yet');
     expect(screen.getAllByText('New project').length).toBeGreaterThanOrEqual(1);
   });
 });

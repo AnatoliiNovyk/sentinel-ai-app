@@ -85,9 +85,10 @@ describe('Reports — empty state', () => {
     mockProjectsEq.mockResolvedValue({ data: [], error: null });
   });
 
-  it('renders "Reports" heading', () => {
+  it('renders "Reports" heading', async () => {
     render(<Reports />);
     expect(screen.getByText('Reports')).toBeInTheDocument();
+    await screen.findByText('No reports yet');
   });
 
   it('shows empty state when no reports', async () => {
