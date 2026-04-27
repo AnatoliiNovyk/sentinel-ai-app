@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Projects from '../Projects';
@@ -135,7 +135,7 @@ describe('Projects — with projects', () => {
 });
 
 describe('Projects — delete', () => {
-  it.skip('calls supabase delete when Delete button clicked', async () => {
+  it('calls supabase delete when Delete button clicked', async () => {
     // First load returns project; subsequent calls return empty
     mockOrder
       .mockResolvedValueOnce({ data: [makeProject()], error: null })
@@ -145,7 +145,8 @@ describe('Projects — delete', () => {
     const deleteBtn = screen.getByLabelText('Delete project');
     fireEvent.click(deleteBtn);
 
-    const confirmBtn = await screen.findByRole('button', { name: /^delete project$/i });
+    const dialog = await screen.findByRole('dialog', { name: /delete project/i });
+    const confirmBtn = within(dialog).getByRole('button', { name: /^delete project$/i });
     fireEvent.click(confirmBtn);
     await waitFor(() => expect(mockDeleteEq).toHaveBeenCalledWith('id', 'proj-1'));
   });

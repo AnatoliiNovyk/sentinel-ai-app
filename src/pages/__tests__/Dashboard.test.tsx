@@ -130,12 +130,7 @@ describe('Dashboard — layout', () => {
 
   it.skip('navigates to /chat when "Launch AI audit" clicked', async () => {
     renderDashboard();
-    await waitForDashboardLoaded();
-    const launchButton = await screen.findByRole(
-      'button',
-      { name: /launch ai audit/i },
-      { timeout: 5000 },
-    );
+    const launchButton = await screen.findByRole('button', { name: /launch ai audit/i }, { timeout: 5000 });
     fireEvent.click(launchButton);
     expect(mockNavigate).toHaveBeenCalledWith('/chat');
   });
