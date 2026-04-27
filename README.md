@@ -99,6 +99,9 @@ For long or repeated Vitest runs (especially on Windows), use the heap-safe comm
 | `npm run test:dashboard:stable` | Runs only Dashboard suite with increased Node heap |
 | `npm run test:trio:stable` | Runs the critical trio: Dashboard, Projects, Reports with increased Node heap |
 | `npm run test:full:stability:heap` | Runs full stability suite with increased Node heap |
+| `npm run test:safe:dashboard` | Runs Dashboard via PowerShell helper (safe wrapper) |
+| `npm run test:safe:trio` | Runs trio via PowerShell helper (safe wrapper) |
+| `npm run test:safe:full` | Runs full suite via PowerShell helper (safe wrapper) |
 
 CI also runs `test:trio:stable` as a dedicated stability job.
 

@@ -17,6 +17,10 @@
     "test:dashboard:stable": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run src/pages/__tests__/Dashboard.test.tsx --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:trio:stable": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run src/pages/__tests__/Dashboard.test.tsx src/pages/__tests__/Projects.test.tsx src/pages/__tests__/Reports.test.tsx --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
     "test:full:stability:heap": "node --max-old-space-size=6144 ./node_modules/vitest/vitest.mjs run --pool=forks --poolOptions.forks.maxForks=1 --poolOptions.forks.minForks=1",
+    "test:safe": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1",
+    "test:safe:dashboard": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite dashboard",
+    "test:safe:trio": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite trio",
+    "test:safe:full": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite full",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "quality:check": "npm run check:no-js-duplicates && npm run lint -- --max-warnings=0 && npm run typecheck && npm run test:run && npm run build"
