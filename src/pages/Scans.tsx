@@ -105,9 +105,7 @@ const Scans = () => {
 
   // Show mock warning whenever the active scan is in MOCK mode
   useEffect(() => {
-    if (currentScanMode === 'MOCK') {
-      setShowMockWarning(true);
-    }
+    setShowMockWarning(currentScanMode === 'MOCK');
   }, [currentScanMode]);
 
   // Load initial data
@@ -135,7 +133,8 @@ const Scans = () => {
           const data = await ScansService.getProjectScans(selectedProjectId);
           setScans(data);
           if (data.length > 0 && !selectedScanId) {
-            setSelectedScanId(data[0].id);
+            const preferred = data.find((s) => s.detected_mode !== 'MOCK' && !s.is_mock) ?? data[0];
+            setSelectedScanId(preferred.id);
           }
         } catch (err) {
           console.error('Failed to load scans:', err);
@@ -168,7 +167,8 @@ const Scans = () => {
       const data = await ScansService.getProjectScans(projectId);
       setScans(data);
       if (data.length > 0 && !selectedScanId) {
-        setSelectedScanId(data[0].id);
+        const preferred = data.find((s) => s.detected_mode !== 'MOCK' && !s.is_mock) ?? data[0];
+        setSelectedScanId(preferred.id);
       }
     } catch (err) {
       console.error('Failed to load scans:', err);

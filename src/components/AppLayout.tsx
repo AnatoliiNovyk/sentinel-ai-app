@@ -3,9 +3,9 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
 import CommandPalette from './CommandPalette';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-const AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
+const DEFAULT_AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
   ?? 'http://95.67.75.146:9090/health';
 
 type AgentHealth = {
@@ -20,10 +20,27 @@ type AgentHealth = {
 function AgentStatus() {
   const [health, setHealth] = useState<AgentHealth | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
+  const [agentUrl, setAgentUrl] = useState<string>(() =>
+    localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL,
+  );
 
-  const poll = async () => {
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'agentHealthUrl') {
+        setAgentUrl(e.newValue ?? DEFAULT_AGENT_HEALTH_URL);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const poll = useCallback(async () => {
     try {
-      const res = await fetch(AGENT_HEALTH_URL, { signal: AbortSignal.timeout(5000) });
+      const latestUrl = localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL;
+      if (latestUrl !== agentUrl) {
+        setAgentUrl(latestUrl);
+      }
+      const res = await fetch(latestUrl, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const data: AgentHealth = await res.json();
         setHealth(data);
@@ -35,13 +52,13 @@ function AgentStatus() {
       setReachable(false);
       setHealth(null);
     }
-  };
+  }, [agentUrl]);
 
   useEffect(() => {
     poll();
     const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [poll]);
 
   const dotColor =
     reachable === null ? 'bg-slate-600' :
