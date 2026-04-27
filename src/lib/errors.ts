@@ -53,7 +53,7 @@ export function errorToUserMessage(err: ApiError): string {
     case ErrorCode.SCAN_DB_INSERT_FAILED:
       return 'Failed to create scan record.';
     case ErrorCode.SCAN_EDGE_FN_ERROR:
-      return 'Scan service unavailable. Switched to mock mode.';
+      return 'Scan service unavailable. Real scanner agent is unreachable.';
     case ErrorCode.SCAN_MOCK_FAILED:
       return 'Mock scan failed to execute.';
     default:

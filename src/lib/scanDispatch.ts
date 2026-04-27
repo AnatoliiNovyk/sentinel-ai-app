@@ -7,14 +7,15 @@ import { runScansParallel, summarizeScanResults } from './parallelScanner';
 const EDGE_BASE = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
   : '';
+const ALLOW_MOCK_FALLBACK = import.meta.env.DEV || import.meta.env.VITE_ALLOW_MOCK_SCAN_FALLBACK === 'true';
 
 /**
  * Dispatches a scan.
  * 1. Creates a `scans` row (status = queued).
  * 2. Calls the `scan-dispatch` Edge Function which inserts a `scan_jobs` row
  *    and the VPS agent picks it up.
- * 3. Falls back to the browser mock if the edge function is unavailable
- *    (dev environment or edge fn not deployed).
+ * 3. Falls back to the browser mock only in local dev or when explicitly enabled
+ *    via VITE_ALLOW_MOCK_SCAN_FALLBACK=true.
  *
  * Returns the scan_id on success, or null on failure.
  */
@@ -87,7 +88,26 @@ export async function dispatchScan(
     }
   }
 
-  // 3. Fallback: browser mock (dev / demo mode)
+  if (!ALLOW_MOCK_FALLBACK) {
+    await supabase
+      .from('scans')
+      .update({
+        status: 'failed',
+        is_mock: false,
+        detected_mode: 'UNKNOWN',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', scan.id);
+
+    return failure(
+      ErrorCode.SCAN_EDGE_FN_ERROR,
+      'Real scan dispatch is unavailable. Mock fallback is disabled in this environment.',
+      undefined,
+      { projectId, scanner },
+    );
+  }
+
+  // 3. Fallback: browser mock (dev/demo only)
   console.info('[scanDispatch] Running in MOCK mode (no real agent)');
   // Mark this scan row as the one mock will use
   await supabase.from('scans').update({ status: 'failed', detected_mode: 'MOCK', is_mock: true }).eq('id', scan.id);

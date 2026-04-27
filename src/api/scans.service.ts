@@ -46,16 +46,16 @@ export const ScansService = {
    * Dispatches a new scan task.
    */
   async dispatchScan(projectId: string, scanner: string, target: string, orgId: string) {
-    // 1. Create a scan record with org_id for RBAC visibility
+    // 1. Create a scan record in UNKNOWN mode until real dispatch succeeds
     const { data: scan, error: scanErr } = await supabase
       .from('scans')
       .insert({
         project_id: projectId,
         org_id: orgId,
         scanner,
-        status: 'running',
+        status: 'queued',
         is_mock: false,
-        detected_mode: 'REAL',
+        detected_mode: 'UNKNOWN',
         started_at: new Date().toISOString()
       })
       .select()
@@ -74,7 +74,24 @@ export const ScansService = {
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      await supabase
+        .from('scans')
+        .update({
+          status: 'failed',
+          is_mock: false,
+          detected_mode: 'UNKNOWN',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', scan.id);
+      throw error;
+    }
+
+    await supabase
+      .from('scans')
+      .update({ status: 'running', is_mock: false, detected_mode: 'REAL' })
+      .eq('id', scan.id);
+
     return { scan, dispatchResult: data };
   }
 };
