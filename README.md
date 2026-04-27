@@ -90,6 +90,17 @@ Command matrix:
 | `npm run test:run` | Unit and integration tests (Vitest) |
 | `npm run build` | Production build health (Vite) |
 
+### Test Stability Commands
+
+For long or repeated Vitest runs (especially on Windows), use the heap-safe commands below to reduce worker OOM risk:
+
+| Command | Purpose |
+|---|---|
+| `npm run test:trio:stable` | Runs the critical trio: Dashboard, Projects, Reports with increased Node heap |
+| `npm run test:full:stability:heap` | Runs full stability suite with increased Node heap |
+
+CI also runs `test:trio:stable` as a dedicated stability job.
+
 If `quality:check` passes locally, the branch is ready for CI review.
 
 ---
