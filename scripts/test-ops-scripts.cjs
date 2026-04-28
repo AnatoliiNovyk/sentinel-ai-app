@@ -824,17 +824,43 @@ async function testEvidenceIntegrityVerifier(rootDir) {
   };
   chaosReport.evidence_id = `chaos-drill-${ts}-${chaosPayloadHash.slice(0, 12)}`;
 
+  const weeklyReport = {
+    schema_version: '1.0',
+    report_type: 'weekly_slo_sla_summary',
+    summary: {
+      scans_total: 10,
+      success_rate_percent: 90,
+      failure_rate_percent: 10,
+      sla_breach_rate_percent: 20,
+    },
+    thresholds_ok: false,
+    threshold_breaches: [{ type: 'max_failure_rate_percent', actual: 10, threshold: 5 }],
+  };
+  const weeklyPayloadHash = hashPart(JSON.stringify({
+    summary: weeklyReport.summary,
+    thresholds_ok: weeklyReport.thresholds_ok,
+    threshold_breaches: weeklyReport.threshold_breaches,
+  }));
+  weeklyReport.integrity = {
+    algorithm: 'sha256',
+    payload_hash: weeklyPayloadHash,
+  };
+  weeklyReport.evidence_id = `weekly-slo-sla-${ts}-${weeklyPayloadHash.slice(0, 12)}`;
+
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-evidence-verify-'));
   const dailyFile = path.join(tempDir, 'daily.json');
   const recoveryFile = path.join(tempDir, 'recovery.json');
   const chaosFile = path.join(tempDir, 'chaos.json');
+  const weeklyFile = path.join(tempDir, 'weekly.json');
   fs.writeFileSync(dailyFile, JSON.stringify(dailyReport), 'utf8');
   fs.writeFileSync(recoveryFile, JSON.stringify(recoveryReport), 'utf8');
   fs.writeFileSync(chaosFile, JSON.stringify(chaosReport), 'utf8');
+  fs.writeFileSync(weeklyFile, JSON.stringify(weeklyReport), 'utf8');
 
   await runNode(verifierScript, ['--report-file', dailyFile]);
   await runNode(verifierScript, ['--report-file', recoveryFile]);
   await runNode(verifierScript, ['--report-file', chaosFile]);
+  await runNode(verifierScript, ['--report-file', weeklyFile]);
 
   const tamperedDaily = JSON.parse(JSON.stringify(dailyReport));
   tamperedDaily.summary.scans_total = 999;
@@ -853,6 +879,64 @@ async function testEvidenceIntegrityVerifier(rootDir) {
   assert.match(`${invalidEvidenceResult.stdout}\n${invalidEvidenceResult.stderr}`, /evidence_id hash suffix mismatch/i);
 }
 
+async function testWeeklySloSlaSummaryScript(rootDir) {
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      return sendJson(res, 200, [
+        {
+          id: 'scan-weekly-1',
+          status: 'completed',
+          started_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          completed_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'scan-weekly-2',
+          status: 'completed',
+          started_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          completed_at: new Date(Date.now() - 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'scan-weekly-3',
+          status: 'failed',
+          started_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+          completed_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        },
+      ]);
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-weekly-slo-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'weekly-slo-sla-summary.ps1');
+  const stdout = await runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-DaysBack', '7',
+    '-SlaDurationThresholdMinutes', '60',
+    '-MinSuccessRatePercent', '80',
+    '-MaxFailureRatePercent', '40',
+    '-MaxSlaBreachRatePercent', '40',
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.schema_version, '1.0');
+  assert.equal(json.report_type, 'weekly_slo_sla_summary');
+  assert.equal(typeof json.evidence_id, 'string');
+  assert.equal(typeof json.integrity.payload_hash, 'string');
+  assert.equal(json.summary.scans_total, 3);
+  assert.equal(json.summary.scans_completed, 2);
+  assert.equal(json.summary.scans_failed, 1);
+  assert.equal(typeof json.thresholds_ok, 'boolean');
+  assert.ok(Array.isArray(json.threshold_breaches));
+
+  await closeServer(server);
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
@@ -865,6 +949,7 @@ async function main() {
   await testDailyBreachEscalationScript(rootDir);
   await testDailyBreachEscalationSkippedWhenHealthy(rootDir);
   await testRecoveryPlaybookScript(rootDir);
+  await testWeeklySloSlaSummaryScript(rootDir);
   await testEvidenceIntegrityVerifier(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');

@@ -1,0 +1,107 @@
+name: Weekly SLO SLA Summary
+
+on:
+  schedule:
+    - cron: '30 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: "Days in summary window"
+        required: false
+        default: "7"
+      sla_duration_threshold_minutes:
+        description: "SLA threshold for completed scan duration in minutes"
+        required: false
+        default: "60"
+      min_success_rate_percent:
+        description: "Minimum success rate SLO (0-100)"
+        required: false
+        default: "95"
+      max_failure_rate_percent:
+        description: "Maximum failure rate SLO (0-100)"
+        required: false
+        default: "5"
+      max_sla_breach_rate_percent:
+        description: "Maximum SLA breach rate (0-100)"
+        required: false
+        default: "10"
+      send_webhook:
+        description: "Send webhook summary (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  weekly-slo-sla:
+    name: Generate Weekly SLO SLA Summary
+    runs-on: ubuntu-latest
+    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
+    timeout-minutes: 20
+    concurrency:
+      group: weekly-slo-sla-summary
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+          EOF
+
+      - name: Generate summary
+        shell: pwsh
+        env:
+          INPUT_DAYS_BACK: ${{ github.event.inputs.days_back }}
+          INPUT_SLA_DURATION_THRESHOLD_MINUTES: ${{ github.event.inputs.sla_duration_threshold_minutes }}
+          INPUT_MIN_SUCCESS_RATE_PERCENT: ${{ github.event.inputs.min_success_rate_percent }}
+          INPUT_MAX_FAILURE_RATE_PERCENT: ${{ github.event.inputs.max_failure_rate_percent }}
+          INPUT_MAX_SLA_BREACH_RATE_PERCENT: ${{ github.event.inputs.max_sla_breach_rate_percent }}
+          INPUT_SEND_WEBHOOK: ${{ github.event.inputs.send_webhook }}
+        run: |
+          $daysBack = if ([string]::IsNullOrWhiteSpace($env:INPUT_DAYS_BACK)) { 7 } else { [int]$env:INPUT_DAYS_BACK }
+          $slaDurationThresholdMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_SLA_DURATION_THRESHOLD_MINUTES)) { 60 } else { [int]$env:INPUT_SLA_DURATION_THRESHOLD_MINUTES }
+          $minSuccessRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MIN_SUCCESS_RATE_PERCENT)) { 95 } else { [double]$env:INPUT_MIN_SUCCESS_RATE_PERCENT }
+          $maxFailureRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_FAILURE_RATE_PERCENT)) { 5 } else { [double]$env:INPUT_MAX_FAILURE_RATE_PERCENT }
+          $maxSlaBreachRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_SLA_BREACH_RATE_PERCENT)) { 10 } else { [double]$env:INPUT_MAX_SLA_BREACH_RATE_PERCENT }
+          $sendWebhook = if ([string]::IsNullOrWhiteSpace($env:INPUT_SEND_WEBHOOK)) { $true } else { [bool]::Parse($env:INPUT_SEND_WEBHOOK) }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/weekly-slo-sla-summary.ps1',
+            '-DaysBack', $daysBack,
+            '-SlaDurationThresholdMinutes', $slaDurationThresholdMinutes,
+            '-MinSuccessRatePercent', $minSuccessRatePercent,
+            '-MaxFailureRatePercent', $maxFailureRatePercent,
+            '-MaxSlaBreachRatePercent', $maxSlaBreachRatePercent
+          )
+          if ($sendWebhook) {
+            $args += '-SendWebhook'
+          }
+
+          $output = powershell @args
+          $json = $output | Out-String | ConvertFrom-Json
+
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+          ($json | ConvertTo-Json -Depth 14) | Out-File -Encoding utf8 reports/weekly-slo-sla-summary.json
+
+          Write-Host "evidence_id=$($json.evidence_id) payload_hash=$($json.integrity.payload_hash) thresholds_ok=$($json.thresholds_ok)"
+          Write-Host "success_rate_percent=$($json.summary.success_rate_percent) failure_rate_percent=$($json.summary.failure_rate_percent) sla_breach_rate_percent=$($json.summary.sla_breach_rate_percent)"
+
+      - name: Verify evidence integrity
+        shell: bash
+        run: |
+          node scripts/verify-evidence-integrity.cjs --report-file reports/weekly-slo-sla-summary.json
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-slo-sla-summary
+          path: reports/weekly-slo-sla-summary.json
+          if-no-files-found: error

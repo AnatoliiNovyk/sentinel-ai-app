@@ -48,6 +48,14 @@ function getPayloadForReport(report) {
     return clone;
   }
 
+  if (report.report_type === 'weekly_slo_sla_summary') {
+    return {
+      summary: report.summary,
+      thresholds_ok: report.thresholds_ok,
+      threshold_breaches: report.threshold_breaches,
+    };
+  }
+
   throw new Error(`Unsupported report_type: ${report.report_type}`);
 }
 
@@ -62,6 +70,10 @@ function getEvidencePrefix(reportType) {
 
   if (reportType === 'chaos_ops_drill') {
     return 'chaos-drill';
+  }
+
+  if (reportType === 'weekly_slo_sla_summary') {
+    return 'weekly-slo-sla';
   }
 
   throw new Error(`Unsupported report_type for evidence_id validation: ${reportType}`);
