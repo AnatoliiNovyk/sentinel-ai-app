@@ -51,6 +51,40 @@ function getPayloadForReport(report) {
   throw new Error(`Unsupported report_type: ${report.report_type}`);
 }
 
+function getEvidencePrefix(reportType) {
+  if (reportType === 'daily_scan_health_report') {
+    return 'daily-health';
+  }
+
+  if (reportType === 'scan_pipeline_recovery_playbook') {
+    return 'recovery-playbook';
+  }
+
+  if (reportType === 'chaos_ops_drill') {
+    return 'chaos-drill';
+  }
+
+  throw new Error(`Unsupported report_type for evidence_id validation: ${reportType}`);
+}
+
+function validateEvidenceId(report, payloadHash) {
+  if (!report.evidence_id || typeof report.evidence_id !== 'string') {
+    throw new Error('Missing or invalid evidence_id');
+  }
+
+  const expectedPrefix = getEvidencePrefix(report.report_type);
+  const pattern = new RegExp(`^${expectedPrefix}-\\d{8}T\\d{6}Z-[a-f0-9]{12}$`);
+  if (!pattern.test(report.evidence_id)) {
+    throw new Error(`Invalid evidence_id format for ${report.report_type}: ${report.evidence_id}`);
+  }
+
+  const expectedHashPart = payloadHash.slice(0, 12);
+  const actualHashPart = report.evidence_id.slice(-12);
+  if (actualHashPart !== expectedHashPart) {
+    throw new Error(`evidence_id hash suffix mismatch: expected=${expectedHashPart} actual=${actualHashPart}`);
+  }
+}
+
 function main() {
   const { reportFile } = parseArgs(process.argv.slice(2));
   if (!reportFile) {
@@ -75,6 +109,8 @@ function main() {
   if (actualHash !== report.integrity.payload_hash) {
     throw new Error(`Integrity mismatch: expected=${report.integrity.payload_hash} actual=${actualHash}`);
   }
+
+  validateEvidenceId(report, actualHash);
 
   process.stdout.write(`Evidence integrity verified: ${report.report_type} (${report.evidence_id || 'n/a'})\n`);
 }

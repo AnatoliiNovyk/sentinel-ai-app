@@ -770,6 +770,9 @@ async function testRecoveryPlaybookScript(rootDir) {
 
 async function testEvidenceIntegrityVerifier(rootDir) {
   const verifierScript = path.join(rootDir, 'scripts', 'verify-evidence-integrity.cjs');
+  const hashPart = (text) => require('node:crypto').createHash('sha256').update(text, 'utf8').digest('hex');
+
+  const ts = '20260428T235959Z';
 
   const dailyReport = {
     schema_version: '1.0',
@@ -778,28 +781,30 @@ async function testEvidenceIntegrityVerifier(rootDir) {
     thresholds_ok: true,
     threshold_breaches: [],
   };
+  const dailyPayloadHash = hashPart(JSON.stringify({
+    summary: dailyReport.summary,
+    thresholds_ok: dailyReport.thresholds_ok,
+    threshold_breaches: dailyReport.threshold_breaches,
+  }));
   dailyReport.integrity = {
     algorithm: 'sha256',
-    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({
-      summary: dailyReport.summary,
-      thresholds_ok: dailyReport.thresholds_ok,
-      threshold_breaches: dailyReport.threshold_breaches,
-    }), 'utf8').digest('hex'),
+    payload_hash: dailyPayloadHash,
   };
-  dailyReport.evidence_id = 'test-daily-evidence';
+  dailyReport.evidence_id = `daily-health-${ts}-${dailyPayloadHash.slice(0, 12)}`;
 
   const recoveryReport = {
     schema_version: '1.0',
     report_type: 'scan_pipeline_recovery_playbook',
     summary: { recovery_outcome: 'cleanup_succeeded' },
   };
+  const recoveryPayloadHash = hashPart(JSON.stringify({
+    summary: recoveryReport.summary,
+  }));
   recoveryReport.integrity = {
     algorithm: 'sha256',
-    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({
-      summary: recoveryReport.summary,
-    }), 'utf8').digest('hex'),
+    payload_hash: recoveryPayloadHash,
   };
-  recoveryReport.evidence_id = 'test-recovery-evidence';
+  recoveryReport.evidence_id = `recovery-playbook-${ts}-${recoveryPayloadHash.slice(0, 12)}`;
 
   const chaosReport = {
     schema_version: '1.0',
@@ -812,11 +817,12 @@ async function testEvidenceIntegrityVerifier(rootDir) {
     exit_code: 0,
     output_excerpt: ['ok'],
   };
+  const chaosPayloadHash = hashPart(JSON.stringify({ ...chaosReport }));
   chaosReport.integrity = {
     algorithm: 'sha256',
-    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({ ...chaosReport }), 'utf8').digest('hex'),
+    payload_hash: chaosPayloadHash,
   };
-  chaosReport.evidence_id = 'test-chaos-evidence';
+  chaosReport.evidence_id = `chaos-drill-${ts}-${chaosPayloadHash.slice(0, 12)}`;
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-evidence-verify-'));
   const dailyFile = path.join(tempDir, 'daily.json');
@@ -837,6 +843,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const tamperedResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedDailyFile]);
   assert.match(`${tamperedResult.stdout}\n${tamperedResult.stderr}`, /Integrity mismatch/i);
+
+  const invalidEvidenceIdDaily = JSON.parse(JSON.stringify(dailyReport));
+  invalidEvidenceIdDaily.evidence_id = `daily-health-${ts}-aaaaaaaaaaaa`;
+  const invalidEvidenceIdFile = path.join(tempDir, 'daily-invalid-evidence-id.json');
+  fs.writeFileSync(invalidEvidenceIdFile, JSON.stringify(invalidEvidenceIdDaily), 'utf8');
+
+  const invalidEvidenceResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdFile]);
+  assert.match(`${invalidEvidenceResult.stdout}\n${invalidEvidenceResult.stderr}`, /evidence_id hash suffix mismatch/i);
 }
 
 async function main() {
