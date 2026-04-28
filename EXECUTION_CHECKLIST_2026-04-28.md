@@ -52,3 +52,4 @@
 - [x] Посилено scheduled workflows: додано `concurrency`/`timeout-minutes` і ручні параметри `workflow_dispatch` для stale cleanup (`.github/workflows/scheduled-stale-cleanup.yml`, `.github/workflows/daily-scan-health-report.yml`).
 - [x] Додано threshold-based gating у daily health-report (max stale jobs + max error rate) з optional fail-mode та workflow inputs (`scripts/daily-queue-health-report.ps1`, `.github/workflows/daily-scan-health-report.yml`).
 - [x] Додано automated incident escalation для daily threshold breaches з retry/backoff, severity та workflow-політикою fail/escalate (`scripts/escalate-daily-health-breach.ps1`, `.github/workflows/daily-scan-health-report.yml`, `scripts/test-ops-scripts.cjs`).
+- [x] Додано trend-based gating для spike error-rate (порівняння current day vs baseline попередніх днів) з порогом і fail-політикою (`scripts/daily-queue-health-report.ps1`, `.github/workflows/daily-scan-health-report.yml`, `scripts/test-ops-scripts.cjs`).

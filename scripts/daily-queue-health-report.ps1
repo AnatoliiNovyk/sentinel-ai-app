@@ -1,9 +1,11 @@
 param(
   [string]$EnvFile = "sentinel-agent/.env",
   [int]$HoursBack = 24,
+  [int]$TrendDays = 7,
   [int]$StaleMinutes = 60,
   [int]$MaxStaleRunningJobs = 0,
   [double]$MaxErrorJobRatePercent = 40,
+  [double]$MaxErrorRateTrendSpikePercent = 25,
   [switch]$FailOnThresholdBreach,
   [switch]$SendWebhook,
   [string]$WebhookUrl = ""
@@ -103,12 +105,20 @@ if ($StaleMinutes -lt 1) {
   throw "StaleMinutes must be >= 1"
 }
 
+if ($TrendDays -lt 2) {
+  throw "TrendDays must be >= 2"
+}
+
 if ($MaxStaleRunningJobs -lt 0) {
   throw "MaxStaleRunningJobs must be >= 0"
 }
 
 if ($MaxErrorJobRatePercent -lt 0 -or $MaxErrorJobRatePercent -gt 100) {
   throw "MaxErrorJobRatePercent must be in range 0..100"
+}
+
+if ($MaxErrorRateTrendSpikePercent -lt 0 -or $MaxErrorRateTrendSpikePercent -gt 100) {
+  throw "MaxErrorRateTrendSpikePercent must be in range 0..100"
 }
 
 $content = Get-Content $EnvFile -Raw
@@ -131,12 +141,15 @@ $restHeaders = @{
 
 $nowUtc = (Get-Date).ToUniversalTime()
 $fromUtc = $nowUtc.AddHours(-1 * $HoursBack)
+$trendFromUtc = $nowUtc.AddDays(-1 * $TrendDays)
+$queryFromUtc = if ($trendFromUtc -lt $fromUtc) { $trendFromUtc } else { $fromUtc }
 $staleBeforeUtc = $nowUtc.AddMinutes(-1 * $StaleMinutes)
 $fromIso = $fromUtc.ToString('o')
+$queryFromIso = $queryFromUtc.ToString('o')
 $staleBeforeIso = $staleBeforeUtc.ToString('o')
 
-$scansUri = "$supabaseUrl/rest/v1/scans?select=id,status,started_at,completed_at&started_at=gte.$([System.Uri]::EscapeDataString($fromIso))&order=started_at.asc"
-$jobsUri = "$supabaseUrl/rest/v1/scan_jobs?select=id,scan_id,status,error_message,started_at,completed_at&started_at=gte.$([System.Uri]::EscapeDataString($fromIso))&order=started_at.asc"
+$scansUri = "$supabaseUrl/rest/v1/scans?select=id,status,started_at,completed_at&started_at=gte.$([System.Uri]::EscapeDataString($queryFromIso))&order=started_at.asc"
+$jobsUri = "$supabaseUrl/rest/v1/scan_jobs?select=id,scan_id,status,error_message,started_at,completed_at&started_at=gte.$([System.Uri]::EscapeDataString($queryFromIso))&order=started_at.asc"
 
 $scansRes = Invoke-JsonRequest -Method 'GET' -Uri $scansUri -Headers $restHeaders -Body $null
 if ($scansRes.StatusCode -ne 200) {
@@ -148,10 +161,21 @@ if ($jobsRes.StatusCode -ne 200) {
   throw "Failed to fetch scan_jobs. HTTP=$($jobsRes.StatusCode) Body=$($jobsRes.Raw)"
 }
 
-$scans = @()
-if ($scansRes.Json) { $scans = @($scansRes.Json) }
-$jobs = @()
-if ($jobsRes.Json) { $jobs = @($jobsRes.Json) }
+$scansAll = @()
+if ($scansRes.Json) { $scansAll = @($scansRes.Json) }
+$jobsAll = @()
+if ($jobsRes.Json) { $jobsAll = @($jobsRes.Json) }
+
+$scans = @(
+  $scansAll | Where-Object {
+    $_.started_at -and (Convert-ToUtcDateTimeOffset -Value $_.started_at).UtcDateTime -ge $fromUtc
+  }
+)
+$jobs = @(
+  $jobsAll | Where-Object {
+    $_.started_at -and (Convert-ToUtcDateTimeOffset -Value $_.started_at).UtcDateTime -ge $fromUtc
+  }
+)
 
 $scanStatusCounts = @{}
 foreach ($s in $scans) {
@@ -195,6 +219,52 @@ $errorJobRatePercent = 0
 if ($jobs.Count -gt 0) {
   $errorJobRatePercent = [math]::Round(($errorJobs.Count * 100.0) / $jobs.Count, 2)
 }
+
+$trendJobs = @(
+  $jobsAll | Where-Object {
+    $_.started_at -and (Convert-ToUtcDateTimeOffset -Value $_.started_at).UtcDateTime -ge $trendFromUtc
+  }
+)
+$trendByDay = @()
+if ($trendJobs.Count -gt 0) {
+  $trendByDay = @(
+    $trendJobs |
+      Group-Object -Property {
+        (Convert-ToUtcDateTimeOffset -Value $_.started_at).UtcDateTime.ToString('yyyy-MM-dd')
+      } |
+      Sort-Object Name |
+      ForEach-Object {
+        $dayJobs = @($_.Group)
+        $dayErrorJobs = @($dayJobs | Where-Object { $_.status -eq 'error' -and -not [string]::IsNullOrWhiteSpace($_.error_message) })
+        $dayRate = 0
+        if ($dayJobs.Count -gt 0) {
+          $dayRate = [math]::Round(($dayErrorJobs.Count * 100.0) / $dayJobs.Count, 2)
+        }
+
+        [pscustomobject]@{
+          date = $_.Name
+          jobs_total = $dayJobs.Count
+          error_jobs_count = $dayErrorJobs.Count
+          error_job_rate_percent = $dayRate
+        }
+      }
+  )
+}
+
+$trendBaselineRatePercent = 0
+$trendCurrentRatePercent = 0
+$trendSpikePercent = 0
+$trendBaselineDaysCount = 0
+if ($trendByDay.Count -ge 2) {
+  $trendCurrentRatePercent = [double]$trendByDay[-1].error_job_rate_percent
+  $baselineEntries = @($trendByDay | Select-Object -First ($trendByDay.Count - 1))
+  $trendBaselineDaysCount = $baselineEntries.Count
+  if ($trendBaselineDaysCount -gt 0) {
+    $trendBaselineRatePercent = [math]::Round(($baselineEntries | Measure-Object -Property error_job_rate_percent -Average).Average, 2)
+    $trendSpikePercent = [math]::Round($trendCurrentRatePercent - $trendBaselineRatePercent, 2)
+  }
+}
+
 $topErrors = @()
 if ($errorJobs.Count -gt 0) {
   $topErrors = @(
@@ -232,6 +302,16 @@ $summary = [pscustomobject]@{
   thresholds = [pscustomobject]@{
     max_stale_running_jobs = $MaxStaleRunningJobs
     max_error_job_rate_percent = $MaxErrorJobRatePercent
+    max_error_rate_trend_spike_percent = $MaxErrorRateTrendSpikePercent
+  }
+  trend = [pscustomobject]@{
+    days = $TrendDays
+    from_utc = $trendFromUtc.ToString('o')
+    baseline_days_count = $trendBaselineDaysCount
+    baseline_error_job_rate_percent = $trendBaselineRatePercent
+    current_error_job_rate_percent = $trendCurrentRatePercent
+    error_job_rate_spike_percent = $trendSpikePercent
+    daily_error_rates = $trendByDay
   }
   generated_at = (Get-Date).ToUniversalTime().ToString('o')
 }
@@ -249,6 +329,15 @@ if ($errorJobRatePercent -gt $MaxErrorJobRatePercent) {
     type = 'error_job_rate_percent'
     actual = $errorJobRatePercent
     threshold = $MaxErrorJobRatePercent
+  }
+}
+if ($trendByDay.Count -ge 2 -and $trendSpikePercent -gt $MaxErrorRateTrendSpikePercent) {
+  $thresholdBreaches += [pscustomobject]@{
+    type = 'error_rate_trend_spike_percent'
+    actual = $trendSpikePercent
+    threshold = $MaxErrorRateTrendSpikePercent
+    baseline_error_job_rate_percent = $trendBaselineRatePercent
+    current_error_job_rate_percent = $trendCurrentRatePercent
   }
 }
 

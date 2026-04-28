@@ -342,6 +342,8 @@ async function testDailyReportScript(rootDir) {
   assert.equal(typeof json.summary.jobs_total, 'number');
   assert.equal(typeof json.summary.stale_running_jobs_count, 'number');
   assert.equal(typeof json.summary.error_job_rate_percent, 'number');
+  assert.equal(typeof json.summary.trend.error_job_rate_spike_percent, 'number');
+  assert.ok(Array.isArray(json.summary.trend.daily_error_rates));
   assert.equal(typeof json.thresholds_ok, 'boolean');
   assert.ok(Array.isArray(json.threshold_breaches));
 
@@ -393,6 +395,66 @@ async function testDailyReportThresholdFail(rootDir) {
   ]);
 
   assert.match(`${failResult.stdout}\n${failResult.stderr}`, /Daily health thresholds breached/i);
+  await closeServer(server);
+}
+
+async function testDailyReportTrendSpikeThresholdFail(rootDir) {
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      return sendJson(res, 200, []);
+    }
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scan_jobs') {
+      const jobs = [];
+      for (let d = 3; d >= 1; d -= 1) {
+        for (let i = 0; i < 10; i += 1) {
+          jobs.push({
+            id: `job-trend-base-${d}-${i}`,
+            scan_id: `scan-trend-base-${d}`,
+            status: i === 0 ? 'error' : 'completed',
+            error_message: i === 0 ? `base-error-${d}` : null,
+            started_at: new Date(Date.now() - d * 24 * 60 * 60 * 1000 + i * 1000).toISOString(),
+            completed_at: new Date(Date.now() - d * 24 * 60 * 60 * 1000 + i * 1000 + 500).toISOString(),
+          });
+        }
+      }
+
+      for (let i = 0; i < 10; i += 1) {
+        jobs.push({
+          id: `job-trend-current-${i}`,
+          scan_id: 'scan-trend-current',
+          status: i < 6 ? 'error' : 'completed',
+          error_message: i < 6 ? 'current-spike-error' : null,
+          started_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + i * 1000).toISOString(),
+          completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + i * 1000 + 500).toISOString(),
+        });
+      }
+
+      return sendJson(res, 200, jobs);
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-daily-trend-fail-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'daily-queue-health-report.ps1');
+  const failResult = await runPwshExpectFail(scriptPath, [
+    '-EnvFile', envFile,
+    '-HoursBack', '24',
+    '-TrendDays', '4',
+    '-StaleMinutes', '60',
+    '-MaxStaleRunningJobs', '100',
+    '-MaxErrorJobRatePercent', '100',
+    '-MaxErrorRateTrendSpikePercent', '20',
+    '-FailOnThresholdBreach',
+  ]);
+
+  assert.match(`${failResult.stdout}\n${failResult.stderr}`, /error_rate_trend_spike_percent|Daily health thresholds breached/i);
   await closeServer(server);
 }
 
@@ -560,6 +622,7 @@ async function main() {
   await testTriageScript(rootDir);
   await testDailyReportScript(rootDir);
   await testDailyReportThresholdFail(rootDir);
+  await testDailyReportTrendSpikeThresholdFail(rootDir);
   await testScheduledCleanupScript(rootDir);
   await testDailyBreachEscalationScript(rootDir);
   await testDailyBreachEscalationSkippedWhenHealthy(rootDir);

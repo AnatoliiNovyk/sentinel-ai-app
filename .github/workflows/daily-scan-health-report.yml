@@ -21,6 +21,14 @@ on:
         description: "Max allowed error job rate (0-100)"
         required: false
         default: "60"
+      trend_days:
+        description: "Days used for error-rate trend baseline"
+        required: false
+        default: "7"
+      max_error_rate_trend_spike_percent:
+        description: "Max allowed spike of current day error rate over trend baseline"
+        required: false
+        default: "25"
       fail_on_threshold_breach:
         description: "Fail run if thresholds are breached (true/false)"
         required: false
@@ -71,6 +79,8 @@ jobs:
           INPUT_STALE_MINUTES: ${{ github.event.inputs.stale_minutes }}
           INPUT_MAX_STALE_RUNNING_JOBS: ${{ github.event.inputs.max_stale_running_jobs }}
           INPUT_MAX_ERROR_JOB_RATE_PERCENT: ${{ github.event.inputs.max_error_job_rate_percent }}
+          INPUT_TREND_DAYS: ${{ github.event.inputs.trend_days }}
+          INPUT_MAX_ERROR_RATE_TREND_SPIKE_PERCENT: ${{ github.event.inputs.max_error_rate_trend_spike_percent }}
           INPUT_FAIL_ON_THRESHOLD_BREACH: ${{ github.event.inputs.fail_on_threshold_breach }}
           INPUT_ESCALATE_ON_BREACH: ${{ github.event.inputs.escalate_on_breach }}
         run: |
@@ -78,6 +88,8 @@ jobs:
           $staleMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_STALE_MINUTES)) { 60 } else { [int]$env:INPUT_STALE_MINUTES }
           $maxStaleRunningJobs = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_STALE_RUNNING_JOBS)) { 3 } else { [int]$env:INPUT_MAX_STALE_RUNNING_JOBS }
           $maxErrorJobRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_ERROR_JOB_RATE_PERCENT)) { 60 } else { [double]$env:INPUT_MAX_ERROR_JOB_RATE_PERCENT }
+          $trendDays = if ([string]::IsNullOrWhiteSpace($env:INPUT_TREND_DAYS)) { 7 } else { [int]$env:INPUT_TREND_DAYS }
+          $maxErrorRateTrendSpikePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_ERROR_RATE_TREND_SPIKE_PERCENT)) { 25 } else { [double]$env:INPUT_MAX_ERROR_RATE_TREND_SPIKE_PERCENT }
           $failOnThresholdBreach = if ([string]::IsNullOrWhiteSpace($env:INPUT_FAIL_ON_THRESHOLD_BREACH)) { $true } else { [bool]::Parse($env:INPUT_FAIL_ON_THRESHOLD_BREACH) }
           $escalateOnBreach = if ([string]::IsNullOrWhiteSpace($env:INPUT_ESCALATE_ON_BREACH)) { $true } else { [bool]::Parse($env:INPUT_ESCALATE_ON_BREACH) }
 
@@ -85,9 +97,11 @@ jobs:
             '-ExecutionPolicy', 'Bypass',
             '-File', 'scripts/daily-queue-health-report.ps1',
             '-HoursBack', $hoursBack,
+            '-TrendDays', $trendDays,
             '-StaleMinutes', $staleMinutes,
             '-MaxStaleRunningJobs', $maxStaleRunningJobs,
             '-MaxErrorJobRatePercent', $maxErrorJobRatePercent,
+            '-MaxErrorRateTrendSpikePercent', $maxErrorRateTrendSpikePercent,
             '-SendWebhook'
           )
 
