@@ -91,11 +91,17 @@ export const ScansService = {
    * Dispatches a new scan task.
    */
   async dispatchScan(projectId: string, scanner: string, target: string, orgId?: string | null) {
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !authData.user) {
+      throw new Error('Authentication required to start scan. Please sign in again.');
+    }
+
     // 1. Create a scan record in UNKNOWN mode until real dispatch succeeds
     const { data: scan, error: scanErr } = await supabase
       .from('scans')
       .insert({
         project_id: projectId,
+        user_id: authData.user.id,
         org_id: orgId,
         scanner,
         status: 'queued',
