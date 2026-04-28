@@ -97,6 +97,12 @@ type ScanJob = {
   metadata: Record<string, unknown>;
 };
 
+type ReportResultOutcome = {
+  ok: boolean;
+  durationMs: number;
+  attempts: number;
+};
+
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
@@ -400,7 +406,9 @@ async function reportResult(
   findings: Finding[],
   metadata: Record<string, unknown>,
   error?: string
-) : Promise<boolean> {
+) : Promise<ReportResultOutcome> {
+  const startedAt = Date.now();
+
   for (let attempt = 1; attempt <= REPORT_MAX_ATTEMPTS; attempt++) {
     metrics.reportAttemptsTotal++;
     try {
@@ -424,7 +432,11 @@ async function reportResult(
 
       console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}. Attempt ${attempt}/${REPORT_MAX_ATTEMPTS}`);
       metrics.reportSuccessTotal++;
-      return true;
+      return {
+        ok: true,
+        durationMs: Date.now() - startedAt,
+        attempts: attempt,
+      };
     } catch (err: unknown) {
       const transient = isTransientReportError(err);
       const hasRetriesLeft = attempt < REPORT_MAX_ATTEMPTS;
@@ -442,16 +454,27 @@ async function reportResult(
       console.error(`❌ Failed to report results for job ${jobId} after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
       metrics.reportFailuresTotal++;
       await writeLog(jobId, scanId, projectId, 'error', `Report delivery failed after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
-      return false;
+      return {
+        ok: false,
+        durationMs: Date.now() - startedAt,
+        attempts: attempt,
+      };
     }
   }
 
   metrics.reportFailuresTotal++;
-  return false;
+  return {
+    ok: false,
+    durationMs: Date.now() - startedAt,
+    attempts: REPORT_MAX_ATTEMPTS,
+  };
 }
 
 async function fetchPendingJob(): Promise<ScanJob | null> {
+  const startedAt = Date.now();
   const { data, error } = await supabase.rpc('claim_next_job');
+  recordDurationMetric('claimDurationMsLast', 'claimDurationMsSum', 'claimDurationMsSamples', Date.now() - startedAt);
+
   if (error) {
     metrics.jobClaimErrorsTotal++;
     throw new Error(`claim_next_job failed: ${error.message}`);
@@ -531,9 +554,11 @@ async function recoverStaleRunningJobs(): Promise<{ jobsRecovered: number; scans
 }
 
 async function runJob(job: ScanJob) {
+  const jobStartedAt = Date.now();
   console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
   await writeLog(job.id, job.scan_id, job.project_id, 'info', `▶️ Starting ${job.scanner} scan on ${job.target}`);
   try {
+    const executionStartedAt = Date.now();
     let findings: Finding[] = [];
     
     if (job.scanner === 'ai_task' || job.scanner === 'ai-agent') {
@@ -557,25 +582,36 @@ async function runJob(job: ScanJob) {
     }
 
     const realFindings = findings.filter(f => f.severity !== 'info' || !f.title.toLowerCase().includes('no '));
+    recordDurationMetric('executeDurationMsLast', 'executeDurationMsSum', 'executeDurationMsSamples', Date.now() - executionStartedAt);
+
     await writeLog(
       job.id, job.scan_id, job.project_id, 'success',
       `✅ Scan complete — ${realFindings.length} finding(s) found (${findings.length} total)`
     );
-    const reportOk = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
-    if (reportOk) {
+
+    const reportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
+    recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', reportOutcome.durationMs);
+
+    if (reportOutcome.ok) {
       await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
     } else {
       await writeLog(job.id, job.scan_id, job.project_id, 'error', '📤 Result reporting failed after retries');
     }
+
     await sendWebhookAlert(job.project_id, job.target, findings);
   } catch (err: unknown) {
     const message = getErrorMessage(err);
     console.error(`❌ Job ${job.id} crashed:`, message);
     await writeLog(job.id, job.scan_id, job.project_id, 'error', `❌ Scan failed: ${message}`);
-    const failureReportOk = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
-    if (!failureReportOk) {
+
+    const failureReportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
+    recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', failureReportOutcome.durationMs);
+
+    if (!failureReportOutcome.ok) {
       await writeLog(job.id, job.scan_id, job.project_id, 'error', '❌ Failed to deliver scan failure payload after retries');
     }
+  } finally {
+    recordDurationMetric('endToEndDurationMsLast', 'endToEndDurationMsSum', 'endToEndDurationMsSamples', Date.now() - jobStartedAt);
   }
 }
 
@@ -640,7 +676,30 @@ const metrics = {
   jobClaimErrorsTotal: 0,
   staleJobsRecoveredTotal: 0,
   staleScansRecoveredTotal: 0,
+  claimDurationMsLast: 0,
+  claimDurationMsSum: 0,
+  claimDurationMsSamples: 0,
+  executeDurationMsLast: 0,
+  executeDurationMsSum: 0,
+  executeDurationMsSamples: 0,
+  reportDurationMsLast: 0,
+  reportDurationMsSum: 0,
+  reportDurationMsSamples: 0,
+  endToEndDurationMsLast: 0,
+  endToEndDurationMsSum: 0,
+  endToEndDurationMsSamples: 0,
 };
+
+function recordDurationMetric(
+  lastKey: 'claimDurationMsLast' | 'executeDurationMsLast' | 'reportDurationMsLast' | 'endToEndDurationMsLast',
+  sumKey: 'claimDurationMsSum' | 'executeDurationMsSum' | 'reportDurationMsSum' | 'endToEndDurationMsSum',
+  sampleKey: 'claimDurationMsSamples' | 'executeDurationMsSamples' | 'reportDurationMsSamples' | 'endToEndDurationMsSamples',
+  durationMs: number,
+): void {
+  metrics[lastKey] = durationMs;
+  metrics[sumKey] += durationMs;
+  metrics[sampleKey] += 1;
+}
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
 
@@ -675,6 +734,30 @@ function startHealthServer() {
         '# HELP sentinel_stale_scans_recovered_total Total stale scans auto-failed by watchdog',
         '# TYPE sentinel_stale_scans_recovered_total counter',
         `sentinel_stale_scans_recovered_total ${metrics.staleScansRecoveredTotal}`,
+        '# HELP sentinel_claim_duration_ms_last Last claim_next_job RPC duration in ms',
+        '# TYPE sentinel_claim_duration_ms_last gauge',
+        `sentinel_claim_duration_ms_last ${metrics.claimDurationMsLast}`,
+        '# HELP sentinel_claim_duration_ms_avg Average claim_next_job RPC duration in ms',
+        '# TYPE sentinel_claim_duration_ms_avg gauge',
+        `sentinel_claim_duration_ms_avg ${metrics.claimDurationMsSamples > 0 ? (metrics.claimDurationMsSum / metrics.claimDurationMsSamples).toFixed(2) : '0'}`,
+        '# HELP sentinel_execute_duration_ms_last Last scan execution duration in ms',
+        '# TYPE sentinel_execute_duration_ms_last gauge',
+        `sentinel_execute_duration_ms_last ${metrics.executeDurationMsLast}`,
+        '# HELP sentinel_execute_duration_ms_avg Average scan execution duration in ms',
+        '# TYPE sentinel_execute_duration_ms_avg gauge',
+        `sentinel_execute_duration_ms_avg ${metrics.executeDurationMsSamples > 0 ? (metrics.executeDurationMsSum / metrics.executeDurationMsSamples).toFixed(2) : '0'}`,
+        '# HELP sentinel_report_duration_ms_last Last scan-result reporting duration in ms',
+        '# TYPE sentinel_report_duration_ms_last gauge',
+        `sentinel_report_duration_ms_last ${metrics.reportDurationMsLast}`,
+        '# HELP sentinel_report_duration_ms_avg Average scan-result reporting duration in ms',
+        '# TYPE sentinel_report_duration_ms_avg gauge',
+        `sentinel_report_duration_ms_avg ${metrics.reportDurationMsSamples > 0 ? (metrics.reportDurationMsSum / metrics.reportDurationMsSamples).toFixed(2) : '0'}`,
+        '# HELP sentinel_end_to_end_duration_ms_last Last end-to-end job duration in ms',
+        '# TYPE sentinel_end_to_end_duration_ms_last gauge',
+        `sentinel_end_to_end_duration_ms_last ${metrics.endToEndDurationMsLast}`,
+        '# HELP sentinel_end_to_end_duration_ms_avg Average end-to-end job duration in ms',
+        '# TYPE sentinel_end_to_end_duration_ms_avg gauge',
+        `sentinel_end_to_end_duration_ms_avg ${metrics.endToEndDurationMsSamples > 0 ? (metrics.endToEndDurationMsSum / metrics.endToEndDurationMsSamples).toFixed(2) : '0'}`,
       ];
 
       res.writeHead(200, {
