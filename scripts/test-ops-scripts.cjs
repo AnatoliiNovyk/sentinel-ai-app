@@ -615,6 +615,95 @@ async function testDailyBreachEscalationSkippedWhenHealthy(rootDir) {
   await closeServer(server);
 }
 
+async function testRecoveryPlaybookScript(rootDir) {
+  let cleanupCalled = false;
+  let webhookCalled = false;
+
+  const staleJobsBefore = [
+    {
+      id: 'job-recovery-1',
+      scan_id: 'scan-recovery-1',
+      status: 'running',
+      started_at: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+      error_message: null,
+    },
+    {
+      id: 'job-recovery-2',
+      scan_id: 'scan-recovery-2',
+      status: 'running',
+      started_at: new Date(Date.now() - 1000 * 60 * 260).toISOString(),
+      error_message: null,
+    },
+  ];
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scan_jobs') {
+      if (!cleanupCalled) {
+        return sendJson(res, 200, staleJobsBefore);
+      }
+      return sendJson(res, 200, []);
+    }
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      return sendJson(res, 200, [
+        {
+          id: 'scan-recovery-1',
+          status: 'running',
+          started_at: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+          completed_at: null,
+        },
+        {
+          id: 'scan-recovery-2',
+          status: 'running',
+          started_at: new Date(Date.now() - 1000 * 60 * 260).toISOString(),
+          completed_at: null,
+        },
+      ]);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/cleanup_stale_running_jobs') {
+      cleanupCalled = true;
+      const body = await parseJsonBody(req);
+      assert.equal(body.timeout_minutes, 120);
+      return sendJson(res, 200, { jobs_updated: 2, scans_updated: 2, timeout_minutes: 120 });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/webhook') {
+      webhookCalled = true;
+      return sendJson(res, 200, { ok: true });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-recovery-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'recovery-playbook.ps1');
+  const stdout = await runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-TimeoutMinutes', '120',
+    '-MaxScans', '200',
+    '-ApplyCleanup',
+    '-SendWebhook',
+    '-WebhookUrl', `http://127.0.0.1:${port}/webhook`,
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.summary.mode, 'apply');
+  assert.equal(json.summary.stale_running_jobs_before_count, 2);
+  assert.equal(json.summary.stale_running_jobs_after_count, 0);
+  assert.equal(json.summary.cleanup_attempted, true);
+  assert.equal(json.summary.cleanup_ok, true);
+  assert.equal(cleanupCalled, true);
+  assert.equal(webhookCalled, true);
+
+  await closeServer(server);
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
@@ -626,6 +715,7 @@ async function main() {
   await testScheduledCleanupScript(rootDir);
   await testDailyBreachEscalationScript(rootDir);
   await testDailyBreachEscalationSkippedWhenHealthy(rootDir);
+  await testRecoveryPlaybookScript(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');
 }

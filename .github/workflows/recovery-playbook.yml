@@ -1,0 +1,87 @@
+name: Recovery Playbook
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_minutes:
+        description: "Stale timeout in minutes"
+        required: false
+        default: "120"
+      max_scans:
+        description: "Max stale jobs to inspect"
+        required: false
+        default: "200"
+      apply_cleanup:
+        description: "Apply cleanup RPC (true/false)"
+        required: false
+        default: "false"
+      send_webhook:
+        description: "Send operational webhook report (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  recovery-playbook:
+    name: Run Recovery Playbook
+    runs-on: ubuntu-latest
+    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
+    timeout-minutes: 20
+    concurrency:
+      group: recovery-playbook
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+          EOF
+
+      - name: Execute recovery playbook
+        shell: pwsh
+        env:
+          INPUT_TIMEOUT_MINUTES: ${{ github.event.inputs.timeout_minutes }}
+          INPUT_MAX_SCANS: ${{ github.event.inputs.max_scans }}
+          INPUT_APPLY_CLEANUP: ${{ github.event.inputs.apply_cleanup }}
+          INPUT_SEND_WEBHOOK: ${{ github.event.inputs.send_webhook }}
+        run: |
+          $timeoutMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_TIMEOUT_MINUTES)) { 120 } else { [int]$env:INPUT_TIMEOUT_MINUTES }
+          $maxScans = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_SCANS)) { 200 } else { [int]$env:INPUT_MAX_SCANS }
+          $applyCleanup = if ([string]::IsNullOrWhiteSpace($env:INPUT_APPLY_CLEANUP)) { $false } else { [bool]::Parse($env:INPUT_APPLY_CLEANUP) }
+          $sendWebhook = if ([string]::IsNullOrWhiteSpace($env:INPUT_SEND_WEBHOOK)) { $true } else { [bool]::Parse($env:INPUT_SEND_WEBHOOK) }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/recovery-playbook.ps1',
+            '-TimeoutMinutes', $timeoutMinutes,
+            '-MaxScans', $maxScans
+          )
+          if ($applyCleanup) {
+            $args += '-ApplyCleanup'
+          }
+          if ($sendWebhook) {
+            $args += '-SendWebhook'
+          }
+
+          $output = powershell @args
+          $json = $output | Out-String | ConvertFrom-Json
+
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+          ($json | ConvertTo-Json -Depth 14) | Out-File -Encoding utf8 reports/recovery-playbook-report.json
+
+          Write-Host "mode=$($json.summary.mode) outcome=$($json.summary.recovery_outcome) stale_before=$($json.summary.stale_running_jobs_before_count) stale_after=$($json.summary.stale_running_jobs_after_count) cleanup_attempted=$($json.summary.cleanup_attempted)"
+
+      - name: Upload recovery artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-playbook-report
+          path: reports/recovery-playbook-report.json
+          if-no-files-found: error
