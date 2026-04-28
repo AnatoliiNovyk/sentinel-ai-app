@@ -14,9 +14,13 @@
 
 ## P1 імплементація
 - [x] Додано retry/backoff policy для transient error path у результатах агента (`sentinel-agent/src/index.ts`).
-- [ ] Додано audit trail подій scan lifecycle у `audit_logs` через `AuditService`.
-- [ ] Введено базові operational алерти (Slack/Teams webhook) по `scan_failed`/rate-limit spikes.
-- [ ] Додано smoke e2e чек у release workflow для запуску одного реального скану.
+- [x] Додано audit trail подій scan lifecycle у `audit_logs` через `AuditService`.
+- [x] Введено базові operational алерти (Slack/Teams webhook) по `scan_failed`/rate-limit spikes.
+- [x] Додано smoke e2e чек у release workflow для запуску одного реального скану.
+
+## P2 прогрес
+- [x] Додано базові runtime-метрики агента та endpoint `/metrics` для observability (`sentinel-agent/src/index.ts`).
+- [x] Додано adaptive polling backoff із jitter для `claim_next_job` помилок (`sentinel-agent/src/index.ts`).
 
 ## Валідація
 - [x] Запустити `npm run lint -- --max-warnings=0`.

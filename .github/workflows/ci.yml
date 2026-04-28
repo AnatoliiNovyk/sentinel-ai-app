@@ -55,3 +55,44 @@ jobs:
 
       - name: Run heap-safe trio stability tests
         run: npm run test:trio:stable
+
+  smoke-e2e-release:
+    name: Smoke E2E (Release)
+    runs-on: ubuntu-latest
+    needs: [quality]
+    if: github.ref == 'refs/heads/main' && secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != '' && secrets.SENTINEL_AGENT_SECRET != ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare smoke env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          AGENT_SECRET=${{ secrets.SENTINEL_AGENT_SECRET }}
+          EOF
+
+      - name: Run smoke pipeline check
+        shell: pwsh
+        run: |
+          $output = powershell -ExecutionPolicy Bypass -File scripts/smoke-pipeline-safe.ps1 -ControlledFailure
+          $json = $output | Out-String | ConvertFrom-Json
+
+          if ($json.dispatch_http -ne 200) {
+            throw "Smoke dispatch failed. HTTP=$($json.dispatch_http)"
+          }
+
+          if ($json.result_http -ne 200) {
+            throw "Smoke result callback failed. HTTP=$($json.result_http)"
+          }
+
+          if ($json.log_count -lt 3) {
+            throw "Smoke lifecycle logs insufficient. log_count=$($json.log_count)"
+          }
+
+          Write-Host "Smoke scan_id: $($json.scan_id)"
+          Write-Host "dispatch_http=$($json.dispatch_http) result_http=$($json.result_http) log_count=$($json.log_count)"

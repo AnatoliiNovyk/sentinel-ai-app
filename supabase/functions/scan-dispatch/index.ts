@@ -5,6 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+const operationalAlertWebhookUrl = Deno.env.get("OPERATIONAL_ALERT_WEBHOOK_URL") ?? "";
 
 // ---------------------------------------------------------------------------
 // In-memory rate limiter for scan dispatch (10 scans / 60s per user)
@@ -13,6 +14,53 @@ const SCAN_RATE_LIMIT = 10;
 const SCAN_WINDOW_MS = 60_000;
 const scanBuckets = new Map<string, number[]>();
 type AgentLogLevel = "info" | "success" | "error" | "warn";
+type AuditAction = "scan_started" | "rate_limit_exceeded" | "scan_failed";
+
+async function insertAuditLog(
+  serviceClient: ReturnType<typeof createClient>,
+  params: {
+    org_id: string;
+    user_id: string;
+    action: AuditAction;
+    resource_type: string;
+    resource_id: string;
+    status: "success" | "failure";
+    error_code?: string | null;
+    error_message?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+): Promise<void> {
+  const { error } = await serviceClient.from("audit_logs").insert({
+    org_id: params.org_id,
+    user_id: params.user_id,
+    action: params.action,
+    resource_type: params.resource_type,
+    resource_id: params.resource_id,
+    status: params.status,
+    error_code: params.error_code ?? null,
+    error_message: params.error_message ?? null,
+    metadata: params.metadata ?? null,
+    created_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.warn("audit log insert failed:", error.message);
+  }
+}
+
+async function sendOperationalAlert(payload: Record<string, unknown>): Promise<void> {
+  if (!operationalAlertWebhookUrl) return;
+
+  try {
+    await fetch(operationalAlertWebhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn("operational alert send failed:", error instanceof Error ? error.message : "Unknown error");
+  }
+}
 
 function checkScanRateLimit(userId: string): { allowed: boolean; retryAfterSeconds: number } {
   const now = Date.now();
@@ -114,6 +162,28 @@ Deno.serve(async (req: Request) => {
         level: "warn",
         message: `Scan dispatch rate-limited (retry_after=${rl.retryAfterSeconds}s)`,
       });
+      if (scan.org_id) {
+        await insertAuditLog(serviceClient, {
+          org_id: scan.org_id,
+          user_id: scan.user_id,
+          action: "rate_limit_exceeded",
+          resource_type: "scan",
+          resource_id: scan_id,
+          status: "failure",
+          error_code: "RATE_LIMIT",
+          error_message: `Retry after ${rl.retryAfterSeconds}s`,
+          metadata: { project_id, retry_after_seconds: rl.retryAfterSeconds },
+        });
+      }
+      await sendOperationalAlert({
+        event: "rate_limit_exceeded",
+        scan_id,
+        project_id,
+        user_id: scan.user_id,
+        org_id: scan.org_id ?? null,
+        retry_after_seconds: rl.retryAfterSeconds,
+        timestamp: new Date().toISOString(),
+      });
       return new Response(
         JSON.stringify({ error: "Too many scan requests. Please wait before starting another scan.", retryAfterSeconds: rl.retryAfterSeconds }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rl.retryAfterSeconds) } },
@@ -144,6 +214,17 @@ Deno.serve(async (req: Request) => {
       level: "success",
       message: "Scan job queued",
     });
+    if (scan.org_id) {
+      await insertAuditLog(serviceClient, {
+        org_id: scan.org_id,
+        user_id: scan.user_id,
+        action: "scan_started",
+        resource_type: "scan",
+        resource_id: scan_id,
+        status: "success",
+        metadata: { project_id, job_id: job.id, scanner, target },
+      });
+    }
 
     // Ensure the scan record also has the correct status and org_id
     await serviceClient
@@ -172,6 +253,38 @@ Deno.serve(async (req: Request) => {
         level: "error",
         message: `Scan dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}`,
       });
+
+      if (dispatchScanId) {
+        const { data: scanContext } = await serviceClient
+          .from("scans")
+          .select("user_id, org_id, project_id")
+          .eq("id", dispatchScanId)
+          .maybeSingle();
+
+        if (scanContext?.user_id && scanContext?.org_id) {
+          await insertAuditLog(serviceClient, {
+            org_id: scanContext.org_id,
+            user_id: scanContext.user_id,
+            action: "scan_failed",
+            resource_type: "scan",
+            resource_id: dispatchScanId,
+            status: "failure",
+            error_code: "DISPATCH_ERROR",
+            error_message: err instanceof Error ? err.message : "Unknown error",
+            metadata: { project_id: dispatchProjectId ?? null },
+          });
+        }
+
+        await sendOperationalAlert({
+          event: "scan_dispatch_failed",
+          scan_id: dispatchScanId,
+          project_id: scanContext?.project_id ?? dispatchProjectId ?? null,
+          user_id: scanContext?.user_id ?? null,
+          org_id: scanContext?.org_id ?? null,
+          error_message: err instanceof Error ? err.message : "Unknown error",
+          timestamp: new Date().toISOString(),
+        });
+      }
     } catch {
       // Logging failures must not mask the original dispatch error.
     }

@@ -11,7 +11,8 @@ const execFileAsync = promisify(execFile);
 const SUPABASE_URL    = process.env.SUPABASE_URL!;
 const SERVICE_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const AGENT_SECRET    = process.env.AGENT_SECRET!;
-const POLL_INTERVAL   = 3_000; // 3 seconds
+const BASE_POLL_INTERVAL_MS = 3_000;
+const MAX_POLL_INTERVAL_MS = 30_000;
 const REPORT_MAX_ATTEMPTS = 4;
 const REPORT_BASE_DELAY_MS = 1_000;
 
@@ -101,6 +102,12 @@ function getErrorMessage(err: unknown): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withJitter(ms: number, ratio = 0.2): number {
+  const delta = ms * ratio;
+  const jittered = ms + (Math.random() * 2 - 1) * delta;
+  return Math.max(500, Math.round(jittered));
 }
 
 function isTransientReportError(err: unknown): boolean {
@@ -393,6 +400,7 @@ async function reportResult(
   error?: string
 ) : Promise<boolean> {
   for (let attempt = 1; attempt <= REPORT_MAX_ATTEMPTS; attempt++) {
+    metrics.reportAttemptsTotal++;
     try {
       const res = await reportCB.call(() =>
         axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
@@ -413,6 +421,7 @@ async function reportResult(
       );
 
       console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}. Attempt ${attempt}/${REPORT_MAX_ATTEMPTS}`);
+      metrics.reportSuccessTotal++;
       return true;
     } catch (err: unknown) {
       const transient = isTransientReportError(err);
@@ -420,6 +429,7 @@ async function reportResult(
       const errMsg = getErrorMessage(err);
 
       if (transient && hasRetriesLeft) {
+        metrics.reportRetriesTotal++;
         const delayMs = REPORT_BASE_DELAY_MS * 2 ** (attempt - 1);
         console.warn(`⚠️ Report attempt ${attempt}/${REPORT_MAX_ATTEMPTS} failed for job ${jobId}: ${errMsg}. Retrying in ${delayMs}ms`);
         await writeLog(jobId, scanId, projectId, 'warn', `Report delivery transient failure (attempt ${attempt}/${REPORT_MAX_ATTEMPTS}); retry in ${delayMs}ms`);
@@ -428,19 +438,21 @@ async function reportResult(
       }
 
       console.error(`❌ Failed to report results for job ${jobId} after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
+      metrics.reportFailuresTotal++;
       await writeLog(jobId, scanId, projectId, 'error', `Report delivery failed after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
       return false;
     }
   }
 
+  metrics.reportFailuresTotal++;
   return false;
 }
 
 async function fetchPendingJob(): Promise<ScanJob | null> {
   const { data, error } = await supabase.rpc('claim_next_job');
   if (error) {
-    console.error('❌ Error claiming job:', error.message);
-    return null;
+    metrics.jobClaimErrorsTotal++;
+    throw new Error(`claim_next_job failed: ${error.message}`);
   }
   return data && data.length > 0 ? (data[0] as ScanJob) : null;
 }
@@ -547,13 +559,55 @@ const health = {
   lastError: null as string | null,
 };
 
+const metrics = {
+  reportAttemptsTotal: 0,
+  reportRetriesTotal: 0,
+  reportSuccessTotal: 0,
+  reportFailuresTotal: 0,
+  jobClaimErrorsTotal: 0,
+};
+
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
 
 function startHealthServer() {
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/metrics') {
+      const lines = [
+        '# HELP sentinel_jobs_processed_total Total jobs processed by agent',
+        '# TYPE sentinel_jobs_processed_total counter',
+        `sentinel_jobs_processed_total ${health.jobsProcessed}`,
+        '# HELP sentinel_jobs_failed_total Total jobs failed in agent loop',
+        '# TYPE sentinel_jobs_failed_total counter',
+        `sentinel_jobs_failed_total ${health.jobsFailed}`,
+        '# HELP sentinel_report_attempts_total Total result report attempts',
+        '# TYPE sentinel_report_attempts_total counter',
+        `sentinel_report_attempts_total ${metrics.reportAttemptsTotal}`,
+        '# HELP sentinel_report_retries_total Total result report retries',
+        '# TYPE sentinel_report_retries_total counter',
+        `sentinel_report_retries_total ${metrics.reportRetriesTotal}`,
+        '# HELP sentinel_report_success_total Total successful result reports',
+        '# TYPE sentinel_report_success_total counter',
+        `sentinel_report_success_total ${metrics.reportSuccessTotal}`,
+        '# HELP sentinel_report_failures_total Total failed result reports after retries',
+        '# TYPE sentinel_report_failures_total counter',
+        `sentinel_report_failures_total ${metrics.reportFailuresTotal}`,
+        '# HELP sentinel_job_claim_errors_total Total claim_next_job RPC errors',
+        '# TYPE sentinel_job_claim_errors_total counter',
+        `sentinel_job_claim_errors_total ${metrics.jobClaimErrorsTotal}`,
+      ];
+
+      res.writeHead(200, {
+        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(`${lines.join('\n')}\n`);
+      return;
+    }
+
     if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
       const body = JSON.stringify({
         ...health,
+        metrics,
         uptime: Math.floor((Date.now() - new Date(health.startedAt).getTime()) / 1000),
         timestamp: new Date().toISOString(),
       });
@@ -578,7 +632,10 @@ function startHealthServer() {
 async function main() {
   startHealthServer();
   health.status = 'ok';
-  console.log('🚀 Agent loop started (3s interval)');
+  console.log(`🚀 Agent loop started (${BASE_POLL_INTERVAL_MS}ms base interval)`);
+  let consecutiveLoopErrors = 0;
+  let pollIntervalMs = BASE_POLL_INTERVAL_MS;
+
   while (true) {
     try {
       const job = await fetchPendingJob();
@@ -587,13 +644,25 @@ async function main() {
         await runJob(job);
         health.jobsProcessed++;
       }
+
+      consecutiveLoopErrors = 0;
+      pollIntervalMs = BASE_POLL_INTERVAL_MS;
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
       console.error('⚠️ Loop Error:', msg);
       health.jobsFailed++;
       health.lastError = msg;
+
+      consecutiveLoopErrors++;
+      const backoffMs = Math.min(
+        BASE_POLL_INTERVAL_MS * 2 ** Math.min(consecutiveLoopErrors, 4),
+        MAX_POLL_INTERVAL_MS,
+      );
+      pollIntervalMs = withJitter(backoffMs);
+      console.warn(`⏳ Backing off queue polling for ${pollIntervalMs}ms (consecutive errors: ${consecutiveLoopErrors})`);
     }
-    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+
+    await sleep(pollIntervalMs);
   }
 }
 
