@@ -12,6 +12,12 @@
 - [x] Додано lifecycle-логи в result flow (`received`, `scan failed`, `chat completed`, `scan completed`).
 - [x] Переконанося, що logging не блокує основний flow.
 
+## P1 імплементація
+- [x] Додано retry/backoff policy для transient error path у результатах агента (`sentinel-agent/src/index.ts`).
+- [ ] Додано audit trail подій scan lifecycle у `audit_logs` через `AuditService`.
+- [ ] Введено базові operational алерти (Slack/Teams webhook) по `scan_failed`/rate-limit spikes.
+- [ ] Додано smoke e2e чек у release workflow для запуску одного реального скану.
+
 ## Валідація
 - [x] Запустити `npm run lint -- --max-warnings=0`.
 - [x] Запустити `npm run build`.

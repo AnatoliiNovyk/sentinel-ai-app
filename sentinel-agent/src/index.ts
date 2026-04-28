@@ -12,6 +12,8 @@ const SUPABASE_URL    = process.env.SUPABASE_URL!;
 const SERVICE_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const AGENT_SECRET    = process.env.AGENT_SECRET!;
 const POLL_INTERVAL   = 3_000; // 3 seconds
+const REPORT_MAX_ATTEMPTS = 4;
+const REPORT_BASE_DELAY_MS = 1_000;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -95,6 +97,22 @@ type ScanJob = {
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientReportError(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false;
+
+  const status = err.response?.status;
+  if (status === 429 || (typeof status === 'number' && status >= 500)) {
+    return true;
+  }
+
+  const code = err.code;
+  return code === 'ECONNABORTED' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND' || code === 'EAI_AGAIN';
 }
 
 console.log('🛡️ Sentinel AI Agent v2.3 starting...');
@@ -373,28 +391,49 @@ async function reportResult(
   findings: Finding[],
   metadata: Record<string, unknown>,
   error?: string
-) {
-  try {
-    const res = await reportCB.call(() =>
-      axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
-        job_id: jobId,
-        scan_id: scanId,
-        user_id: userId,
-        project_id: projectId,
-        findings,
-        metadata,
-        error_message: error
-      }, {
-        headers: {
-          'X-Agent-Secret': AGENT_SECRET,
-          'Authorization': `Bearer ${SERVICE_KEY}`
-        }
-      })
-    );
-    console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}`);
-  } catch (err: unknown) {
-    console.error(`❌ Failed to report results for job ${jobId}:`, getErrorMessage(err));
+) : Promise<boolean> {
+  for (let attempt = 1; attempt <= REPORT_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await reportCB.call(() =>
+        axios.post(`${SUPABASE_URL}/functions/v1/scan-result`, {
+          job_id: jobId,
+          scan_id: scanId,
+          user_id: userId,
+          project_id: projectId,
+          findings,
+          metadata,
+          error_message: error
+        }, {
+          headers: {
+            'X-Agent-Secret': AGENT_SECRET,
+            'Authorization': `Bearer ${SERVICE_KEY}`
+          },
+          timeout: 15_000,
+        })
+      );
+
+      console.log(`✅ Reported results for job ${jobId}. Status: ${res.status}. Attempt ${attempt}/${REPORT_MAX_ATTEMPTS}`);
+      return true;
+    } catch (err: unknown) {
+      const transient = isTransientReportError(err);
+      const hasRetriesLeft = attempt < REPORT_MAX_ATTEMPTS;
+      const errMsg = getErrorMessage(err);
+
+      if (transient && hasRetriesLeft) {
+        const delayMs = REPORT_BASE_DELAY_MS * 2 ** (attempt - 1);
+        console.warn(`⚠️ Report attempt ${attempt}/${REPORT_MAX_ATTEMPTS} failed for job ${jobId}: ${errMsg}. Retrying in ${delayMs}ms`);
+        await writeLog(jobId, scanId, projectId, 'warn', `Report delivery transient failure (attempt ${attempt}/${REPORT_MAX_ATTEMPTS}); retry in ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+
+      console.error(`❌ Failed to report results for job ${jobId} after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
+      await writeLog(jobId, scanId, projectId, 'error', `Report delivery failed after ${attempt}/${REPORT_MAX_ATTEMPTS} attempt(s): ${errMsg}`);
+      return false;
+    }
   }
+
+  return false;
 }
 
 async function fetchPendingJob(): Promise<ScanJob | null> {
@@ -437,14 +476,21 @@ async function runJob(job: ScanJob) {
       job.id, job.scan_id, job.project_id, 'success',
       `✅ Scan complete — ${realFindings.length} finding(s) found (${findings.length} total)`
     );
-    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
-    await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
+    const reportOk = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
+    if (reportOk) {
+      await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
+    } else {
+      await writeLog(job.id, job.scan_id, job.project_id, 'error', '📤 Result reporting failed after retries');
+    }
     await sendWebhookAlert(job.project_id, job.target, findings);
   } catch (err: unknown) {
     const message = getErrorMessage(err);
     console.error(`❌ Job ${job.id} crashed:`, message);
     await writeLog(job.id, job.scan_id, job.project_id, 'error', `❌ Scan failed: ${message}`);
-    await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
+    const failureReportOk = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
+    if (!failureReportOk) {
+      await writeLog(job.id, job.scan_id, job.project_id, 'error', '❌ Failed to deliver scan failure payload after retries');
+    }
   }
 }
 
