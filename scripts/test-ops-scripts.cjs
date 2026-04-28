@@ -266,12 +266,79 @@ async function testDailyReportScript(rootDir) {
   server.close();
 }
 
+async function testScheduledCleanupScript(rootDir) {
+  let cleanupCalled = false;
+  let webhookCalled = false;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scan_jobs') {
+      return sendJson(res, 200, [
+        {
+          id: 'job-cleanup-1',
+          scan_id: 'scan-cleanup-1',
+          status: 'running',
+          started_at: new Date(Date.now() - 1000 * 60 * 200).toISOString(),
+          error_message: null,
+        },
+        {
+          id: 'job-cleanup-2',
+          scan_id: 'scan-cleanup-2',
+          status: 'running',
+          started_at: new Date(Date.now() - 1000 * 60 * 210).toISOString(),
+          error_message: null,
+        },
+      ]);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/cleanup_stale_running_jobs') {
+      cleanupCalled = true;
+      const body = await parseJsonBody(req);
+      assert.equal(body.timeout_minutes, 120);
+      return sendJson(res, 200, { jobs_updated: 2, scans_updated: 2, timeout_minutes: 120 });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/webhook') {
+      webhookCalled = true;
+      return sendJson(res, 200, { ok: true });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-scheduled-cleanup-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'scheduled-stale-cleanup.ps1');
+  const stdout = runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-TimeoutMinutes', '120',
+    '-MinStaleJobsToCleanup', '2',
+    '-MaxJobsInspect', '100',
+    '-ApplyCleanup',
+    '-SendWebhook',
+    '-WebhookUrl', `http://127.0.0.1:${port}/webhook`,
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.summary.should_cleanup, true);
+  assert.equal(json.summary.cleanup_attempted, true);
+  assert.equal(json.summary.cleanup_http, 200);
+  assert.equal(cleanupCalled, true);
+  assert.equal(webhookCalled, true);
+
+  server.close();
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
   await testSmokeScript(rootDir);
   await testTriageScript(rootDir);
   await testDailyReportScript(rootDir);
+  await testScheduledCleanupScript(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');
 }

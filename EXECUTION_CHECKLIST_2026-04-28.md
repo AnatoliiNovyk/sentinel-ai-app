@@ -48,3 +48,4 @@
 - [x] Додано incident runbook і triage/recovery скрипт для stuck scans/jobs (`RUNBOOK_SCAN_PIPELINE_INCIDENTS.md`, `scripts/triage-stuck-scans.ps1`).
 - [x] Додано щоденний automated health-report workflow + скрипт з опційною відправкою у webhook (`.github/workflows/daily-scan-health-report.yml`, `scripts/daily-queue-health-report.ps1`).
 - [x] Додано контрактні тести для ops-скриптів з mock HTTP і підключено їх у CI (`scripts/test-ops-scripts.cjs`, `.github/workflows/ci.yml`).
+- [x] Додано scheduled safe cleanup workflow для stale `running` jobs з порогом і webhook-звітом (`scripts/scheduled-stale-cleanup.ps1`, `.github/workflows/scheduled-stale-cleanup.yml`).

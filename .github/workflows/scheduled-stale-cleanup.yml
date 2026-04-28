@@ -1,0 +1,51 @@
+name: Scheduled Stale Cleanup
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  stale-cleanup:
+    name: Safe Stale Cleanup
+    runs-on: ubuntu-latest
+    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare cleanup env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+          EOF
+
+      - name: Run stale cleanup safely
+        shell: pwsh
+        run: |
+          $output = powershell -ExecutionPolicy Bypass -File scripts/scheduled-stale-cleanup.ps1 -TimeoutMinutes 120 -MinStaleJobsToCleanup 3 -MaxJobsInspect 500 -ApplyCleanup -SendWebhook
+          $json = $output | Out-String | ConvertFrom-Json
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+          ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/scheduled-stale-cleanup.json
+
+          Write-Host "stale_running_jobs_count=$($json.summary.stale_running_jobs_count) should_cleanup=$($json.summary.should_cleanup) cleanup_attempted=$($json.summary.cleanup_attempted) cleanup_ok=$($json.summary.cleanup_ok)"
+
+          if ($json.summary.cleanup_attempted -and -not $json.summary.cleanup_ok) {
+            throw "Scheduled stale cleanup RPC failed. HTTP=$($json.summary.cleanup_http)"
+          }
+
+          if ($json.send_webhook -and $null -ne $json.webhook_status -and -not $json.webhook_status.ok) {
+            throw "Scheduled stale cleanup webhook failed. HTTP=$($json.webhook_status.http)"
+          }
+
+      - name: Upload cleanup report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-stale-cleanup
+          path: reports/scheduled-stale-cleanup.json
+          if-no-files-found: error
