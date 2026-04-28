@@ -79,7 +79,7 @@ jobs:
       - name: Run smoke pipeline check
         shell: pwsh
         run: |
-          $output = powershell -ExecutionPolicy Bypass -File scripts/smoke-pipeline-safe.ps1 -ControlledFailure
+          $output = powershell -ExecutionPolicy Bypass -File scripts/smoke-pipeline-safe.ps1 -ControlledFailure -WaitForCompletion -TimeoutSeconds 240 -PollIntervalSeconds 4
           $json = $output | Out-String | ConvertFrom-Json
 
           if ($json.dispatch_http -ne 200) {
@@ -94,5 +94,22 @@ jobs:
             throw "Smoke lifecycle logs insufficient. log_count=$($json.log_count)"
           }
 
+          if (-not $json.wait_for_completion) {
+            throw "Smoke wait_for_completion=false. CI gate must enforce terminal status."
+          }
+
+          if ($json.final_scan_status -notin @('completed', 'failed', 'error')) {
+            throw "Smoke scan did not reach terminal status in time. final_scan_status=$($json.final_scan_status)"
+          }
+
+          if ($json.final_scan_status -ne 'failed') {
+            throw "Controlled failure smoke expected failed final status, got: $($json.final_scan_status)"
+          }
+
+          $activeJobs = @($json.jobs | Where-Object { $_.status -in @('queued', 'pending', 'running') })
+          if ($activeJobs.Count -gt 0) {
+            throw "Smoke finished but jobs still active: $($activeJobs.Count)"
+          }
+
           Write-Host "Smoke scan_id: $($json.scan_id)"
-          Write-Host "dispatch_http=$($json.dispatch_http) result_http=$($json.result_http) log_count=$($json.log_count)"
+          Write-Host "dispatch_http=$($json.dispatch_http) result_http=$($json.result_http) final_scan_status=$($json.final_scan_status) jobs=$($json.jobs.Count) log_count=$($json.log_count)"

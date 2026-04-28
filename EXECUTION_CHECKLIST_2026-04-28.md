@@ -41,3 +41,6 @@
 
 ## Артефакти
 - [x] Додано changelog поточного батчу у `changelogs/`.
+
+## P3 прогрес
+- [x] Release smoke CI gate переведено на режим очікування термінального статусу scan (`-WaitForCompletion`) з fail-fast при `queued/pending/running` (`.github/workflows/ci.yml`).
