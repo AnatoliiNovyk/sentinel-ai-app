@@ -70,3 +70,4 @@
 - [x] Посилено CI окремим heap-safe job для dashboard stability (`.github/workflows/ci.yml`).
 - [x] Посилено evidence verifier strict-перевіркою `schema_version=1.0` і покрито негативними контрактами (invalid/missing schema_version) для блокування невалідних evidence-конвертів (`scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
 - [x] Посилено evidence verifier strict-перевіркою integrity metadata (`algorithm=sha256`, `payload_hash=64 hex`) та негативними контрактами для invalid integrity metadata і unsupported report_type (`scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
+- [x] Додано strict валідацію форми payload по report-type (типи `summary`/`thresholds_ok`/`threshold_breaches`) та негативні контракти на invalid payload shape для daily/weekly evidence (`scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).

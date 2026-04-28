@@ -67,6 +67,28 @@ function getPayloadForReport(report) {
   throw new Error(`Unsupported report_type: ${report.report_type}`);
 }
 
+function validateReportPayloadShape(report) {
+  if (report.report_type === 'daily_scan_health_report' || report.report_type === 'weekly_slo_sla_summary') {
+    if (!report.summary || typeof report.summary !== 'object' || Array.isArray(report.summary)) {
+      throw new Error(`Invalid ${report.report_type} payload: summary must be an object`);
+    }
+
+    if (typeof report.thresholds_ok !== 'boolean') {
+      throw new Error(`Invalid ${report.report_type} payload: thresholds_ok must be a boolean`);
+    }
+
+    if (!Array.isArray(report.threshold_breaches)) {
+      throw new Error(`Invalid ${report.report_type} payload: threshold_breaches must be an array`);
+    }
+  }
+
+  if (report.report_type === 'scan_pipeline_recovery_playbook') {
+    if (!report.summary || typeof report.summary !== 'object' || Array.isArray(report.summary)) {
+      throw new Error('Invalid scan_pipeline_recovery_playbook payload: summary must be an object');
+    }
+  }
+}
+
 function getEvidencePrefix(reportType) {
   if (reportType === 'daily_scan_health_report') {
     return 'daily-health';
@@ -134,6 +156,7 @@ function main() {
   const report = JSON.parse(text);
 
   validateIntegrityMetadata(report);
+  validateReportPayloadShape(report);
 
   const payload = getPayloadForReport(report);
   const actualHash = sha256Hex(JSON.stringify(payload));

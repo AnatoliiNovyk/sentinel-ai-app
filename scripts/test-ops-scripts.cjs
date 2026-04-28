@@ -968,6 +968,22 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const unsupportedReportTypeResult = await runNodeExpectFail(verifierScript, ['--report-file', unsupportedReportTypeFile]);
   assert.match(`${unsupportedReportTypeResult.stdout}\n${unsupportedReportTypeResult.stderr}`, /Unsupported report_type/i);
+
+  const invalidWeeklyThresholds = JSON.parse(JSON.stringify(weeklyReport));
+  invalidWeeklyThresholds.thresholds_ok = 'false';
+  const invalidWeeklyThresholdsFile = path.join(tempDir, 'weekly-invalid-thresholds-ok-type.json');
+  fs.writeFileSync(invalidWeeklyThresholdsFile, JSON.stringify(invalidWeeklyThresholds), 'utf8');
+
+  const invalidWeeklyThresholdsResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidWeeklyThresholdsFile]);
+  assert.match(`${invalidWeeklyThresholdsResult.stdout}\n${invalidWeeklyThresholdsResult.stderr}`, /thresholds_ok must be a boolean/i);
+
+  const invalidDailyBreaches = JSON.parse(JSON.stringify(dailyReport));
+  invalidDailyBreaches.threshold_breaches = null;
+  const invalidDailyBreachesFile = path.join(tempDir, 'daily-invalid-threshold-breaches-type.json');
+  fs.writeFileSync(invalidDailyBreachesFile, JSON.stringify(invalidDailyBreaches), 'utf8');
+
+  const invalidDailyBreachesResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidDailyBreachesFile]);
+  assert.match(`${invalidDailyBreachesResult.stdout}\n${invalidDailyBreachesResult.stderr}`, /threshold_breaches must be an array/i);
 }
 
 async function testWeeklySloSlaSummaryScript(rootDir) {
