@@ -158,6 +158,15 @@ function writeEnvFile(filePath, supabaseUrl, includeAgentSecret = true) {
   fs.writeFileSync(filePath, `${lines.join('\n')}\n`, 'utf8');
 }
 
+function writeEscalationEnvFile(filePath, escalationWebhookUrl) {
+  const lines = [
+    'SUPABASE_URL=http://127.0.0.1:9',
+    'SUPABASE_SERVICE_ROLE_KEY=test-service-role-key',
+    `ESCALATION_ALERT_WEBHOOK_URL=${escalationWebhookUrl}`,
+  ];
+  fs.writeFileSync(filePath, `${lines.join('\n')}\n`, 'utf8');
+}
+
 async function testSmokeScript(rootDir) {
   let logsCalls = 0;
 
@@ -453,6 +462,97 @@ async function testScheduledCleanupScript(rootDir) {
   await closeServer(server);
 }
 
+async function testDailyBreachEscalationScript(rootDir) {
+  let webhookCalled = false;
+  let webhookPayload = null;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'POST' && url.pathname === '/webhook') {
+      webhookCalled = true;
+      webhookPayload = await parseJsonBody(req);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-escalate-'));
+  const envFile = path.join(tempDir, '.env');
+  const reportFile = path.join(tempDir, 'daily-report.json');
+  writeEscalationEnvFile(envFile, `http://127.0.0.1:${port}/webhook`);
+
+  fs.writeFileSync(reportFile, JSON.stringify({
+    thresholds_ok: false,
+    threshold_breaches: [{ type: 'stale_running_jobs', actual: 5, threshold: 3 }],
+    summary: {
+      generated_at: new Date().toISOString(),
+      scans_total: 10,
+      jobs_total: 12,
+    },
+  }), 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'escalate-daily-health-breach.ps1');
+  const stdout = await runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-ReportFile', reportFile,
+    '-EscalateOnBreach',
+    '-EscalationSeverity', 'critical',
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.status, 'escalated');
+  assert.equal(json.escalation_attempted, true);
+  assert.equal(webhookCalled, true);
+  assert.equal(webhookPayload.event, 'daily_scan_pipeline_threshold_breach');
+  assert.equal(webhookPayload.severity, 'critical');
+
+  await closeServer(server);
+}
+
+async function testDailyBreachEscalationSkippedWhenHealthy(rootDir) {
+  let webhookCalled = false;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'POST' && url.pathname === '/webhook') {
+      webhookCalled = true;
+      return sendJson(res, 200, { ok: true });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-escalate-skip-'));
+  const envFile = path.join(tempDir, '.env');
+  const reportFile = path.join(tempDir, 'daily-report.json');
+  writeEscalationEnvFile(envFile, `http://127.0.0.1:${port}/webhook`);
+
+  fs.writeFileSync(reportFile, JSON.stringify({
+    thresholds_ok: true,
+    threshold_breaches: [],
+    summary: {
+      generated_at: new Date().toISOString(),
+    },
+  }), 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'escalate-daily-health-breach.ps1');
+  const stdout = await runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-ReportFile', reportFile,
+    '-EscalateOnBreach',
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.status, 'skipped');
+  assert.equal(json.reason, 'thresholds_ok');
+  assert.equal(webhookCalled, false);
+
+  await closeServer(server);
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
@@ -461,6 +561,8 @@ async function main() {
   await testDailyReportScript(rootDir);
   await testDailyReportThresholdFail(rootDir);
   await testScheduledCleanupScript(rootDir);
+  await testDailyBreachEscalationScript(rootDir);
+  await testDailyBreachEscalationSkippedWhenHealthy(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');
 }

@@ -25,6 +25,18 @@ on:
         description: "Fail run if thresholds are breached (true/false)"
         required: false
         default: "true"
+      escalate_on_breach:
+        description: "Escalate to incident webhook when thresholds are breached (true/false)"
+        required: false
+        default: "true"
+      escalation_severity:
+        description: "Escalation severity label"
+        required: false
+        default: "high"
+      escalation_webhook_url:
+        description: "Optional escalation webhook URL override"
+        required: false
+        default: ""
 
 jobs:
   daily-report:
@@ -48,9 +60,11 @@ jobs:
           SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
           OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+          ESCALATION_ALERT_WEBHOOK_URL=${{ secrets.ESCALATION_ALERT_WEBHOOK_URL }}
           EOF
 
       - name: Generate and send daily report
+        id: report
         shell: pwsh
         env:
           INPUT_HOURS_BACK: ${{ github.event.inputs.hours_back }}
@@ -58,12 +72,14 @@ jobs:
           INPUT_MAX_STALE_RUNNING_JOBS: ${{ github.event.inputs.max_stale_running_jobs }}
           INPUT_MAX_ERROR_JOB_RATE_PERCENT: ${{ github.event.inputs.max_error_job_rate_percent }}
           INPUT_FAIL_ON_THRESHOLD_BREACH: ${{ github.event.inputs.fail_on_threshold_breach }}
+          INPUT_ESCALATE_ON_BREACH: ${{ github.event.inputs.escalate_on_breach }}
         run: |
           $hoursBack = if ([string]::IsNullOrWhiteSpace($env:INPUT_HOURS_BACK)) { 24 } else { [int]$env:INPUT_HOURS_BACK }
           $staleMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_STALE_MINUTES)) { 60 } else { [int]$env:INPUT_STALE_MINUTES }
           $maxStaleRunningJobs = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_STALE_RUNNING_JOBS)) { 3 } else { [int]$env:INPUT_MAX_STALE_RUNNING_JOBS }
           $maxErrorJobRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_ERROR_JOB_RATE_PERCENT)) { 60 } else { [double]$env:INPUT_MAX_ERROR_JOB_RATE_PERCENT }
           $failOnThresholdBreach = if ([string]::IsNullOrWhiteSpace($env:INPUT_FAIL_ON_THRESHOLD_BREACH)) { $true } else { [bool]::Parse($env:INPUT_FAIL_ON_THRESHOLD_BREACH) }
+          $escalateOnBreach = if ([string]::IsNullOrWhiteSpace($env:INPUT_ESCALATE_ON_BREACH)) { $true } else { [bool]::Parse($env:INPUT_ESCALATE_ON_BREACH) }
 
           $args = @(
             '-ExecutionPolicy', 'Bypass',
@@ -74,14 +90,15 @@ jobs:
             '-MaxErrorJobRatePercent', $maxErrorJobRatePercent,
             '-SendWebhook'
           )
-          if ($failOnThresholdBreach) {
-            $args += '-FailOnThresholdBreach'
-          }
 
           $output = powershell @args
           $json = $output | Out-String | ConvertFrom-Json
           New-Item -ItemType Directory -Force -Path reports | Out-Null
           ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/daily-scan-health-report.json
+
+          "thresholds_ok=$($json.thresholds_ok.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "should_fail=$(((-not $json.thresholds_ok) -and $failOnThresholdBreach).ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "escalate_on_breach=$($escalateOnBreach.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           Write-Host "Daily health report generated at: $($json.summary.generated_at)"
           Write-Host "scans_total=$($json.summary.scans_total) jobs_total=$($json.summary.jobs_total) stale_running_jobs_count=$($json.summary.stale_running_jobs_count) avg_completed_scan_duration_sec=$($json.summary.avg_completed_scan_duration_sec)"
@@ -94,7 +111,40 @@ jobs:
             }
           }
 
+      - name: Escalate threshold breach
+        if: steps.report.outputs.thresholds_ok == 'false' && steps.report.outputs.escalate_on_breach == 'true'
+        shell: pwsh
+        env:
+          INPUT_ESCALATION_SEVERITY: ${{ github.event.inputs.escalation_severity }}
+          INPUT_ESCALATION_WEBHOOK_URL: ${{ github.event.inputs.escalation_webhook_url }}
+        run: |
+          $escalationSeverity = if ([string]::IsNullOrWhiteSpace($env:INPUT_ESCALATION_SEVERITY)) { 'high' } else { $env:INPUT_ESCALATION_SEVERITY }
+          $escalationWebhookUrl = if ([string]::IsNullOrWhiteSpace($env:INPUT_ESCALATION_WEBHOOK_URL)) { '' } else { $env:INPUT_ESCALATION_WEBHOOK_URL }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/escalate-daily-health-breach.ps1',
+            '-ReportFile', 'reports/daily-scan-health-report.json',
+            '-EscalateOnBreach',
+            '-EscalationSeverity', $escalationSeverity
+          )
+          if (-not [string]::IsNullOrWhiteSpace($escalationWebhookUrl)) {
+            $args += @('-WebhookUrl', $escalationWebhookUrl)
+          }
+
+          $output = powershell @args
+          $json = $output | Out-String | ConvertFrom-Json
+          Write-Host "escalation_status=$($json.status) escalation_reason=$($json.reason) attempts=$($json.webhook_status.attempts)"
+
+      - name: Fail on threshold breach
+        if: steps.report.outputs.should_fail == 'true'
+        shell: bash
+        run: |
+          echo "Daily health thresholds breached and fail_on_threshold_breach=true"
+          exit 1
+
       - name: Upload daily report artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: daily-scan-health-report
