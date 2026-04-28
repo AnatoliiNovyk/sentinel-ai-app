@@ -1,0 +1,85 @@
+name: Chaos Ops Drill
+
+on:
+  schedule:
+    - cron: '15 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      run_contract_suite:
+        description: "Run full ops contract fault-injection suite (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  chaos-drill:
+    name: Run Chaos Fault-Injection Drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: chaos-ops-drill
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Execute chaos drill
+        shell: pwsh
+        env:
+          INPUT_RUN_CONTRACT_SUITE: ${{ github.event.inputs.run_contract_suite }}
+        run: |
+          $runContractSuite = if ([string]::IsNullOrWhiteSpace($env:INPUT_RUN_CONTRACT_SUITE)) { $true } else { [bool]::Parse($env:INPUT_RUN_CONTRACT_SUITE) }
+
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+
+          if (-not $runContractSuite) {
+            $report = [pscustomobject]@{
+              schema_version = '1.0'
+              report_type = 'chaos_ops_drill'
+              executed = $false
+              reason = 'run_contract_suite=false'
+              generated_at = (Get-Date).ToUniversalTime().ToString('o')
+              workflow = 'chaos-ops-drill.yml'
+            }
+            ($report | ConvertTo-Json -Depth 8) | Out-File -Encoding utf8 reports/chaos-ops-drill.json
+            Write-Host 'Chaos drill skipped by input flag.'
+            exit 0
+          }
+
+          $output = node scripts/test-ops-scripts.cjs 2>&1
+          $exitCode = $LASTEXITCODE
+
+          $report = [pscustomobject]@{
+            schema_version = '1.0'
+            report_type = 'chaos_ops_drill'
+            executed = $true
+            generated_at = (Get-Date).ToUniversalTime().ToString('o')
+            workflow = 'chaos-ops-drill.yml'
+            command = 'node scripts/test-ops-scripts.cjs'
+            success = ($exitCode -eq 0)
+            exit_code = $exitCode
+            output_excerpt = ($output | Select-Object -Last 80)
+          }
+
+          ($report | ConvertTo-Json -Depth 10) | Out-File -Encoding utf8 reports/chaos-ops-drill.json
+
+          if ($exitCode -ne 0) {
+            throw "Chaos drill failed. ExitCode=$exitCode"
+          }
+
+      - name: Upload chaos drill artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-ops-drill
+          path: reports/chaos-ops-drill.json
+          if-no-files-found: error
