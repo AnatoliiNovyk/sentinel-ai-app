@@ -21,6 +21,7 @@
     "test:safe:dashboard": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite dashboard",
     "test:safe:trio": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite trio",
     "test:safe:full": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite full",
+    "test:ops:contracts": "node scripts/test-ops-scripts.cjs",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "quality:check": "npm run check:no-js-duplicates && npm run lint -- --max-warnings=0 && npm run typecheck && npm run test:run && npm run build"
