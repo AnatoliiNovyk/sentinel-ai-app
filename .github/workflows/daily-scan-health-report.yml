@@ -4,6 +4,27 @@ on:
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
+    inputs:
+      hours_back:
+        description: "Reporting window in hours"
+        required: false
+        default: "24"
+      stale_minutes:
+        description: "Minutes before running job is considered stale"
+        required: false
+        default: "60"
+      max_stale_running_jobs:
+        description: "Max allowed stale running jobs before breach"
+        required: false
+        default: "3"
+      max_error_job_rate_percent:
+        description: "Max allowed error job rate (0-100)"
+        required: false
+        default: "60"
+      fail_on_threshold_breach:
+        description: "Fail run if thresholds are breached (true/false)"
+        required: false
+        default: "true"
 
 jobs:
   daily-report:
@@ -31,14 +52,40 @@ jobs:
 
       - name: Generate and send daily report
         shell: pwsh
+        env:
+          INPUT_HOURS_BACK: ${{ github.event.inputs.hours_back }}
+          INPUT_STALE_MINUTES: ${{ github.event.inputs.stale_minutes }}
+          INPUT_MAX_STALE_RUNNING_JOBS: ${{ github.event.inputs.max_stale_running_jobs }}
+          INPUT_MAX_ERROR_JOB_RATE_PERCENT: ${{ github.event.inputs.max_error_job_rate_percent }}
+          INPUT_FAIL_ON_THRESHOLD_BREACH: ${{ github.event.inputs.fail_on_threshold_breach }}
         run: |
-          $output = powershell -ExecutionPolicy Bypass -File scripts/daily-queue-health-report.ps1 -HoursBack 24 -StaleMinutes 60 -SendWebhook
+          $hoursBack = if ([string]::IsNullOrWhiteSpace($env:INPUT_HOURS_BACK)) { 24 } else { [int]$env:INPUT_HOURS_BACK }
+          $staleMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_STALE_MINUTES)) { 60 } else { [int]$env:INPUT_STALE_MINUTES }
+          $maxStaleRunningJobs = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_STALE_RUNNING_JOBS)) { 3 } else { [int]$env:INPUT_MAX_STALE_RUNNING_JOBS }
+          $maxErrorJobRatePercent = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_ERROR_JOB_RATE_PERCENT)) { 60 } else { [double]$env:INPUT_MAX_ERROR_JOB_RATE_PERCENT }
+          $failOnThresholdBreach = if ([string]::IsNullOrWhiteSpace($env:INPUT_FAIL_ON_THRESHOLD_BREACH)) { $true } else { [bool]::Parse($env:INPUT_FAIL_ON_THRESHOLD_BREACH) }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/daily-queue-health-report.ps1',
+            '-HoursBack', $hoursBack,
+            '-StaleMinutes', $staleMinutes,
+            '-MaxStaleRunningJobs', $maxStaleRunningJobs,
+            '-MaxErrorJobRatePercent', $maxErrorJobRatePercent,
+            '-SendWebhook'
+          )
+          if ($failOnThresholdBreach) {
+            $args += '-FailOnThresholdBreach'
+          }
+
+          $output = powershell @args
           $json = $output | Out-String | ConvertFrom-Json
           New-Item -ItemType Directory -Force -Path reports | Out-Null
           ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/daily-scan-health-report.json
 
           Write-Host "Daily health report generated at: $($json.summary.generated_at)"
           Write-Host "scans_total=$($json.summary.scans_total) jobs_total=$($json.summary.jobs_total) stale_running_jobs_count=$($json.summary.stale_running_jobs_count) avg_completed_scan_duration_sec=$($json.summary.avg_completed_scan_duration_sec)"
+          Write-Host "thresholds_ok=$($json.thresholds_ok) breaches=$($json.threshold_breaches.Count)"
 
           if ($json.send_webhook -and $null -ne $json.webhook_status) {
             Write-Host "webhook_http=$($json.webhook_status.http) webhook_ok=$($json.webhook_status.ok)"

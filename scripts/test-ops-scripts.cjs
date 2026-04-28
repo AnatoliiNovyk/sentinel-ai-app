@@ -3,7 +3,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 
 function startMockServer(handler) {
   return new Promise((resolve) => {
@@ -51,6 +51,22 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+
+    server.close((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 function extractJson(stdout) {
   const first = stdout.indexOf('{');
   const last = stdout.lastIndexOf('}');
@@ -60,18 +76,72 @@ function extractJson(stdout) {
   return JSON.parse(stdout.slice(first, last + 1));
 }
 
-function runPwsh(scriptPath, args) {
-  const result = spawnSync(
-    'pwsh',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args],
-    { encoding: 'utf8' },
-  );
+function runPwshRaw(scriptPath, args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pwsh', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
-  if (result.status !== 0) {
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+
+    const timeout = setTimeout(() => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      child.kill('SIGTERM');
+      reject(new Error(`Command timed out after ${timeoutMs}ms: ${scriptPath}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+    }, timeoutMs);
+
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+
+    child.on('error', (error) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      clearTimeout(timeout);
+      reject(new Error(`Command execution failed: ${scriptPath}\nerror: ${error.message}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+    });
+
+    child.on('close', (code) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      clearTimeout(timeout);
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
+async function runPwsh(scriptPath, args) {
+  const result = await runPwshRaw(scriptPath, args, 240_000);
+
+  if (result.code !== 0) {
     throw new Error(`Command failed: ${scriptPath}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
 
   return result.stdout;
+}
+
+async function runPwshExpectFail(scriptPath, args) {
+  const result = await runPwshRaw(scriptPath, args, 120_000);
+
+  if (result.code === 0) {
+    throw new Error(`Command expected to fail but succeeded: ${scriptPath}\nstdout:\n${result.stdout}`);
+  }
+
+  return { stdout: result.stdout, stderr: result.stderr };
 }
 
 function writeEnvFile(filePath, supabaseUrl, includeAgentSecret = true) {
@@ -141,16 +211,16 @@ async function testSmokeScript(rootDir) {
   writeEnvFile(envFile, `http://127.0.0.1:${port}`);
 
   const scriptPath = path.join(rootDir, 'scripts', 'smoke-pipeline-safe.ps1');
-  const stdout = runPwsh(scriptPath, ['-EnvFile', envFile, '-ControlledFailure', '-WaitForCompletion', '-TimeoutSeconds', '10', '-PollIntervalSeconds', '1']);
+  const stdout = await runPwsh(scriptPath, ['-EnvFile', envFile, '-ControlledFailure', '-WaitForCompletion', '-TimeoutSeconds', '10', '-PollIntervalSeconds', '1']);
   const json = extractJson(stdout);
 
   assert.equal(json.dispatch_http, 200);
   assert.equal(json.result_http, 200);
   assert.equal(json.wait_for_completion, true);
   assert.equal(json.final_scan_status, 'failed');
-  assert.ok(Array.isArray(json.jobs));
+  assert.ok(json.jobs !== undefined && json.jobs !== null);
 
-  server.close();
+  await closeServer(server);
 }
 
 async function testTriageScript(rootDir) {
@@ -194,7 +264,7 @@ async function testTriageScript(rootDir) {
   writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
 
   const scriptPath = path.join(rootDir, 'scripts', 'triage-stuck-scans.ps1');
-  const stdout = runPwsh(scriptPath, ['-EnvFile', envFile, '-TimeoutMinutes', '10', '-MaxScans', '10', '-ApplyCleanup']);
+  const stdout = await runPwsh(scriptPath, ['-EnvFile', envFile, '-TimeoutMinutes', '10', '-MaxScans', '10', '-ApplyCleanup']);
   const json = extractJson(stdout);
 
   assert.equal(json.apply_cleanup, true);
@@ -202,7 +272,7 @@ async function testTriageScript(rootDir) {
   assert.equal(json.affected_scans_count, 1);
   assert.equal(json.cleanup_http, 200);
 
-  server.close();
+  await closeServer(server);
 }
 
 async function testDailyReportScript(rootDir) {
@@ -255,15 +325,66 @@ async function testDailyReportScript(rootDir) {
   writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
 
   const scriptPath = path.join(rootDir, 'scripts', 'daily-queue-health-report.ps1');
-  const stdout = runPwsh(scriptPath, ['-EnvFile', envFile, '-HoursBack', '24', '-StaleMinutes', '60']);
+  const stdout = await runPwsh(scriptPath, ['-EnvFile', envFile, '-HoursBack', '24', '-StaleMinutes', '60']);
   const json = extractJson(stdout);
 
   assert.ok(json.summary);
   assert.equal(typeof json.summary.scans_total, 'number');
   assert.equal(typeof json.summary.jobs_total, 'number');
   assert.equal(typeof json.summary.stale_running_jobs_count, 'number');
+  assert.equal(typeof json.summary.error_job_rate_percent, 'number');
+  assert.equal(typeof json.thresholds_ok, 'boolean');
+  assert.ok(Array.isArray(json.threshold_breaches));
 
-  server.close();
+  await closeServer(server);
+}
+
+async function testDailyReportThresholdFail(rootDir) {
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      return sendJson(res, 200, [
+        {
+          id: 'scan-daily-fail-1',
+          status: 'running',
+          started_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+          completed_at: null,
+        },
+      ]);
+    }
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scan_jobs') {
+      return sendJson(res, 200, [
+        {
+          id: 'job-daily-fail-1',
+          scan_id: 'scan-daily-fail-1',
+          status: 'running',
+          error_message: null,
+          started_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+          completed_at: null,
+        },
+      ]);
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-daily-fail-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'daily-queue-health-report.ps1');
+  const failResult = await runPwshExpectFail(scriptPath, [
+    '-EnvFile', envFile,
+    '-HoursBack', '24',
+    '-StaleMinutes', '1',
+    '-MaxStaleRunningJobs', '0',
+    '-FailOnThresholdBreach',
+  ]);
+
+  assert.match(`${failResult.stdout}\n${failResult.stderr}`, /Daily health thresholds breached/i);
+  await closeServer(server);
 }
 
 async function testScheduledCleanupScript(rootDir) {
@@ -312,7 +433,7 @@ async function testScheduledCleanupScript(rootDir) {
   writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
 
   const scriptPath = path.join(rootDir, 'scripts', 'scheduled-stale-cleanup.ps1');
-  const stdout = runPwsh(scriptPath, [
+  const stdout = await runPwsh(scriptPath, [
     '-EnvFile', envFile,
     '-TimeoutMinutes', '120',
     '-MinStaleJobsToCleanup', '2',
@@ -329,7 +450,7 @@ async function testScheduledCleanupScript(rootDir) {
   assert.equal(cleanupCalled, true);
   assert.equal(webhookCalled, true);
 
-  server.close();
+  await closeServer(server);
 }
 
 async function main() {
@@ -338,6 +459,7 @@ async function main() {
   await testSmokeScript(rootDir);
   await testTriageScript(rootDir);
   await testDailyReportScript(rootDir);
+  await testDailyReportThresholdFail(rootDir);
   await testScheduledCleanupScript(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');

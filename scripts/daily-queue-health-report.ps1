@@ -2,6 +2,9 @@ param(
   [string]$EnvFile = "sentinel-agent/.env",
   [int]$HoursBack = 24,
   [int]$StaleMinutes = 60,
+  [int]$MaxStaleRunningJobs = 0,
+  [double]$MaxErrorJobRatePercent = 40,
+  [switch]$FailOnThresholdBreach,
   [switch]$SendWebhook,
   [string]$WebhookUrl = ""
 )
@@ -66,6 +69,28 @@ function Invoke-JsonRequest {
   }
 }
 
+function Convert-ToUtcDateTimeOffset {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Value
+  )
+
+  if ($Value -is [DateTimeOffset]) {
+    return $Value.ToUniversalTime()
+  }
+
+  if ($Value -is [DateTime]) {
+    return [DateTimeOffset]::new($Value).ToUniversalTime()
+  }
+
+  $text = [string]$Value
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    throw "Date value is empty"
+  }
+
+  return [DateTimeOffset]::Parse($text, [System.Globalization.CultureInfo]::InvariantCulture).ToUniversalTime()
+}
+
 if (-not (Test-Path $EnvFile)) {
   throw "Env file not found: $EnvFile"
 }
@@ -76,6 +101,14 @@ if ($HoursBack -lt 1) {
 
 if ($StaleMinutes -lt 1) {
   throw "StaleMinutes must be >= 1"
+}
+
+if ($MaxStaleRunningJobs -lt 0) {
+  throw "MaxStaleRunningJobs must be >= 0"
+}
+
+if ($MaxErrorJobRatePercent -lt 0 -or $MaxErrorJobRatePercent -gt 100) {
+  throw "MaxErrorJobRatePercent must be in range 0..100"
 }
 
 $content = Get-Content $EnvFile -Raw
@@ -137,8 +170,8 @@ foreach ($j in $jobs) {
 $completedScanDurationsSec = @()
 foreach ($s in $scans) {
   if ($s.started_at -and $s.completed_at) {
-    $started = [DateTimeOffset]::Parse([string]$s.started_at)
-    $completed = [DateTimeOffset]::Parse([string]$s.completed_at)
+    $started = Convert-ToUtcDateTimeOffset -Value $s.started_at
+    $completed = Convert-ToUtcDateTimeOffset -Value $s.completed_at
     $delta = ($completed - $started).TotalSeconds
     if ($delta -ge 0) {
       $completedScanDurationsSec += [math]::Round($delta, 2)
@@ -153,11 +186,15 @@ if ($completedScanDurationsSec.Count -gt 0) {
 
 $staleRunningJobs = @(
   $jobs | Where-Object {
-    $_.status -eq 'running' -and $_.started_at -and ([DateTimeOffset]::Parse([string]$_.started_at)).UtcDateTime -lt $staleBeforeUtc
+    $_.status -eq 'running' -and $_.started_at -and (Convert-ToUtcDateTimeOffset -Value $_.started_at).UtcDateTime -lt $staleBeforeUtc
   }
 )
 
 $errorJobs = @($jobs | Where-Object { $_.status -eq 'error' -and -not [string]::IsNullOrWhiteSpace($_.error_message) })
+$errorJobRatePercent = 0
+if ($jobs.Count -gt 0) {
+  $errorJobRatePercent = [math]::Round(($errorJobs.Count * 100.0) / $jobs.Count, 2)
+}
 $topErrors = @()
 if ($errorJobs.Count -gt 0) {
   $topErrors = @(
@@ -189,9 +226,33 @@ $summary = [pscustomobject]@{
   avg_completed_scan_duration_sec = $avgScanDurationSec
   stale_running_jobs_count = $staleRunningJobs.Count
   stale_running_jobs = $staleRunningJobs | Select-Object -First 20
+  error_jobs_count = $errorJobs.Count
+  error_job_rate_percent = $errorJobRatePercent
   top_job_errors = $topErrors
+  thresholds = [pscustomobject]@{
+    max_stale_running_jobs = $MaxStaleRunningJobs
+    max_error_job_rate_percent = $MaxErrorJobRatePercent
+  }
   generated_at = (Get-Date).ToUniversalTime().ToString('o')
 }
+
+$thresholdBreaches = @()
+if ($staleRunningJobs.Count -gt $MaxStaleRunningJobs) {
+  $thresholdBreaches += [pscustomobject]@{
+    type = 'stale_running_jobs'
+    actual = $staleRunningJobs.Count
+    threshold = $MaxStaleRunningJobs
+  }
+}
+if ($errorJobRatePercent -gt $MaxErrorJobRatePercent) {
+  $thresholdBreaches += [pscustomobject]@{
+    type = 'error_job_rate_percent'
+    actual = $errorJobRatePercent
+    threshold = $MaxErrorJobRatePercent
+  }
+}
+
+$thresholdsOk = $thresholdBreaches.Count -eq 0
 
 $webhookStatus = $null
 if ($SendWebhook) {
@@ -201,9 +262,11 @@ if ($SendWebhook) {
 
   $webhookPayload = [pscustomobject]@{
     event = 'daily_scan_pipeline_health_report'
-    severity = if ($staleRunningJobs.Count -gt 0) { 'warning' } else { 'info' }
+    severity = if ($thresholdsOk) { 'info' } else { 'warning' }
     source = 'sentinel-agent-ops'
     summary = $summary
+    thresholds_ok = $thresholdsOk
+    threshold_breaches = $thresholdBreaches
   }
 
   $webhookRes = Invoke-JsonRequest -Method 'POST' -Uri $effectiveWebhookUrl -Headers @{ 'Content-Type' = 'application/json' } -Body $webhookPayload
@@ -216,6 +279,13 @@ if ($SendWebhook) {
 
 [pscustomobject]@{
   summary = $summary
+  thresholds_ok = $thresholdsOk
+  threshold_breaches = $thresholdBreaches
+  fail_on_threshold_breach = $FailOnThresholdBreach.IsPresent
   send_webhook = $SendWebhook.IsPresent
   webhook_status = $webhookStatus
 } | ConvertTo-Json -Depth 12
+
+if ($FailOnThresholdBreach -and -not $thresholdsOk) {
+  throw "Daily health thresholds breached: $($thresholdBreaches | ConvertTo-Json -Compress)"
+}
