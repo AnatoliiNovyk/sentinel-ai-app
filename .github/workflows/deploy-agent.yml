@@ -53,8 +53,34 @@ jobs:
             sudo systemctl status sentinel-agent --no-pager
 
             echo "🩺 Checking local health endpoint..."
-            curl -fsS http://127.0.0.1:9090/health | head -c 400
+            HEALTH_OK=0
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:9090/health >/tmp/sentinel-health.json; then
+                HEALTH_OK=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$HEALTH_OK" -ne 1 ]; then
+              echo "❌ Health endpoint not ready after retry window"
+              sudo journalctl -u sentinel-agent -n 120 --no-pager
+              exit 1
+            fi
+            head -c 400 /tmp/sentinel-health.json
             echo ""
 
             echo "📊 Checking watchdog metrics presence..."
-            curl -fsS http://127.0.0.1:9090/metrics | grep -E "sentinel_stale_jobs_recovered_total|sentinel_stale_scans_recovered_total"
+            METRICS_OK=0
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:9090/metrics >/tmp/sentinel-metrics.txt; then
+                METRICS_OK=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$METRICS_OK" -ne 1 ]; then
+              echo "❌ Metrics endpoint not ready after retry window"
+              sudo journalctl -u sentinel-agent -n 120 --no-pager
+              exit 1
+            fi
+            grep -E "sentinel_stale_jobs_recovered_total|sentinel_stale_scans_recovered_total|sentinel_end_to_end_duration_ms_avg" /tmp/sentinel-metrics.txt
