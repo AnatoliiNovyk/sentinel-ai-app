@@ -49,3 +49,4 @@
 - [x] Додано щоденний automated health-report workflow + скрипт з опційною відправкою у webhook (`.github/workflows/daily-scan-health-report.yml`, `scripts/daily-queue-health-report.ps1`).
 - [x] Додано контрактні тести для ops-скриптів з mock HTTP і підключено їх у CI (`scripts/test-ops-scripts.cjs`, `.github/workflows/ci.yml`).
 - [x] Додано scheduled safe cleanup workflow для stale `running` jobs з порогом і webhook-звітом (`scripts/scheduled-stale-cleanup.ps1`, `.github/workflows/scheduled-stale-cleanup.yml`).
+- [x] Посилено scheduled workflows: додано `concurrency`/`timeout-minutes` і ручні параметри `workflow_dispatch` для stale cleanup (`.github/workflows/scheduled-stale-cleanup.yml`, `.github/workflows/daily-scan-health-report.yml`).

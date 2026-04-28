@@ -4,12 +4,33 @@ on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
+    inputs:
+      timeout_minutes:
+        description: "Stale timeout in minutes"
+        required: false
+        default: "120"
+      min_stale_jobs_to_cleanup:
+        description: "Minimum stale running jobs to allow cleanup"
+        required: false
+        default: "3"
+      max_jobs_inspect:
+        description: "Max stale jobs to inspect"
+        required: false
+        default: "500"
+      apply_cleanup:
+        description: "Execute cleanup RPC (true/false)"
+        required: false
+        default: "true"
 
 jobs:
   stale-cleanup:
     name: Safe Stale Cleanup
     runs-on: ubuntu-latest
     if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
+    timeout-minutes: 15
+    concurrency:
+      group: scheduled-stale-cleanup
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -27,8 +48,30 @@ jobs:
 
       - name: Run stale cleanup safely
         shell: pwsh
+        env:
+          INPUT_TIMEOUT_MINUTES: ${{ github.event.inputs.timeout_minutes }}
+          INPUT_MIN_STALE_JOBS_TO_CLEANUP: ${{ github.event.inputs.min_stale_jobs_to_cleanup }}
+          INPUT_MAX_JOBS_INSPECT: ${{ github.event.inputs.max_jobs_inspect }}
+          INPUT_APPLY_CLEANUP: ${{ github.event.inputs.apply_cleanup }}
         run: |
-          $output = powershell -ExecutionPolicy Bypass -File scripts/scheduled-stale-cleanup.ps1 -TimeoutMinutes 120 -MinStaleJobsToCleanup 3 -MaxJobsInspect 500 -ApplyCleanup -SendWebhook
+          $timeoutMinutes = if ([string]::IsNullOrWhiteSpace($env:INPUT_TIMEOUT_MINUTES)) { 120 } else { [int]$env:INPUT_TIMEOUT_MINUTES }
+          $minStaleJobsToCleanup = if ([string]::IsNullOrWhiteSpace($env:INPUT_MIN_STALE_JOBS_TO_CLEANUP)) { 3 } else { [int]$env:INPUT_MIN_STALE_JOBS_TO_CLEANUP }
+          $maxJobsInspect = if ([string]::IsNullOrWhiteSpace($env:INPUT_MAX_JOBS_INSPECT)) { 500 } else { [int]$env:INPUT_MAX_JOBS_INSPECT }
+          $applyCleanup = if ([string]::IsNullOrWhiteSpace($env:INPUT_APPLY_CLEANUP)) { $true } else { [bool]::Parse($env:INPUT_APPLY_CLEANUP) }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/scheduled-stale-cleanup.ps1',
+            '-TimeoutMinutes', $timeoutMinutes,
+            '-MinStaleJobsToCleanup', $minStaleJobsToCleanup,
+            '-MaxJobsInspect', $maxJobsInspect,
+            '-SendWebhook'
+          )
+          if ($applyCleanup) {
+            $args += '-ApplyCleanup'
+          }
+
+          $output = powershell @args
           $json = $output | Out-String | ConvertFrom-Json
           New-Item -ItemType Directory -Force -Path reports | Out-Null
           ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/scheduled-stale-cleanup.json
