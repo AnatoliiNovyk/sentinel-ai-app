@@ -15,6 +15,8 @@ const BASE_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 30_000;
 const REPORT_MAX_ATTEMPTS = 4;
 const REPORT_BASE_DELAY_MS = 1_000;
+const STALE_RUNNING_JOB_TIMEOUT_MINUTES = parseInt(process.env.STALE_RUNNING_JOB_TIMEOUT_MINUTES ?? '180', 10);
+const STALE_WATCHDOG_INTERVAL_MS = parseInt(process.env.STALE_WATCHDOG_INTERVAL_MS ?? '60000', 10);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -457,6 +459,77 @@ async function fetchPendingJob(): Promise<ScanJob | null> {
   return data && data.length > 0 ? (data[0] as ScanJob) : null;
 }
 
+async function recoverStaleRunningJobs(): Promise<{ jobsRecovered: number; scansRecovered: number }> {
+  const cutoffIso = new Date(Date.now() - STALE_RUNNING_JOB_TIMEOUT_MINUTES * 60 * 1000).toISOString();
+
+  const { data: staleJobs, error: staleErr } = await supabase
+    .from('scan_jobs')
+    .select('id, scan_id')
+    .eq('status', 'running')
+    .lt('started_at', cutoffIso);
+
+  if (staleErr) {
+    throw new Error(`watchdog query failed: ${staleErr.message}`);
+  }
+
+  if (!staleJobs || staleJobs.length === 0) {
+    return { jobsRecovered: 0, scansRecovered: 0 };
+  }
+
+  const staleJobIds = staleJobs.map((j) => j.id);
+  const nowIso = new Date().toISOString();
+
+  const { data: updatedJobs, error: updateJobsErr } = await supabase
+    .from('scan_jobs')
+    .update({
+      status: 'error',
+      error_message: `stale timeout auto-fail (${STALE_RUNNING_JOB_TIMEOUT_MINUTES}m)`,
+      completed_at: nowIso,
+    })
+    .in('id', staleJobIds)
+    .eq('status', 'running')
+    .select('id, scan_id');
+
+  if (updateJobsErr) {
+    throw new Error(`watchdog update jobs failed: ${updateJobsErr.message}`);
+  }
+
+  const recoveredJobRows = updatedJobs ?? [];
+  const candidateScanIds = [...new Set(recoveredJobRows.map((j) => j.scan_id).filter(Boolean))] as string[];
+
+  let scansRecovered = 0;
+  for (const scanId of candidateScanIds) {
+    const { count, error: runningCountErr } = await supabase
+      .from('scan_jobs')
+      .select('id', { head: true, count: 'exact' })
+      .eq('scan_id', scanId)
+      .eq('status', 'running');
+
+    if (runningCountErr) {
+      throw new Error(`watchdog count failed for scan ${scanId}: ${runningCountErr.message}`);
+    }
+
+    if ((count ?? 0) === 0) {
+      const { data: updatedScan, error: updateScanErr } = await supabase
+        .from('scans')
+        .update({ status: 'failed', completed_at: nowIso })
+        .eq('id', scanId)
+        .eq('status', 'running')
+        .select('id');
+
+      if (updateScanErr) {
+        throw new Error(`watchdog update scan failed for ${scanId}: ${updateScanErr.message}`);
+      }
+
+      if (updatedScan && updatedScan.length > 0) {
+        scansRecovered++;
+      }
+    }
+  }
+
+  return { jobsRecovered: recoveredJobRows.length, scansRecovered };
+}
+
 async function runJob(job: ScanJob) {
   console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
   await writeLog(job.id, job.scan_id, job.project_id, 'info', `▶️ Starting ${job.scanner} scan on ${job.target}`);
@@ -565,6 +638,8 @@ const metrics = {
   reportSuccessTotal: 0,
   reportFailuresTotal: 0,
   jobClaimErrorsTotal: 0,
+  staleJobsRecoveredTotal: 0,
+  staleScansRecoveredTotal: 0,
 };
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
@@ -594,6 +669,12 @@ function startHealthServer() {
         '# HELP sentinel_job_claim_errors_total Total claim_next_job RPC errors',
         '# TYPE sentinel_job_claim_errors_total counter',
         `sentinel_job_claim_errors_total ${metrics.jobClaimErrorsTotal}`,
+        '# HELP sentinel_stale_jobs_recovered_total Total stale running scan_jobs auto-failed by watchdog',
+        '# TYPE sentinel_stale_jobs_recovered_total counter',
+        `sentinel_stale_jobs_recovered_total ${metrics.staleJobsRecoveredTotal}`,
+        '# HELP sentinel_stale_scans_recovered_total Total stale scans auto-failed by watchdog',
+        '# TYPE sentinel_stale_scans_recovered_total counter',
+        `sentinel_stale_scans_recovered_total ${metrics.staleScansRecoveredTotal}`,
       ];
 
       res.writeHead(200, {
@@ -635,9 +716,25 @@ async function main() {
   console.log(`🚀 Agent loop started (${BASE_POLL_INTERVAL_MS}ms base interval)`);
   let consecutiveLoopErrors = 0;
   let pollIntervalMs = BASE_POLL_INTERVAL_MS;
+  let lastWatchdogRunAt = 0;
 
   while (true) {
     try {
+      const nowMs = Date.now();
+      if (nowMs - lastWatchdogRunAt >= STALE_WATCHDOG_INTERVAL_MS) {
+        try {
+          const recovered = await recoverStaleRunningJobs();
+          if (recovered.jobsRecovered > 0 || recovered.scansRecovered > 0) {
+            metrics.staleJobsRecoveredTotal += recovered.jobsRecovered;
+            metrics.staleScansRecoveredTotal += recovered.scansRecovered;
+            console.warn(`🧹 Watchdog recovered stale states: jobs=${recovered.jobsRecovered}, scans=${recovered.scansRecovered}`);
+          }
+        } catch (watchdogErr: unknown) {
+          console.warn(`⚠️ Watchdog error: ${getErrorMessage(watchdogErr)}`);
+        }
+        lastWatchdogRunAt = nowMs;
+      }
+
       const job = await fetchPendingJob();
       if (job) {
         health.lastJobAt = new Date().toISOString();

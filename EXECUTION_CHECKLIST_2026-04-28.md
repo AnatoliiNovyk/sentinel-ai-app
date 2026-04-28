@@ -21,6 +21,7 @@
 ## P2 прогрес
 - [x] Додано базові runtime-метрики агента та endpoint `/metrics` для observability (`sentinel-agent/src/index.ts`).
 - [x] Додано adaptive polling backoff із jitter для `claim_next_job` помилок (`sentinel-agent/src/index.ts`).
+- [x] Додано stale-running watchdog з auto-recovery для `scan_jobs`/`scans` (`sentinel-agent/src/index.ts`).
 
 ## Валідація
 - [x] Запустити `npm run lint -- --max-warnings=0`.
