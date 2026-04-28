@@ -46,3 +46,4 @@
 - [x] Release smoke CI gate переведено на режим очікування термінального статусу scan (`-WaitForCompletion`) з fail-fast при `queued/pending/running` (`.github/workflows/ci.yml`).
 - [x] Додано SLO-алерти на latency-метрики агента (`claim/execute/report/end-to-end`) через `OPERATIONAL_ALERT_WEBHOOK_URL` з cooldown та min-samples (`sentinel-agent/src/index.ts`).
 - [x] Додано incident runbook і triage/recovery скрипт для stuck scans/jobs (`RUNBOOK_SCAN_PIPELINE_INCIDENTS.md`, `scripts/triage-stuck-scans.ps1`).
+- [x] Додано щоденний automated health-report workflow + скрипт з опційною відправкою у webhook (`.github/workflows/daily-scan-health-report.yml`, `scripts/daily-queue-health-report.ps1`).

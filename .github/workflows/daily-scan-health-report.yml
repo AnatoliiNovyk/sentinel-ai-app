@@ -1,0 +1,51 @@
+name: Daily Scan Health Report
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  daily-report:
+    name: Generate Daily Health Report
+    runs-on: ubuntu-latest
+    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare report env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+          EOF
+
+      - name: Generate and send daily report
+        shell: pwsh
+        run: |
+          $output = powershell -ExecutionPolicy Bypass -File scripts/daily-queue-health-report.ps1 -HoursBack 24 -StaleMinutes 60 -SendWebhook
+          $json = $output | Out-String | ConvertFrom-Json
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+          ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/daily-scan-health-report.json
+
+          Write-Host "Daily health report generated at: $($json.summary.generated_at)"
+          Write-Host "scans_total=$($json.summary.scans_total) jobs_total=$($json.summary.jobs_total) stale_running_jobs_count=$($json.summary.stale_running_jobs_count) avg_completed_scan_duration_sec=$($json.summary.avg_completed_scan_duration_sec)"
+
+          if ($json.send_webhook -and $null -ne $json.webhook_status) {
+            Write-Host "webhook_http=$($json.webhook_status.http) webhook_ok=$($json.webhook_status.ok)"
+            if (-not $json.webhook_status.ok) {
+              throw "Daily report webhook failed. HTTP=$($json.webhook_status.http)"
+            }
+          }
+
+      - name: Upload daily report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-scan-health-report
+          path: reports/daily-scan-health-report.json
+          if-no-files-found: error
