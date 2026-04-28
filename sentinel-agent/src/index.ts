@@ -17,6 +17,13 @@ const REPORT_MAX_ATTEMPTS = 4;
 const REPORT_BASE_DELAY_MS = 1_000;
 const STALE_RUNNING_JOB_TIMEOUT_MINUTES = parseInt(process.env.STALE_RUNNING_JOB_TIMEOUT_MINUTES ?? '180', 10);
 const STALE_WATCHDOG_INTERVAL_MS = parseInt(process.env.STALE_WATCHDOG_INTERVAL_MS ?? '60000', 10);
+const OPERATIONAL_ALERT_WEBHOOK_URL = process.env.OPERATIONAL_ALERT_WEBHOOK_URL ?? '';
+const SLO_CLAIM_AVG_MS_THRESHOLD = parseInt(process.env.SLO_CLAIM_AVG_MS_THRESHOLD ?? '2000', 10);
+const SLO_EXECUTE_AVG_MS_THRESHOLD = parseInt(process.env.SLO_EXECUTE_AVG_MS_THRESHOLD ?? '120000', 10);
+const SLO_REPORT_AVG_MS_THRESHOLD = parseInt(process.env.SLO_REPORT_AVG_MS_THRESHOLD ?? '15000', 10);
+const SLO_END_TO_END_AVG_MS_THRESHOLD = parseInt(process.env.SLO_END_TO_END_AVG_MS_THRESHOLD ?? '180000', 10);
+const SLO_MIN_SAMPLE_COUNT = parseInt(process.env.SLO_MIN_SAMPLE_COUNT ?? '5', 10);
+const SLO_ALERT_COOLDOWN_MS = parseInt(process.env.SLO_ALERT_COOLDOWN_MS ?? '900000', 10);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -656,6 +663,73 @@ async function sendWebhookAlert(
   }
 }
 
+type SloBreach = {
+  metric: 'claim' | 'execute' | 'report' | 'end_to_end';
+  avgMs: number;
+  thresholdMs: number;
+  samples: number;
+};
+
+async function maybeSendLatencySloAlert(): Promise<void> {
+  const claimAvg = getDurationAvg(metrics.claimDurationMsSum, metrics.claimDurationMsSamples);
+  const executeAvg = getDurationAvg(metrics.executeDurationMsSum, metrics.executeDurationMsSamples);
+  const reportAvg = getDurationAvg(metrics.reportDurationMsSum, metrics.reportDurationMsSamples);
+  const endToEndAvg = getDurationAvg(metrics.endToEndDurationMsSum, metrics.endToEndDurationMsSamples);
+
+  const breaches: SloBreach[] = [];
+  if (metrics.claimDurationMsSamples >= SLO_MIN_SAMPLE_COUNT && claimAvg > SLO_CLAIM_AVG_MS_THRESHOLD) {
+    breaches.push({ metric: 'claim', avgMs: claimAvg, thresholdMs: SLO_CLAIM_AVG_MS_THRESHOLD, samples: metrics.claimDurationMsSamples });
+  }
+  if (metrics.executeDurationMsSamples >= SLO_MIN_SAMPLE_COUNT && executeAvg > SLO_EXECUTE_AVG_MS_THRESHOLD) {
+    breaches.push({ metric: 'execute', avgMs: executeAvg, thresholdMs: SLO_EXECUTE_AVG_MS_THRESHOLD, samples: metrics.executeDurationMsSamples });
+  }
+  if (metrics.reportDurationMsSamples >= SLO_MIN_SAMPLE_COUNT && reportAvg > SLO_REPORT_AVG_MS_THRESHOLD) {
+    breaches.push({ metric: 'report', avgMs: reportAvg, thresholdMs: SLO_REPORT_AVG_MS_THRESHOLD, samples: metrics.reportDurationMsSamples });
+  }
+  if (metrics.endToEndDurationMsSamples >= SLO_MIN_SAMPLE_COUNT && endToEndAvg > SLO_END_TO_END_AVG_MS_THRESHOLD) {
+    breaches.push({ metric: 'end_to_end', avgMs: endToEndAvg, thresholdMs: SLO_END_TO_END_AVG_MS_THRESHOLD, samples: metrics.endToEndDurationMsSamples });
+  }
+
+  if (breaches.length === 0 || !OPERATIONAL_ALERT_WEBHOOK_URL) {
+    return;
+  }
+
+  const now = Date.now();
+  if (metrics.sloAlertLastAtMs > 0 && now - metrics.sloAlertLastAtMs < SLO_ALERT_COOLDOWN_MS) {
+    metrics.sloAlertsSuppressedTotal++;
+    return;
+  }
+
+  try {
+    await axios.post(OPERATIONAL_ALERT_WEBHOOK_URL, {
+      event: 'agent_latency_slo_breach',
+      severity: 'warning',
+      source: 'sentinel-agent',
+      timestamp: new Date().toISOString(),
+      breaches: breaches.map((b) => ({
+        metric: b.metric,
+        avg_ms: Number(b.avgMs.toFixed(2)),
+        threshold_ms: b.thresholdMs,
+        samples: b.samples,
+      })),
+      health: {
+        jobs_processed: health.jobsProcessed,
+        jobs_failed: health.jobsFailed,
+        last_error: health.lastError,
+      },
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10_000,
+    });
+
+    metrics.sloAlertsTotal++;
+    metrics.sloAlertLastAtMs = now;
+    console.warn(`📣 SLO latency alert sent (${breaches.map((b) => b.metric).join(', ')})`);
+  } catch (err: unknown) {
+    console.warn(`⚠️ Failed to send SLO latency alert: ${getErrorMessage(err)}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Health state (updated by main loop)
 // ---------------------------------------------------------------------------
@@ -688,6 +762,9 @@ const metrics = {
   endToEndDurationMsLast: 0,
   endToEndDurationMsSum: 0,
   endToEndDurationMsSamples: 0,
+  sloAlertsTotal: 0,
+  sloAlertsSuppressedTotal: 0,
+  sloAlertLastAtMs: 0,
 };
 
 function recordDurationMetric(
@@ -699,6 +776,11 @@ function recordDurationMetric(
   metrics[lastKey] = durationMs;
   metrics[sumKey] += durationMs;
   metrics[sampleKey] += 1;
+}
+
+function getDurationAvg(sum: number, samples: number): number {
+  if (samples <= 0) return 0;
+  return sum / samples;
 }
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT ?? '9090', 10);
@@ -758,6 +840,15 @@ function startHealthServer() {
         '# HELP sentinel_end_to_end_duration_ms_avg Average end-to-end job duration in ms',
         '# TYPE sentinel_end_to_end_duration_ms_avg gauge',
         `sentinel_end_to_end_duration_ms_avg ${metrics.endToEndDurationMsSamples > 0 ? (metrics.endToEndDurationMsSum / metrics.endToEndDurationMsSamples).toFixed(2) : '0'}`,
+        '# HELP sentinel_slo_alerts_total Total latency SLO alerts sent',
+        '# TYPE sentinel_slo_alerts_total counter',
+        `sentinel_slo_alerts_total ${metrics.sloAlertsTotal}`,
+        '# HELP sentinel_slo_alerts_suppressed_total Total latency SLO alerts suppressed by cooldown',
+        '# TYPE sentinel_slo_alerts_suppressed_total counter',
+        `sentinel_slo_alerts_suppressed_total ${metrics.sloAlertsSuppressedTotal}`,
+        '# HELP sentinel_slo_alert_last_timestamp_seconds Unix timestamp of last sent latency SLO alert',
+        '# TYPE sentinel_slo_alert_last_timestamp_seconds gauge',
+        `sentinel_slo_alert_last_timestamp_seconds ${metrics.sloAlertLastAtMs > 0 ? Math.floor(metrics.sloAlertLastAtMs / 1000) : 0}`,
       ];
 
       res.writeHead(200, {
@@ -812,6 +903,8 @@ async function main() {
             metrics.staleScansRecoveredTotal += recovered.scansRecovered;
             console.warn(`🧹 Watchdog recovered stale states: jobs=${recovered.jobsRecovered}, scans=${recovered.scansRecovered}`);
           }
+
+          await maybeSendLatencySloAlert();
         } catch (watchdogErr: unknown) {
           console.warn(`⚠️ Watchdog error: ${getErrorMessage(watchdogErr)}`);
         }
