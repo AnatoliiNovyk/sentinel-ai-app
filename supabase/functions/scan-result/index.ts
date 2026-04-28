@@ -5,6 +5,30 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Agent-Secret",
 };
+type AgentLogLevel = "info" | "success" | "error" | "warn";
+
+async function insertAgentLog(
+  serviceClient: ReturnType<typeof createClient>,
+  params: {
+    job_id?: string | null;
+    scan_id?: string | null;
+    project_id?: string | null;
+    level?: AgentLogLevel;
+    message: string;
+  },
+): Promise<void> {
+  const { error } = await serviceClient.from("agent_logs").insert({
+    job_id: params.job_id ?? null,
+    scan_id: params.scan_id ?? null,
+    project_id: params.project_id ?? null,
+    level: params.level ?? "info",
+    message: params.message,
+  });
+
+  if (error) {
+    console.warn("agent log insert failed:", error.message);
+  }
+}
 
 function verifyAgent(req: Request): boolean {
   const secret = req.headers.get("X-Agent-Secret");
@@ -37,9 +61,24 @@ Deno.serve(async (req: Request) => {
     );
 
     const now = new Date().toISOString();
+    await insertAgentLog(supabase, {
+      job_id,
+      scan_id: scan_id ?? null,
+      project_id: project_id ?? null,
+      level: "info",
+      message: "Scan result received",
+    });
 
     // 1. Handle error case
     if (error_message) {
+      await insertAgentLog(supabase, {
+        job_id,
+        scan_id: scan_id ?? null,
+        project_id: project_id ?? null,
+        level: "error",
+        message: `Scan failed: ${error_message}`,
+      });
+
       await supabase.from("scan_jobs").update({ status: "error", error_message, completed_at: now }).eq("id", job_id);
       if (scan_id) {
         await supabase.from("scans").update({ status: "failed", completed_at: now }).eq("id", scan_id);
@@ -60,6 +99,13 @@ Deno.serve(async (req: Request) => {
 
       // Mark job as done
       await supabase.from("scan_jobs").update({ status: "done", completed_at: now }).eq("id", job_id);
+      await insertAgentLog(supabase, {
+        job_id,
+        scan_id: null,
+        project_id: project_id ?? null,
+        level: "success",
+        message: "Chat response completed",
+      });
       
       return new Response(JSON.stringify({ ok: true, type: 'chat_response' }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -105,6 +151,15 @@ Deno.serve(async (req: Request) => {
 
     // Mark job done
     await supabase.from("scan_jobs").update({ status: "done", completed_at: now }).eq("id", job_id);
+    if (scan_id) {
+      await insertAgentLog(supabase, {
+        job_id,
+        scan_id,
+        project_id: project_id ?? null,
+        level: "success",
+        message: `Scan completed with ${Array.isArray(findings) ? findings.length : 0} findings`,
+      });
+    }
 
     // Recompute risk score (only if scan_id exists)
     if (project_id && scan_id) {
