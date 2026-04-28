@@ -86,3 +86,9 @@ jobs:
           name: recovery-playbook-report
           path: reports/recovery-playbook-report.json
           if-no-files-found: error
+
+      - name: Verify evidence integrity
+        if: always()
+        shell: bash
+        run: |
+          node scripts/verify-evidence-integrity.cjs --report-file reports/recovery-playbook-report.json

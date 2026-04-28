@@ -151,3 +151,9 @@ jobs:
           name: chaos-ops-drill
           path: reports/chaos-ops-drill.json
           if-no-files-found: error
+
+      - name: Verify evidence integrity
+        if: always()
+        shell: bash
+        run: |
+          node scripts/verify-evidence-integrity.cjs --report-file reports/chaos-ops-drill.json

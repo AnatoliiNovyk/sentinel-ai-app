@@ -144,6 +144,33 @@ async function runPwshExpectFail(scriptPath, args) {
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
+function runNode(scriptPath, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    child.on('error', (error) => {
+      reject(new Error(`Node command execution failed: ${scriptPath}\nerror: ${error.message}`));
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Node command failed: ${scriptPath}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
 function writeEnvFile(filePath, supabaseUrl, includeAgentSecret = true) {
   const lines = [
     `SUPABASE_URL=${supabaseUrl}`,
@@ -714,6 +741,69 @@ async function testRecoveryPlaybookScript(rootDir) {
   await closeServer(server);
 }
 
+async function testEvidenceIntegrityVerifier(rootDir) {
+  const verifierScript = path.join(rootDir, 'scripts', 'verify-evidence-integrity.cjs');
+
+  const dailyReport = {
+    schema_version: '1.0',
+    report_type: 'daily_scan_health_report',
+    summary: { scans_total: 1 },
+    thresholds_ok: true,
+    threshold_breaches: [],
+  };
+  dailyReport.integrity = {
+    algorithm: 'sha256',
+    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({
+      summary: dailyReport.summary,
+      thresholds_ok: dailyReport.thresholds_ok,
+      threshold_breaches: dailyReport.threshold_breaches,
+    }), 'utf8').digest('hex'),
+  };
+  dailyReport.evidence_id = 'test-daily-evidence';
+
+  const recoveryReport = {
+    schema_version: '1.0',
+    report_type: 'scan_pipeline_recovery_playbook',
+    summary: { recovery_outcome: 'cleanup_succeeded' },
+  };
+  recoveryReport.integrity = {
+    algorithm: 'sha256',
+    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({
+      summary: recoveryReport.summary,
+    }), 'utf8').digest('hex'),
+  };
+  recoveryReport.evidence_id = 'test-recovery-evidence';
+
+  const chaosReport = {
+    schema_version: '1.0',
+    report_type: 'chaos_ops_drill',
+    executed: true,
+    generated_at: new Date().toISOString(),
+    workflow: 'chaos-ops-drill.yml',
+    command: 'node scripts/test-ops-scripts.cjs',
+    success: true,
+    exit_code: 0,
+    output_excerpt: ['ok'],
+  };
+  chaosReport.integrity = {
+    algorithm: 'sha256',
+    payload_hash: require('node:crypto').createHash('sha256').update(JSON.stringify({ ...chaosReport }), 'utf8').digest('hex'),
+  };
+  chaosReport.evidence_id = 'test-chaos-evidence';
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-evidence-verify-'));
+  const dailyFile = path.join(tempDir, 'daily.json');
+  const recoveryFile = path.join(tempDir, 'recovery.json');
+  const chaosFile = path.join(tempDir, 'chaos.json');
+  fs.writeFileSync(dailyFile, JSON.stringify(dailyReport), 'utf8');
+  fs.writeFileSync(recoveryFile, JSON.stringify(recoveryReport), 'utf8');
+  fs.writeFileSync(chaosFile, JSON.stringify(chaosReport), 'utf8');
+
+  await runNode(verifierScript, ['--report-file', dailyFile]);
+  await runNode(verifierScript, ['--report-file', recoveryFile]);
+  await runNode(verifierScript, ['--report-file', chaosFile]);
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
@@ -726,6 +816,7 @@ async function main() {
   await testDailyBreachEscalationScript(rootDir);
   await testDailyBreachEscalationSkippedWhenHealthy(rootDir);
   await testRecoveryPlaybookScript(rootDir);
+  await testEvidenceIntegrityVerifier(rootDir);
 
   process.stdout.write('Ops scripts contract tests passed.\n');
 }

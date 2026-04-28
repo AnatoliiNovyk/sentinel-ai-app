@@ -165,3 +165,9 @@ jobs:
           name: daily-scan-health-report
           path: reports/daily-scan-health-report.json
           if-no-files-found: error
+
+      - name: Verify evidence integrity
+        if: always()
+        shell: bash
+        run: |
+          node scripts/verify-evidence-integrity.cjs --report-file reports/daily-scan-health-report.json
