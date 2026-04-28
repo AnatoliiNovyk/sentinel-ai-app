@@ -76,6 +76,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path reports | Out-Null
           ($json | ConvertTo-Json -Depth 14) | Out-File -Encoding utf8 reports/recovery-playbook-report.json
 
+          Write-Host "evidence_id=$($json.evidence_id) payload_hash=$($json.integrity.payload_hash)"
           Write-Host "mode=$($json.summary.mode) outcome=$($json.summary.recovery_outcome) stale_before=$($json.summary.stale_running_jobs_before_count) stale_after=$($json.summary.stale_running_jobs_after_count) cleanup_attempted=$($json.summary.cleanup_attempted)"
 
       - name: Upload recovery artifact

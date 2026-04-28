@@ -81,6 +81,22 @@ function Invoke-JsonRequest {
   }
 }
 
+function Get-Sha256Hex {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Text
+  )
+
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $hash = $sha.ComputeHash($bytes)
+    return ([System.BitConverter]::ToString($hash)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 if (-not (Test-Path $EnvFile)) {
   throw "Env file not found: $EnvFile"
 }
@@ -187,6 +203,36 @@ $summary = [pscustomobject]@{
   generated_at = (Get-Date).ToUniversalTime().ToString('o')
 }
 
+$evidenceSummaryPayload = [pscustomobject]@{
+  summary = $summary
+}
+$evidenceHash = Get-Sha256Hex -Text ($evidenceSummaryPayload | ConvertTo-Json -Depth 14 -Compress)
+$evidenceId = "recovery-playbook-$($nowUtc.ToString('yyyyMMddTHHmmssZ'))-$($evidenceHash.Substring(0, 12))"
+
+$result = [pscustomobject]@{
+  schema_version = '1.0'
+  report_type = 'scan_pipeline_recovery_playbook'
+  evidence_id = $evidenceId
+  generated_at = (Get-Date).ToUniversalTime().ToString('o')
+  run_context = [pscustomobject]@{
+    script = 'scripts/recovery-playbook.ps1'
+    parameters = [pscustomobject]@{
+      timeout_minutes = $TimeoutMinutes
+      max_scans = $MaxScans
+      apply_cleanup = $ApplyCleanup.IsPresent
+      send_webhook = $SendWebhook.IsPresent
+    }
+  }
+  integrity = [pscustomobject]@{
+    algorithm = 'sha256'
+    payload_hash = $evidenceHash
+  }
+  summary = $summary
+  apply_cleanup = $ApplyCleanup.IsPresent
+  send_webhook = $SendWebhook.IsPresent
+  webhook_status = $null
+}
+
 $webhookStatus = $null
 if ($SendWebhook) {
   if ([string]::IsNullOrWhiteSpace($effectiveWebhook)) {
@@ -198,6 +244,7 @@ if ($SendWebhook) {
     event = 'scan_pipeline_recovery_playbook'
     source = 'sentinel-agent-ops'
     severity = $severity
+    evidence_id = $evidenceId
     summary = $summary
   }
 
@@ -207,13 +254,8 @@ if ($SendWebhook) {
     ok = $webhookRes.StatusCode -ge 200 -and $webhookRes.StatusCode -lt 300
     raw = $webhookRes.Raw
   }
-}
 
-$result = [pscustomobject]@{
-  summary = $summary
-  apply_cleanup = $ApplyCleanup.IsPresent
-  send_webhook = $SendWebhook.IsPresent
-  webhook_status = $webhookStatus
+  $result.webhook_status = $webhookStatus
 }
 
 $result | ConvertTo-Json -Depth 14

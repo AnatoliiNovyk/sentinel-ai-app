@@ -337,6 +337,11 @@ async function testDailyReportScript(rootDir) {
   const stdout = await runPwsh(scriptPath, ['-EnvFile', envFile, '-HoursBack', '24', '-StaleMinutes', '60']);
   const json = extractJson(stdout);
 
+  assert.equal(json.schema_version, '1.0');
+  assert.equal(json.report_type, 'daily_scan_health_report');
+  assert.equal(typeof json.evidence_id, 'string');
+  assert.equal(typeof json.integrity.payload_hash, 'string');
+  assert.equal(json.integrity.payload_hash.length, 64);
   assert.ok(json.summary);
   assert.equal(typeof json.summary.scans_total, 'number');
   assert.equal(typeof json.summary.jobs_total, 'number');
@@ -693,6 +698,11 @@ async function testRecoveryPlaybookScript(rootDir) {
   ]);
   const json = extractJson(stdout);
 
+  assert.equal(json.schema_version, '1.0');
+  assert.equal(json.report_type, 'scan_pipeline_recovery_playbook');
+  assert.equal(typeof json.evidence_id, 'string');
+  assert.equal(typeof json.integrity.payload_hash, 'string');
+  assert.equal(json.integrity.payload_hash.length, 64);
   assert.equal(json.summary.mode, 'apply');
   assert.equal(json.summary.stale_running_jobs_before_count, 2);
   assert.equal(json.summary.stale_running_jobs_after_count, 0);

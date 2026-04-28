@@ -93,6 +93,22 @@ function Convert-ToUtcDateTimeOffset {
   return [DateTimeOffset]::Parse($text, [System.Globalization.CultureInfo]::InvariantCulture).ToUniversalTime()
 }
 
+function Get-Sha256Hex {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Text
+  )
+
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $hash = $sha.ComputeHash($bytes)
+    return ([System.BitConverter]::ToString($hash)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 if (-not (Test-Path $EnvFile)) {
   throw "Env file not found: $EnvFile"
 }
@@ -343,6 +359,44 @@ if ($trendByDay.Count -ge 2 -and $trendSpikePercent -gt $MaxErrorRateTrendSpikeP
 
 $thresholdsOk = $thresholdBreaches.Count -eq 0
 
+$evidenceSummaryPayload = [pscustomobject]@{
+  summary = $summary
+  thresholds_ok = $thresholdsOk
+  threshold_breaches = $thresholdBreaches
+}
+$evidenceHash = Get-Sha256Hex -Text ($evidenceSummaryPayload | ConvertTo-Json -Depth 14 -Compress)
+$evidenceId = "daily-health-$($nowUtc.ToString('yyyyMMddTHHmmssZ'))-$($evidenceHash.Substring(0, 12))"
+
+$result = [pscustomobject]@{
+  schema_version = '1.0'
+  report_type = 'daily_scan_health_report'
+  evidence_id = $evidenceId
+  generated_at = (Get-Date).ToUniversalTime().ToString('o')
+  run_context = [pscustomobject]@{
+    script = 'scripts/daily-queue-health-report.ps1'
+    parameters = [pscustomobject]@{
+      hours_back = $HoursBack
+      trend_days = $TrendDays
+      stale_minutes = $StaleMinutes
+      max_stale_running_jobs = $MaxStaleRunningJobs
+      max_error_job_rate_percent = $MaxErrorJobRatePercent
+      max_error_rate_trend_spike_percent = $MaxErrorRateTrendSpikePercent
+      fail_on_threshold_breach = $FailOnThresholdBreach.IsPresent
+      send_webhook = $SendWebhook.IsPresent
+    }
+  }
+  integrity = [pscustomobject]@{
+    algorithm = 'sha256'
+    payload_hash = $evidenceHash
+  }
+  summary = $summary
+  thresholds_ok = $thresholdsOk
+  threshold_breaches = $thresholdBreaches
+  fail_on_threshold_breach = $FailOnThresholdBreach.IsPresent
+  send_webhook = $SendWebhook.IsPresent
+  webhook_status = $null
+}
+
 $webhookStatus = $null
 if ($SendWebhook) {
   if ([string]::IsNullOrWhiteSpace($effectiveWebhookUrl)) {
@@ -354,6 +408,7 @@ if ($SendWebhook) {
     severity = if ($thresholdsOk) { 'info' } else { 'warning' }
     source = 'sentinel-agent-ops'
     summary = $summary
+    evidence_id = $evidenceId
     thresholds_ok = $thresholdsOk
     threshold_breaches = $thresholdBreaches
   }
@@ -364,16 +419,11 @@ if ($SendWebhook) {
     ok = $webhookRes.StatusCode -ge 200 -and $webhookRes.StatusCode -lt 300
     raw = $webhookRes.Raw
   }
+
+  $result.webhook_status = $webhookStatus
 }
 
-[pscustomobject]@{
-  summary = $summary
-  thresholds_ok = $thresholdsOk
-  threshold_breaches = $thresholdBreaches
-  fail_on_threshold_breach = $FailOnThresholdBreach.IsPresent
-  send_webhook = $SendWebhook.IsPresent
-  webhook_status = $webhookStatus
-} | ConvertTo-Json -Depth 12
+$result | ConvertTo-Json -Depth 14
 
 if ($FailOnThresholdBreach -and -not $thresholdsOk) {
   throw "Daily health thresholds breached: $($thresholdBreaches | ConvertTo-Json -Compress)"

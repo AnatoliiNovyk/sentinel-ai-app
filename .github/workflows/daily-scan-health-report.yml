@@ -115,6 +115,7 @@ jobs:
           "escalate_on_breach=$($escalateOnBreach.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           Write-Host "Daily health report generated at: $($json.summary.generated_at)"
+          Write-Host "evidence_id=$($json.evidence_id) payload_hash=$($json.integrity.payload_hash)"
           Write-Host "scans_total=$($json.summary.scans_total) jobs_total=$($json.summary.jobs_total) stale_running_jobs_count=$($json.summary.stale_running_jobs_count) avg_completed_scan_duration_sec=$($json.summary.avg_completed_scan_duration_sec)"
           Write-Host "thresholds_ok=$($json.thresholds_ok) breaches=$($json.threshold_breaches.Count)"
 
