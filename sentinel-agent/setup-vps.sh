@@ -24,6 +24,12 @@ if ! command -v node &> /dev/null; then
   apt-get install -y nodejs -qq
 fi
 
+# ─── Install scanner runtime dependencies ─────────────────────────────────────
+if ! command -v nmap &> /dev/null; then
+  echo "Installing nmap..."
+  apt-get install -y nmap -qq
+fi
+
 # ─── Pull scanner Docker images ───────────────────────────────────────────────
 echo "Pulling scanner images (this takes a few minutes)..."
 docker pull instrumentisto/nmap &

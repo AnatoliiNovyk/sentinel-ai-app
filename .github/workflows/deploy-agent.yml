@@ -44,6 +44,12 @@ jobs:
             sudo rm -rf node_modules
             sudo npm install
 
+            echo "🧰 Ensuring scanner runtime dependencies..."
+            if ! command -v nmap >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y nmap
+            fi
+
             echo "🔨 Building..."
             sudo npm run build
 
