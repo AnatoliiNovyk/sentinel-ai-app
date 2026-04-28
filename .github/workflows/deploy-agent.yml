@@ -51,3 +51,10 @@ jobs:
 
             echo "✅ Deploy complete."
             sudo systemctl status sentinel-agent --no-pager
+
+            echo "🩺 Checking local health endpoint..."
+            curl -fsS http://127.0.0.1:9090/health | head -c 400
+            echo ""
+
+            echo "📊 Checking watchdog metrics presence..."
+            curl -fsS http://127.0.0.1:9090/metrics | grep -E "sentinel_stale_jobs_recovered_total|sentinel_stale_scans_recovered_total"
