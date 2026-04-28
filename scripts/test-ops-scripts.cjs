@@ -937,6 +937,37 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const missingSchemaDailyResult = await runNodeExpectFail(verifierScript, ['--report-file', missingSchemaDailyFile]);
   assert.match(`${missingSchemaDailyResult.stdout}\n${missingSchemaDailyResult.stderr}`, /Unsupported schema_version/i);
+
+  const invalidIntegrityAlgorithm = JSON.parse(JSON.stringify(dailyReport));
+  invalidIntegrityAlgorithm.integrity.algorithm = 'md5';
+  const invalidIntegrityAlgorithmFile = path.join(tempDir, 'daily-invalid-integrity-algorithm.json');
+  fs.writeFileSync(invalidIntegrityAlgorithmFile, JSON.stringify(invalidIntegrityAlgorithm), 'utf8');
+
+  const invalidIntegrityAlgorithmResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidIntegrityAlgorithmFile]);
+  assert.match(`${invalidIntegrityAlgorithmResult.stdout}\n${invalidIntegrityAlgorithmResult.stderr}`, /Unsupported integrity algorithm/i);
+
+  const invalidIntegrityHashFormat = JSON.parse(JSON.stringify(dailyReport));
+  invalidIntegrityHashFormat.integrity.payload_hash = 'ABC123';
+  const invalidIntegrityHashFormatFile = path.join(tempDir, 'daily-invalid-integrity-hash-format.json');
+  fs.writeFileSync(invalidIntegrityHashFormatFile, JSON.stringify(invalidIntegrityHashFormat), 'utf8');
+
+  const invalidIntegrityHashFormatResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidIntegrityHashFormatFile]);
+  assert.match(`${invalidIntegrityHashFormatResult.stdout}\n${invalidIntegrityHashFormatResult.stderr}`, /Invalid integrity\.payload_hash format/i);
+
+  const unsupportedReportType = JSON.parse(JSON.stringify(dailyReport));
+  unsupportedReportType.report_type = 'unknown_report_type';
+  const unsupportedPayloadHash = hashPart(JSON.stringify({
+    summary: unsupportedReportType.summary,
+    thresholds_ok: unsupportedReportType.thresholds_ok,
+    threshold_breaches: unsupportedReportType.threshold_breaches,
+  }));
+  unsupportedReportType.integrity.payload_hash = unsupportedPayloadHash;
+  unsupportedReportType.evidence_id = `daily-health-${ts}-${unsupportedPayloadHash.slice(0, 12)}`;
+  const unsupportedReportTypeFile = path.join(tempDir, 'unsupported-report-type.json');
+  fs.writeFileSync(unsupportedReportTypeFile, JSON.stringify(unsupportedReportType), 'utf8');
+
+  const unsupportedReportTypeResult = await runNodeExpectFail(verifierScript, ['--report-file', unsupportedReportTypeFile]);
+  assert.match(`${unsupportedReportTypeResult.stdout}\n${unsupportedReportTypeResult.stderr}`, /Unsupported report_type/i);
 }
 
 async function testWeeklySloSlaSummaryScript(rootDir) {

@@ -105,6 +105,20 @@ function validateEvidenceId(report, payloadHash) {
   }
 }
 
+function validateIntegrityMetadata(report) {
+  if (!report.integrity || typeof report.integrity !== 'object') {
+    throw new Error('Missing integrity metadata');
+  }
+
+  if (report.integrity.algorithm !== 'sha256') {
+    throw new Error(`Unsupported integrity algorithm: ${report.integrity.algorithm}`);
+  }
+
+  if (typeof report.integrity.payload_hash !== 'string' || !/^[a-f0-9]{64}$/.test(report.integrity.payload_hash)) {
+    throw new Error('Invalid integrity.payload_hash format: expected 64 lowercase hex characters');
+  }
+}
+
 function main() {
   const { reportFile } = parseArgs(process.argv.slice(2));
   if (!reportFile) {
@@ -119,9 +133,7 @@ function main() {
   const text = fs.readFileSync(resolved, 'utf8');
   const report = JSON.parse(text);
 
-  if (!report.integrity || report.integrity.algorithm !== 'sha256' || !report.integrity.payload_hash) {
-    throw new Error('Missing or invalid integrity metadata (sha256 payload_hash required)');
-  }
+  validateIntegrityMetadata(report);
 
   const payload = getPayloadForReport(report);
   const actualHash = sha256Hex(JSON.stringify(payload));
