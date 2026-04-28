@@ -49,7 +49,7 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
           {currentMode === 'REAL' && <CheckCircle2 className="w-3 h-3" />}
           {currentMode === 'MOCK' && <AlertTriangle className="w-3 h-3" />}
           {currentMode === 'UNKNOWN' && <HelpCircle className="w-3 h-3" />}
-          {currentMode === 'MOCK' ? '⚠ DEMO MODE' : `Mode: ${currentMode}`}
+          {currentMode === 'MOCK' ? 'Selected Scan: DEMO' : `Mode: ${currentMode}`}
         </div>
         <div className="relative">
           <Layout className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

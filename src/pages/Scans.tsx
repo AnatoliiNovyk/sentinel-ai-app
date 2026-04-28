@@ -47,6 +47,8 @@ function RunningProgressBar() {
 }
 
 const Scans = () => {
+  const DEFAULT_AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
+    ?? 'http://95.67.75.146:9090/health';
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [scans, setScans] = useState<Scan[]>([]);
@@ -62,6 +64,7 @@ const Scans = () => {
   const [showNewScanModal, setShowNewScanModal] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [showMockWarning, setShowMockWarning] = useState(false);
+  const [agentReachable, setAgentReachable] = useState<boolean | null>(null);
   const [scanSearch, setScanSearch] = useState('');
   const [scannerFilter, setScannerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -105,8 +108,32 @@ const Scans = () => {
 
   // Show mock warning whenever the active scan is in MOCK mode
   useEffect(() => {
-    setShowMockWarning(currentScanMode === 'MOCK');
-  }, [currentScanMode]);
+    setShowMockWarning(currentScanMode === 'MOCK' && agentReachable === false);
+  }, [currentScanMode, agentReachable]);
+
+  // Reuse the same agent URL source as Settings/AppLayout and gate noisy warnings by real reachability.
+  useEffect(() => {
+    let active = true;
+
+    const checkAgent = async () => {
+      try {
+        const url = localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL;
+        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!active) return;
+        setAgentReachable(res.ok);
+      } catch {
+        if (!active) return;
+        setAgentReachable(false);
+      }
+    };
+
+    checkAgent();
+    const id = setInterval(checkAgent, 30_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [DEFAULT_AGENT_HEALTH_URL]);
 
   // Load initial data
   useEffect(() => {
@@ -346,7 +373,7 @@ Respond ONLY with valid JSON in this exact format:
         <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
           <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span className="flex-1">
-            <strong>Demo Mode:</strong> The selected scan is a simulated historical run. Its findings do not represent a live scan of your current infrastructure.
+            <strong>Demo Mode:</strong> Live scanner agent is currently unreachable, and the selected scan is a simulated run. Findings do not represent a live scan of your current infrastructure.
           </span>
           <button
             onClick={() => setShowMockWarning(false)}
