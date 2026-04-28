@@ -402,6 +402,7 @@ Respond ONLY with valid JSON in this exact format:
         projects={projects}
         selectedProjectId={selectedProjectId}
         currentMode={currentScanMode}
+        agentReachable={agentReachable}
         onSelectProject={setSelectedProjectId}
         onNewScan={() => setShowNewScanModal(true)}
       />

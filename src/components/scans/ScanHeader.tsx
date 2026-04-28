@@ -6,6 +6,7 @@ interface ScanHeaderProps {
   projects: Project[];
   selectedProjectId: string | null;
   currentMode?: 'REAL' | 'MOCK' | 'UNKNOWN';
+  agentReachable?: boolean | null;
   onSelectProject: (id: string) => void;
   onNewScan: () => void;
 }
@@ -14,9 +15,12 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
   projects, 
   selectedProjectId, 
   currentMode = 'UNKNOWN',
+  agentReachable = null,
   onSelectProject,
   onNewScan 
 }) => {
+  const showDemoBadge = currentMode === 'MOCK' && agentReachable === false;
+
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
       <div>
@@ -41,15 +45,21 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
             currentMode === 'REAL'
               ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-              : currentMode === 'MOCK'
+              : showDemoBadge
               ? 'text-amber-300 border-amber-500/40 bg-amber-500/15'
+              : currentMode === 'MOCK'
+              ? 'text-slate-300 border-slate-600/50 bg-slate-800/50'
               : 'text-slate-300 border-slate-600/50 bg-slate-800/50'
           }`}
         >
           {currentMode === 'REAL' && <CheckCircle2 className="w-3 h-3" />}
-          {currentMode === 'MOCK' && <AlertTriangle className="w-3 h-3" />}
+          {showDemoBadge && <AlertTriangle className="w-3 h-3" />}
           {currentMode === 'UNKNOWN' && <HelpCircle className="w-3 h-3" />}
-          {currentMode === 'MOCK' ? 'Selected Scan: DEMO' : `Mode: ${currentMode}`}
+          {showDemoBadge
+            ? 'DEMO MODE'
+            : currentMode === 'MOCK'
+            ? 'Selected Scan: Historical'
+            : `Mode: ${currentMode}`}
         </div>
         <div className="relative">
           <Layout className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
