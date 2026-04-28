@@ -61,3 +61,4 @@
 - [x] Додано негативне tamper-detection покриття для evidence verifier (очікуваний fail при підміні payload) у ops контрактних тестах (`scripts/test-ops-scripts.cjs`).
 - [x] Посилено verifier перевіркою формату/префікса `evidence_id` та відповідності hash-suffix до payload hash; додано негативний тест для invalid evidence_id (`scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
 - [x] Додано weekly SLO/SLA summary automation (скрипт + workflow + integrity verify + контрактний тест) для executive reliability KPI (`scripts/weekly-slo-sla-summary.ps1`, `.github/workflows/weekly-slo-sla-summary.yml`, `scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
+- [x] Додано негативні verifier-тести для weekly evidence (tamper + invalid evidence_id), щоб гарантувати відхилення підроблених weekly SLO/SLA артефактів (`scripts/test-ops-scripts.cjs`).

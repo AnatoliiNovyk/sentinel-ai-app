@@ -870,6 +870,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
   const tamperedResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedDailyFile]);
   assert.match(`${tamperedResult.stdout}\n${tamperedResult.stderr}`, /Integrity mismatch/i);
 
+  const tamperedWeekly = JSON.parse(JSON.stringify(weeklyReport));
+  tamperedWeekly.summary.success_rate_percent = 77;
+  const tamperedWeeklyFile = path.join(tempDir, 'weekly-tampered.json');
+  fs.writeFileSync(tamperedWeeklyFile, JSON.stringify(tamperedWeekly), 'utf8');
+
+  const tamperedWeeklyResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedWeeklyFile]);
+  assert.match(`${tamperedWeeklyResult.stdout}\n${tamperedWeeklyResult.stderr}`, /Integrity mismatch/i);
+
   const invalidEvidenceIdDaily = JSON.parse(JSON.stringify(dailyReport));
   invalidEvidenceIdDaily.evidence_id = `daily-health-${ts}-aaaaaaaaaaaa`;
   const invalidEvidenceIdFile = path.join(tempDir, 'daily-invalid-evidence-id.json');
@@ -877,6 +885,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const invalidEvidenceResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdFile]);
   assert.match(`${invalidEvidenceResult.stdout}\n${invalidEvidenceResult.stderr}`, /evidence_id hash suffix mismatch/i);
+
+  const invalidEvidenceIdWeekly = JSON.parse(JSON.stringify(weeklyReport));
+  invalidEvidenceIdWeekly.evidence_id = `weekly-slo-sla-${ts}-aaaaaaaaaaaa`;
+  const invalidEvidenceIdWeeklyFile = path.join(tempDir, 'weekly-invalid-evidence-id.json');
+  fs.writeFileSync(invalidEvidenceIdWeeklyFile, JSON.stringify(invalidEvidenceIdWeekly), 'utf8');
+
+  const invalidEvidenceWeeklyResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdWeeklyFile]);
+  assert.match(`${invalidEvidenceWeeklyResult.stdout}\n${invalidEvidenceWeeklyResult.stderr}`, /evidence_id hash suffix mismatch/i);
 }
 
 async function testWeeklySloSlaSummaryScript(rootDir) {
