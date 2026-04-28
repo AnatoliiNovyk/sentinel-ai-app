@@ -56,3 +56,4 @@
 - [x] Додано recovery orchestration playbook (dry-run/apply + post-check + artifact + webhook report) та manual workflow для керованого відновлення (`scripts/recovery-playbook.ps1`, `.github/workflows/recovery-playbook.yml`, `scripts/test-ops-scripts.cjs`).
 - [x] Додано evidence hardening для ops-артефактів: versioned envelope, run context, evidence_id, SHA-256 payload hash і workflow trace logging (`scripts/daily-queue-health-report.ps1`, `scripts/recovery-playbook.ps1`, `.github/workflows/daily-scan-health-report.yml`, `.github/workflows/recovery-playbook.yml`, `scripts/test-ops-scripts.cjs`).
 - [x] Додано scheduled/manual chaos drill workflow для регулярного fault-injection validation з artifact-звітом (`.github/workflows/chaos-ops-drill.yml`).
+- [x] Посилено chaos drill workflow: evidence_id/hash у звіті, outputs для трасування та failure webhook notification (`.github/workflows/chaos-ops-drill.yml`).
