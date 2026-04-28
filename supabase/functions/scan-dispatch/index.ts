@@ -36,31 +36,6 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    // Get user from JWT
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) {
-      console.error("Auth error:", authErr);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Rate limit: 10 scans per minute per user
-    const rl = checkScanRateLimit(user.id);
-    if (!rl.allowed) {
-      return new Response(
-        JSON.stringify({ error: "Too many scan requests. Please wait before starting another scan.", retryAfterSeconds: rl.retryAfterSeconds }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rl.retryAfterSeconds) } },
-      );
-    }
-
     const body = await req.json();
     const { scan_id, project_id, scanner, target, org_id } = body;
 
@@ -75,13 +50,41 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Resolve ownership from the already-created scan row (written by authenticated client under RLS).
+    const { data: scan, error: scanErr } = await serviceClient
+      .from("scans")
+      .select("id, user_id, project_id, org_id, status")
+      .eq("id", scan_id)
+      .maybeSingle();
+
+    if (scanErr || !scan) {
+      return new Response(JSON.stringify({ error: "Scan not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (scan.project_id !== project_id) {
+      return new Response(JSON.stringify({ error: "scan_id/project_id mismatch" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Rate limit: 10 scans per minute per user
+    const rl = checkScanRateLimit(scan.user_id);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many scan requests. Please wait before starting another scan.", retryAfterSeconds: rl.retryAfterSeconds }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rl.retryAfterSeconds) } },
+      );
+    }
+
     // Insert job with org_id for RBAC visibility
     const { data: job, error: jobErr } = await serviceClient
       .from("scan_jobs")
       .insert({
         scan_id,
-        user_id: user.id,
-        org_id: org_id, // Important for team visibility
+        user_id: scan.user_id,
+        org_id: scan.org_id ?? org_id ?? null,
         project_id,
         scanner,
         target,
@@ -97,7 +100,7 @@ Deno.serve(async (req: Request) => {
       .from("scans")
       .update({ 
         status: "running", 
-        org_id: org_id, 
+        org_id: scan.org_id ?? org_id ?? null,
         started_at: new Date().toISOString() 
       })
       .eq("id", scan_id);
