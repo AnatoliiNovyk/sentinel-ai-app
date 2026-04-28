@@ -171,6 +171,33 @@ function runNode(scriptPath, args) {
   });
 }
 
+function runNodeExpectFail(scriptPath, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    child.on('error', (error) => {
+      reject(new Error(`Node command execution failed unexpectedly: ${scriptPath}\nerror: ${error.message}`));
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        reject(new Error(`Node command expected to fail but succeeded: ${scriptPath}\nstdout:\n${stdout}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
 function writeEnvFile(filePath, supabaseUrl, includeAgentSecret = true) {
   const lines = [
     `SUPABASE_URL=${supabaseUrl}`,
@@ -802,6 +829,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
   await runNode(verifierScript, ['--report-file', dailyFile]);
   await runNode(verifierScript, ['--report-file', recoveryFile]);
   await runNode(verifierScript, ['--report-file', chaosFile]);
+
+  const tamperedDaily = JSON.parse(JSON.stringify(dailyReport));
+  tamperedDaily.summary.scans_total = 999;
+  const tamperedDailyFile = path.join(tempDir, 'daily-tampered.json');
+  fs.writeFileSync(tamperedDailyFile, JSON.stringify(tamperedDaily), 'utf8');
+
+  const tamperedResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedDailyFile]);
+  assert.match(`${tamperedResult.stdout}\n${tamperedResult.stderr}`, /Integrity mismatch/i);
 }
 
 async function main() {

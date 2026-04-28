@@ -58,3 +58,4 @@
 - [x] Додано scheduled/manual chaos drill workflow для регулярного fault-injection validation з artifact-звітом (`.github/workflows/chaos-ops-drill.yml`).
 - [x] Посилено chaos drill workflow: evidence_id/hash у звіті, outputs для трасування та failure webhook notification (`.github/workflows/chaos-ops-drill.yml`).
 - [x] Додано автоматичну верифікацію evidence integrity у workflow (daily/recovery/chaos) та контрактні тести verifier-скрипта (`scripts/verify-evidence-integrity.cjs`, `.github/workflows/daily-scan-health-report.yml`, `.github/workflows/recovery-playbook.yml`, `.github/workflows/chaos-ops-drill.yml`, `scripts/test-ops-scripts.cjs`).
+- [x] Додано негативне tamper-detection покриття для evidence verifier (очікуваний fail при підміні payload) у ops контрактних тестах (`scripts/test-ops-scripts.cjs`).
