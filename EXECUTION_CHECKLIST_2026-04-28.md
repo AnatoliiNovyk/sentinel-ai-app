@@ -62,3 +62,6 @@
 - [x] Посилено verifier перевіркою формату/префікса `evidence_id` та відповідності hash-suffix до payload hash; додано негативний тест для invalid evidence_id (`scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
 - [x] Додано weekly SLO/SLA summary automation (скрипт + workflow + integrity verify + контрактний тест) для executive reliability KPI (`scripts/weekly-slo-sla-summary.ps1`, `.github/workflows/weekly-slo-sla-summary.yml`, `scripts/verify-evidence-integrity.cjs`, `scripts/test-ops-scripts.cjs`).
 - [x] Додано негативні verifier-тести для weekly evidence (tamper + invalid evidence_id), щоб гарантувати відхилення підроблених weekly SLO/SLA артефактів (`scripts/test-ops-scripts.cjs`).
+- [x] Додано в Dashboard weekly reliability KPI блок (scans, success/failure rates, avg/p95, SLA breach rate, threshold status) для візуалізації executive SLO/SLA (`src/pages/Dashboard.tsx`).
+- [x] Додано автоматичний issue/incident workflow для repeated weekly breaches (tracker issue + incident escalation) у weekly summary pipeline (`.github/workflows/weekly-slo-sla-summary.yml`).
+- [x] Розширено chaos drill dependency degradation сценаріями (DNS failure + connection refused) з включенням результатів у evidence report (`.github/workflows/chaos-ops-drill.yml`).

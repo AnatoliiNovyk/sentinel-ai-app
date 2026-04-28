@@ -1,5 +1,9 @@
 name: Weekly SLO SLA Summary
 
+permissions:
+  contents: read
+  issues: write
+
 on:
   schedule:
     - cron: '30 5 * * 1'
@@ -55,6 +59,7 @@ jobs:
           EOF
 
       - name: Generate summary
+        id: summary
         shell: pwsh
         env:
           INPUT_DAYS_BACK: ${{ github.event.inputs.days_back }}
@@ -90,6 +95,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path reports | Out-Null
           ($json | ConvertTo-Json -Depth 14) | Out-File -Encoding utf8 reports/weekly-slo-sla-summary.json
 
+          $breachCount = @($json.threshold_breaches).Count
+          "thresholds_ok=$($json.thresholds_ok.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "breach_count=$breachCount" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "evidence_id=$($json.evidence_id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
           Write-Host "evidence_id=$($json.evidence_id) payload_hash=$($json.integrity.payload_hash) thresholds_ok=$($json.thresholds_ok)"
           Write-Host "success_rate_percent=$($json.summary.success_rate_percent) failure_rate_percent=$($json.summary.failure_rate_percent) sla_breach_rate_percent=$($json.summary.sla_breach_rate_percent)"
 
@@ -97,6 +107,120 @@ jobs:
         shell: bash
         run: |
           node scripts/verify-evidence-integrity.cjs --report-file reports/weekly-slo-sla-summary.json
+
+      - name: Record weekly breach tracker
+        if: steps.summary.outputs.thresholds_ok == 'false'
+        id: tracker
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('reports/weekly-slo-sla-summary.json', 'utf8'));
+
+            const trackerTitle = '[Ops] Weekly SLO/SLA breach tracker';
+            const marker = '<!-- weekly-slo-sla-breach -->';
+            const issueList = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            let tracker = issueList.find((i) => i.title === trackerTitle);
+            if (!tracker) {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: trackerTitle,
+                body: [
+                  'Automated tracker for weekly reliability threshold breaches.',
+                  '',
+                  'This issue is updated by `.github/workflows/weekly-slo-sla-summary.yml` whenever thresholds are breached.',
+                ].join('\n'),
+              });
+              tracker = created.data;
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const breachRows = (report.threshold_breaches || []).map((b) => `- ${b.type}: actual=${b.actual}, threshold=${b.threshold}`);
+            const commentBody = [
+              marker,
+              `Weekly breach detected at ${report.generated_at}.`,
+              `Evidence: ${report.evidence_id}`,
+              `Success rate: ${report.summary?.success_rate_percent}%`,
+              `Failure rate: ${report.summary?.failure_rate_percent}%`,
+              `SLA breach rate: ${report.summary?.sla_breach_rate_percent}%`,
+              '',
+              'Breaches:',
+              ...(breachRows.length > 0 ? breachRows : ['- (none)']),
+              '',
+              `Workflow run: ${runUrl}`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: tracker.number,
+              body: commentBody,
+            });
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: tracker.number,
+              per_page: 100,
+            });
+            const breachCount = comments.filter((c) => c.body && c.body.includes(marker)).length;
+            const repeated = breachCount >= 2;
+
+            core.setOutput('tracker_issue_number', String(tracker.number));
+            core.setOutput('repeated_breach', repeated ? 'true' : 'false');
+
+      - name: Create or update repeated-breach incident
+        if: steps.tracker.outputs.repeated_breach == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('reports/weekly-slo-sla-summary.json', 'utf8'));
+
+            const incidentTitle = '[Incident] Repeated weekly SLO/SLA breaches';
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = openIssues.find((i) => i.title === incidentTitle);
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              'Repeated weekly reliability threshold breaches detected.',
+              '',
+              `Triggered at: ${report.generated_at}`,
+              `Evidence: ${report.evidence_id}`,
+              `Success rate: ${report.summary?.success_rate_percent}%`,
+              `Failure rate: ${report.summary?.failure_rate_percent}%`,
+              `SLA breach rate: ${report.summary?.sla_breach_rate_percent}%`,
+              '',
+              `Run: ${runUrl}`,
+            ].join('\n');
+
+            if (!existing) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: incidentTitle,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            }
 
       - name: Upload summary artifact
         if: always()

@@ -148,6 +148,57 @@ export default function Dashboard() {
   const completedScans = scans.filter(s => s.status === 'completed').length;
   const activeScans    = liveJobs.length + scans.filter(s => s.status === 'running' || s.status === 'queued').length;
 
+  const weeklySloSummary = useMemo(() => {
+    const nowTs = Date.now();
+    const sevenDaysAgo = nowTs - (7 * 24 * 60 * 60 * 1000);
+    const weekly = scans.filter((s) => {
+      const created = new Date(s.created_at).getTime();
+      return Number.isFinite(created) && created >= sevenDaysAgo;
+    });
+
+    const total = weekly.length;
+    const completed = weekly.filter((s) => s.status === 'completed');
+    const failed = weekly.filter((s) => s.status === 'failed').length;
+    const successRate = total > 0 ? Math.round((completed.length * 10000) / total) / 100 : 0;
+    const failureRate = total > 0 ? Math.round((failed * 10000) / total) / 100 : 0;
+
+    const durations = completed
+      .map((s) => {
+        if (!s.started_at || !s.completed_at) return null;
+        const started = new Date(s.started_at).getTime();
+        const done = new Date(s.completed_at).getTime();
+        if (!Number.isFinite(started) || !Number.isFinite(done) || done < started) return null;
+        return (done - started) / 60000;
+      })
+      .filter((v): v is number => v !== null)
+      .sort((a, b) => a - b);
+
+    const avgDuration = durations.length > 0
+      ? Math.round((durations.reduce((sum, d) => sum + d, 0) / durations.length) * 100) / 100
+      : 0;
+
+    const p95Duration = durations.length > 0
+      ? Math.round(durations[Math.max(0, Math.ceil(durations.length * 0.95) - 1)] * 100) / 100
+      : 0;
+
+    const slaThresholdMinutes = 60;
+    const slaBreaches = durations.filter((d) => d > slaThresholdMinutes).length;
+    const slaBreachRate = durations.length > 0 ? Math.round((slaBreaches * 10000) / durations.length) / 100 : 0;
+
+    return {
+      total,
+      completed: completed.length,
+      failed,
+      successRate,
+      failureRate,
+      avgDuration,
+      p95Duration,
+      slaBreaches,
+      slaBreachRate,
+      thresholdsOk: successRate >= 95 && failureRate <= 5 && slaBreachRate <= 10,
+    };
+  }, [scans]);
+
   // ── Advanced analytics ───────────────────────────────────────────────
   // Scan velocity: daily scan counts for last 14 days
   const scanVelocity = useMemo(() => buildScanVelocity(scans, 14), [scans]);
@@ -260,6 +311,32 @@ export default function Dashboard() {
           sparkColor="#38bdf8"
           subLabel={`${completedScans} completed`}
         />
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-semibold">Weekly SLO/SLA summary</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Executive reliability KPI for the last 7 days</p>
+          </div>
+          <span className={`text-xs px-2.5 py-1 rounded-md border ${
+            weeklySloSummary.thresholdsOk
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+          }`}>
+            {weeklySloSummary.thresholdsOk ? 'Thresholds OK' : 'Threshold breach'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <SummaryPill label="Scans" value={weeklySloSummary.total} color="text-slate-200" />
+          <SummaryPill label="Completed" value={weeklySloSummary.completed} color="text-emerald-400" />
+          <SummaryPill label="Failed" value={weeklySloSummary.failed} color="text-red-400" />
+          <SummaryPill label="Success %" value={weeklySloSummary.successRate} color="text-emerald-300" suffix="%" />
+          <SummaryPill label="Failure %" value={weeklySloSummary.failureRate} color="text-red-300" suffix="%" />
+          <SummaryPill label="Avg min" value={weeklySloSummary.avgDuration} color="text-sky-300" />
+          <SummaryPill label="P95 min" value={weeklySloSummary.p95Duration} color="text-violet-300" />
+          <SummaryPill label="SLA breach %" value={weeklySloSummary.slaBreachRate} color="text-amber-300" suffix="%" />
+        </div>
       </div>
 
       {/* ── Critical findings alert banner ──────────────────────────────── */}
@@ -938,12 +1015,12 @@ function AreaTrendChart({ trend, max }: { trend: { day: string; label: string; o
   );
 }
 
-function SummaryPill({ label, value, color, signed }: { label: string; value: number; color: string; signed?: boolean }) {
+function SummaryPill({ label, value, color, signed, suffix }: { label: string; value: number; color: string; signed?: boolean; suffix?: string }) {
   return (
     <div>
       <div className="text-xs text-slate-500 mb-1">{label}</div>
       <div className={`text-xl font-bold tabular-nums ${color}`}>
-        {signed && value > 0 ? '+' : ''}{value}
+        {signed && value > 0 ? '+' : ''}{value}{suffix ?? ''}
       </div>
     </div>
   );

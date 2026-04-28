@@ -9,6 +9,10 @@ on:
         description: "Run full ops contract fault-injection suite (true/false)"
         required: false
         default: "true"
+      run_dependency_degradation_checks:
+        description: "Run dependency degradation scenarios (true/false)"
+        required: false
+        default: "true"
       send_webhook_on_failure:
         description: "Send operational webhook when drill fails (true/false)"
         required: false
@@ -41,9 +45,11 @@ jobs:
         shell: pwsh
         env:
           INPUT_RUN_CONTRACT_SUITE: ${{ github.event.inputs.run_contract_suite }}
+          INPUT_RUN_DEPENDENCY_DEGRADATION_CHECKS: ${{ github.event.inputs.run_dependency_degradation_checks }}
           INPUT_SEND_WEBHOOK_ON_FAILURE: ${{ github.event.inputs.send_webhook_on_failure }}
         run: |
           $runContractSuite = if ([string]::IsNullOrWhiteSpace($env:INPUT_RUN_CONTRACT_SUITE)) { $true } else { [bool]::Parse($env:INPUT_RUN_CONTRACT_SUITE) }
+          $runDependencyDegradationChecks = if ([string]::IsNullOrWhiteSpace($env:INPUT_RUN_DEPENDENCY_DEGRADATION_CHECKS)) { $true } else { [bool]::Parse($env:INPUT_RUN_DEPENDENCY_DEGRADATION_CHECKS) }
           $sendWebhookOnFailure = if ([string]::IsNullOrWhiteSpace($env:INPUT_SEND_WEBHOOK_ON_FAILURE)) { $true } else { [bool]::Parse($env:INPUT_SEND_WEBHOOK_ON_FAILURE) }
 
           function Get-Sha256Hex {
@@ -61,6 +67,42 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path reports | Out-Null
 
+          function Invoke-DegradationScenario {
+            param(
+              [string]$Name,
+              [string]$Url,
+              [int]$TimeoutSec = 3
+            )
+
+            $startedAt = Get-Date
+            try {
+              $resp = Invoke-WebRequest -Method 'GET' -Uri $Url -TimeoutSec $TimeoutSec -UseBasicParsing
+              $durationMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds, 1)
+              return [pscustomobject]@{
+                scenario = $Name
+                url = $Url
+                expected_failure = $true
+                observed_failure = $false
+                passed = $false
+                status_code = $resp.StatusCode
+                duration_ms = $durationMs
+                error = $null
+              }
+            } catch {
+              $durationMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds, 1)
+              return [pscustomobject]@{
+                scenario = $Name
+                url = $Url
+                expected_failure = $true
+                observed_failure = $true
+                passed = $true
+                status_code = $null
+                duration_ms = $durationMs
+                error = $_.Exception.Message
+              }
+            }
+          }
+
           if (-not $runContractSuite) {
             $generatedAt = (Get-Date).ToUniversalTime()
             $report = [pscustomobject]@{
@@ -70,6 +112,12 @@ jobs:
               reason = 'run_contract_suite=false'
               generated_at = $generatedAt.ToString('o')
               workflow = 'chaos-ops-drill.yml'
+              dependency_degradation = [pscustomobject]@{
+                enabled = $false
+                reason = 'run_contract_suite=false'
+                scenarios = @()
+                all_passed = $true
+              }
             }
 
             $payloadHash = Get-Sha256Hex -Text ($report | ConvertTo-Json -Depth 10 -Compress)
@@ -87,6 +135,18 @@ jobs:
           $exitCode = $LASTEXITCODE
           $generatedAt = (Get-Date).ToUniversalTime()
 
+          $degradationResults = @()
+          if ($runDependencyDegradationChecks) {
+            $degradationResults += Invoke-DegradationScenario -Name 'dns-resolution-failure' -Url 'http://nonexistent.invalid/' -TimeoutSec 3
+            $degradationResults += Invoke-DegradationScenario -Name 'connection-refused' -Url 'http://127.0.0.1:9/' -TimeoutSec 3
+          }
+          $degradationPassed = @($degradationResults | Where-Object { -not $_.passed }).Count -eq 0
+          if (-not $runDependencyDegradationChecks) {
+            $degradationPassed = $true
+          }
+
+          $effectiveExitCode = if ($exitCode -ne 0) { $exitCode } elseif (-not $degradationPassed) { 97 } else { 0 }
+
           $report = [pscustomobject]@{
             schema_version = '1.0'
             report_type = 'chaos_ops_drill'
@@ -94,9 +154,14 @@ jobs:
             generated_at = $generatedAt.ToString('o')
             workflow = 'chaos-ops-drill.yml'
             command = 'node scripts/test-ops-scripts.cjs'
-            success = ($exitCode -eq 0)
-            exit_code = $exitCode
+            success = ($effectiveExitCode -eq 0)
+            exit_code = $effectiveExitCode
             output_excerpt = ($output | Select-Object -Last 80)
+            dependency_degradation = [pscustomobject]@{
+              enabled = $runDependencyDegradationChecks
+              scenarios = @($degradationResults)
+              all_passed = $degradationPassed
+            }
           }
 
           $payloadHash = Get-Sha256Hex -Text ($report | ConvertTo-Json -Depth 12 -Compress)
@@ -110,8 +175,8 @@ jobs:
 
           Write-Host "evidence_id=$($report.evidence_id) payload_hash=$($report.integrity.payload_hash) success=$($report.success)"
 
-          if ($exitCode -ne 0) {
-            throw "Chaos drill failed. ExitCode=$exitCode"
+          if (-not $report.success) {
+            throw "Chaos drill failed. ExitCode=$($report.exit_code)"
           }
 
       - name: Notify drill failure
