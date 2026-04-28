@@ -21,8 +21,8 @@
 - [x] Deploy `scan-result`.
 
 ## Пост-деплой smoke
-- [ ] Запустити `Launch Scan` у проді та перевірити відсутність регресій.
-- [ ] Підтвердити появу lifecycle-log записів у `agent_logs`.
+- [x] Запустити `Launch Scan` у проді та перевірити відсутність регресій.
+- [x] Підтвердити появу lifecycle-log записів у `agent_logs`.
 
 ## Артефакти
 - [x] Додано changelog поточного батчу у `changelogs/`.
