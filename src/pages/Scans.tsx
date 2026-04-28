@@ -10,6 +10,20 @@ import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
 
+function toReadableErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  if (err && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    const keys = ['message', 'error_description', 'error', 'details', 'hint'] as const;
+    for (const key of keys) {
+      const value = rec[key];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+  }
+  return 'Unexpected scan dispatch error. Check project access and scanner service availability.';
+}
+
 const SCAN_STATUS_META: Record<string, { label: string; dotClass: string; textClass: string; bgClass: string; borderClass: string; pulse: boolean }> = {
   running:   { label: 'Running',   dotClass: 'bg-emerald-400', textClass: 'text-emerald-300', bgClass: 'bg-emerald-500/10', borderClass: 'border-emerald-500/30', pulse: true  },
   pending:   { label: 'Pending',   dotClass: 'bg-amber-400',   textClass: 'text-amber-300',   bgClass: 'bg-amber-500/10',   borderClass: 'border-amber-500/30',   pulse: true  },
@@ -236,7 +250,7 @@ const Scans = () => {
       // Reload scans for the project
       await loadScans(project.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = toReadableErrorMessage(err);
       toast.error('Failed to start scan: ' + message);
       setAiGenError('Failed to start scan: ' + message);
     } finally {

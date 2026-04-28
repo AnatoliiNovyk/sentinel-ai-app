@@ -1,6 +1,12 @@
 import { supabase } from './client';
 
 async function getFunctionErrorMessage(error: unknown): Promise<string> {
+  const asRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+
+  const pickText = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
+
   if (error instanceof Error) {
     const maybeContext = error as Error & { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } };
     if (maybeContext.context?.json) {
@@ -21,6 +27,18 @@ async function getFunctionErrorMessage(error: unknown): Promise<string> {
       }
     }
     if (error.message?.trim()) return error.message;
+  }
+
+  const rec = asRecord(error);
+  if (rec) {
+    const direct =
+      pickText(rec.message) ??
+      pickText(rec.error_description) ??
+      pickText(rec.error) ??
+      pickText(rec.details) ??
+      pickText(rec.hint);
+
+    if (direct) return direct;
   }
 
   if (typeof error === 'string' && error.trim()) return error;
@@ -72,7 +90,7 @@ export const ScansService = {
   /**
    * Dispatches a new scan task.
    */
-  async dispatchScan(projectId: string, scanner: string, target: string, orgId: string) {
+  async dispatchScan(projectId: string, scanner: string, target: string, orgId?: string | null) {
     // 1. Create a scan record in UNKNOWN mode until real dispatch succeeds
     const { data: scan, error: scanErr } = await supabase
       .from('scans')
@@ -88,7 +106,10 @@ export const ScansService = {
       .select()
       .single();
 
-    if (scanErr) throw scanErr;
+    if (scanErr) {
+      const message = await getFunctionErrorMessage(scanErr);
+      throw new Error(message);
+    }
 
     // 2. Dispatch job via Edge Function
     const { data, error } = await supabase.functions.invoke('scan-dispatch', {
