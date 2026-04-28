@@ -1,6 +1,9 @@
 param(
   [string]$EnvFile = "sentinel-agent/.env",
-  [switch]$ControlledFailure
+  [switch]$ControlledFailure,
+  [switch]$WaitForCompletion,
+  [int]$TimeoutSeconds = 180,
+  [int]$PollIntervalSeconds = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -146,12 +149,43 @@ if ($logsRes.StatusCode -eq 200 -and $logsRes.Json) {
   $logs = @($logsRes.Json)
 }
 
+$finalScanStatus = 'queued'
+$finalScan = $null
+$jobsRes = $null
+
+if ($WaitForCompletion) {
+  $started = Get-Date
+
+  while (((Get-Date) - $started).TotalSeconds -lt $TimeoutSeconds) {
+    $scanStatusRes = Invoke-JsonRequest -Method 'GET' -Uri "$supabaseUrl/rest/v1/scans?id=eq.$scanId&select=id,status,started_at,completed_at" -Headers $restHeaders -Body $null
+    if ($scanStatusRes.StatusCode -eq 200 -and $scanStatusRes.Json -and $scanStatusRes.Json.Count -gt 0) {
+      $finalScan = $scanStatusRes.Json[0]
+      $finalScanStatus = [string]$finalScan.status
+      if ($finalScanStatus -in @('completed', 'failed', 'error')) {
+        break
+      }
+    }
+    Start-Sleep -Seconds $PollIntervalSeconds
+  }
+
+  $jobsRes = Invoke-JsonRequest -Method 'GET' -Uri "$supabaseUrl/rest/v1/scan_jobs?scan_id=eq.$scanId&select=id,status,error_message,started_at,completed_at&order=started_at.asc" -Headers $restHeaders -Body $null
+  $logsRes = Invoke-JsonRequest -Method 'GET' -Uri "$supabaseUrl/rest/v1/agent_logs?scan_id=eq.$scanId&select=level,message,created_at&order=created_at.asc" -Headers $restHeaders -Body $null
+  $logs = @()
+  if ($logsRes.StatusCode -eq 200 -and $logsRes.Json) {
+    $logs = @($logsRes.Json)
+  }
+}
+
 [pscustomobject]@{
   scan_id = $scanId
   dispatch_http = $dispatchRes.StatusCode
   dispatch_body = $dispatchRes.Raw
   result_http = if ($resultRes) { $resultRes.StatusCode } else { $null }
   result_body = if ($resultRes) { $resultRes.Raw } else { $null }
+  wait_for_completion = $WaitForCompletion.IsPresent
+  final_scan_status = $finalScanStatus
+  final_scan = $finalScan
+  jobs = if ($jobsRes -and $jobsRes.StatusCode -eq 200 -and $jobsRes.Json) { @($jobsRes.Json) } else { @() }
   log_count = $logs.Count
   logs = $logs | ForEach-Object { "$(($_.created_at)) [$($_.level)] $($_.message)" }
 } | ConvertTo-Json -Depth 8
