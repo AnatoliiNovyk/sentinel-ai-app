@@ -27,6 +27,14 @@ function getPayloadForReport(report) {
     throw new Error('Report must be a JSON object');
   }
 
+  if (report.schema_version !== '1.0') {
+    throw new Error(`Unsupported schema_version: ${report.schema_version}`);
+  }
+
+  if (!report.report_type || typeof report.report_type !== 'string') {
+    throw new Error('Missing or invalid report_type');
+  }
+
   if (report.report_type === 'daily_scan_health_report') {
     return {
       summary: report.summary,

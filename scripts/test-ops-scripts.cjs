@@ -921,6 +921,22 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const invalidEvidenceChaosResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdChaosFile]);
   assert.match(`${invalidEvidenceChaosResult.stdout}\n${invalidEvidenceChaosResult.stderr}`, /evidence_id hash suffix mismatch/i);
+
+  const invalidSchemaWeekly = JSON.parse(JSON.stringify(weeklyReport));
+  invalidSchemaWeekly.schema_version = '2.0';
+  const invalidSchemaWeeklyFile = path.join(tempDir, 'weekly-invalid-schema-version.json');
+  fs.writeFileSync(invalidSchemaWeeklyFile, JSON.stringify(invalidSchemaWeekly), 'utf8');
+
+  const invalidSchemaWeeklyResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidSchemaWeeklyFile]);
+  assert.match(`${invalidSchemaWeeklyResult.stdout}\n${invalidSchemaWeeklyResult.stderr}`, /Unsupported schema_version/i);
+
+  const missingSchemaDaily = JSON.parse(JSON.stringify(dailyReport));
+  delete missingSchemaDaily.schema_version;
+  const missingSchemaDailyFile = path.join(tempDir, 'daily-missing-schema-version.json');
+  fs.writeFileSync(missingSchemaDailyFile, JSON.stringify(missingSchemaDaily), 'utf8');
+
+  const missingSchemaDailyResult = await runNodeExpectFail(verifierScript, ['--report-file', missingSchemaDailyFile]);
+  assert.match(`${missingSchemaDailyResult.stdout}\n${missingSchemaDailyResult.stderr}`, /Unsupported schema_version/i);
 }
 
 async function testWeeklySloSlaSummaryScript(rootDir) {
