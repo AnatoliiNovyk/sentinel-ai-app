@@ -59,6 +59,26 @@ jobs:
       - name: Run heap-safe trio stability tests
         run: npm run test:trio:stable
 
+  test-dashboard-stability:
+    name: Test Dashboard Stability
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run heap-safe dashboard stability tests
+        run: npm run test:dashboard:stable
+
   smoke-e2e-release:
     name: Smoke E2E (Release)
     runs-on: ubuntu-latest

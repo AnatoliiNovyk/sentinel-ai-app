@@ -65,3 +65,6 @@
 - [x] Додано в Dashboard weekly reliability KPI блок (scans, success/failure rates, avg/p95, SLA breach rate, threshold status) для візуалізації executive SLO/SLA (`src/pages/Dashboard.tsx`).
 - [x] Додано автоматичний issue/incident workflow для repeated weekly breaches (tracker issue + incident escalation) у weekly summary pipeline (`.github/workflows/weekly-slo-sla-summary.yml`).
 - [x] Розширено chaos drill dependency degradation сценаріями (DNS failure + connection refused) з включенням результатів у evidence report (`.github/workflows/chaos-ops-drill.yml`).
+- [x] Додано регресійні контракти для chaos dependency degradation у evidence verifier (tamper + invalid evidence_id для `chaos_ops_drill`) (`scripts/test-ops-scripts.cjs`).
+- [x] Додано UI-регресійні тести для weekly SLO/SLA summary блоку на Dashboard (`src/pages/__tests__/Dashboard.test.tsx`).
+- [x] Посилено CI окремим heap-safe job для dashboard stability (`.github/workflows/ci.yml`).

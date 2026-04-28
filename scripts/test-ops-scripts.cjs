@@ -816,6 +816,18 @@ async function testEvidenceIntegrityVerifier(rootDir) {
     success: true,
     exit_code: 0,
     output_excerpt: ['ok'],
+    dependency_degradation: {
+      enabled: true,
+      scenarios: [
+        {
+          scenario: 'dns-resolution-failure',
+          expected_failure: true,
+          observed_failure: true,
+          passed: true,
+        },
+      ],
+      all_passed: true,
+    },
   };
   const chaosPayloadHash = hashPart(JSON.stringify({ ...chaosReport }));
   chaosReport.integrity = {
@@ -878,6 +890,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
   const tamperedWeeklyResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedWeeklyFile]);
   assert.match(`${tamperedWeeklyResult.stdout}\n${tamperedWeeklyResult.stderr}`, /Integrity mismatch/i);
 
+  const tamperedChaos = JSON.parse(JSON.stringify(chaosReport));
+  tamperedChaos.dependency_degradation.all_passed = false;
+  const tamperedChaosFile = path.join(tempDir, 'chaos-tampered.json');
+  fs.writeFileSync(tamperedChaosFile, JSON.stringify(tamperedChaos), 'utf8');
+
+  const tamperedChaosResult = await runNodeExpectFail(verifierScript, ['--report-file', tamperedChaosFile]);
+  assert.match(`${tamperedChaosResult.stdout}\n${tamperedChaosResult.stderr}`, /Integrity mismatch/i);
+
   const invalidEvidenceIdDaily = JSON.parse(JSON.stringify(dailyReport));
   invalidEvidenceIdDaily.evidence_id = `daily-health-${ts}-aaaaaaaaaaaa`;
   const invalidEvidenceIdFile = path.join(tempDir, 'daily-invalid-evidence-id.json');
@@ -893,6 +913,14 @@ async function testEvidenceIntegrityVerifier(rootDir) {
 
   const invalidEvidenceWeeklyResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdWeeklyFile]);
   assert.match(`${invalidEvidenceWeeklyResult.stdout}\n${invalidEvidenceWeeklyResult.stderr}`, /evidence_id hash suffix mismatch/i);
+
+  const invalidEvidenceIdChaos = JSON.parse(JSON.stringify(chaosReport));
+  invalidEvidenceIdChaos.evidence_id = `chaos-drill-${ts}-aaaaaaaaaaaa`;
+  const invalidEvidenceIdChaosFile = path.join(tempDir, 'chaos-invalid-evidence-id.json');
+  fs.writeFileSync(invalidEvidenceIdChaosFile, JSON.stringify(invalidEvidenceIdChaos), 'utf8');
+
+  const invalidEvidenceChaosResult = await runNodeExpectFail(verifierScript, ['--report-file', invalidEvidenceIdChaosFile]);
+  assert.match(`${invalidEvidenceChaosResult.stdout}\n${invalidEvidenceChaosResult.stderr}`, /evidence_id hash suffix mismatch/i);
 }
 
 async function testWeeklySloSlaSummaryScript(rootDir) {

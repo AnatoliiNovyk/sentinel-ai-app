@@ -189,3 +189,28 @@ describe('Dashboard — SLA section', () => {
     );
   });
 });
+
+describe('Dashboard — weekly SLO/SLA summary', () => {
+  it('renders weekly summary section and threshold state', async () => {
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('Weekly SLO/SLA summary')).toBeInTheDocument();
+        expect(screen.getByText('Threshold breach')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  it('renders weekly KPI labels', async () => {
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('Success %')).toBeInTheDocument();
+        expect(screen.getByText('Failure %')).toBeInTheDocument();
+        expect(screen.getByText('SLA breach %')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+});
