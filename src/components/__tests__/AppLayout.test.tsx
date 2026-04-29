@@ -4,10 +4,15 @@ import AppLayout from '../AppLayout';
 
 const originalLocation = window.location;
 
-const { mockSignOut, mockProfile, mockLocation } = vi.hoisted(() => ({
+const { mockSignOut, mockProfile, mockLocation, mockAuthState, mockProbeAuditRows } = vi.hoisted(() => ({
   mockSignOut: vi.fn().mockResolvedValue(undefined),
   mockProfile: { full_name: 'Jane Doe', email: 'jane@test.com' },
   mockLocation: { pathname: '/' },
+  mockAuthState: {
+    user: { id: 'user-1' } as { id: string } | null,
+    organizations: [{ id: 'org-1' }] as { id: string }[],
+  },
+  mockProbeAuditRows: [] as unknown[],
 }));
 
 const { mockProbeAgentHealth } = vi.hoisted(() => ({
@@ -17,8 +22,33 @@ const { mockProbeAgentHealth } = vi.hoisted(() => ({
 vi.mock('../../context/useAuth', () => {
   const _signOut = mockSignOut;
   const _profile = mockProfile;
-  return { useAuth: () => ({ profile: _profile, signOut: _signOut }) };
+  return {
+    useAuth: () => ({
+      profile: _profile,
+      signOut: _signOut,
+      user: mockAuthState.user,
+      organizations: mockAuthState.organizations,
+    }),
+  };
 });
+
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    from: (table: string) => {
+      if (table !== 'audit_logs') {
+        return { select: () => ({ eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }) }) };
+      }
+
+      const chain = {
+        eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        limit: vi.fn(() => Promise.resolve({ data: mockProbeAuditRows, error: null })),
+      };
+
+      return { select: () => chain };
+    },
+  },
+}));
 
 vi.mock('react-router-dom', () => ({
   NavLink: ({
@@ -116,6 +146,7 @@ describe('AppLayout — header', () => {
       value: originalLocation,
     });
     localStorage.removeItem('agentHealthUrl');
+    mockProbeAuditRows.length = 0;
     vi.unstubAllGlobals();
   });
 
@@ -199,6 +230,23 @@ describe('AppLayout — header', () => {
       expect(screen.getByText('Agent HTTPS check failed (TLS/CORS)')).toBeInTheDocument();
     });
     expect(mockProbeAgentHealth).toHaveBeenCalled();
+  });
+
+  it('shows global probe smoke badge when latest audit log status is ok', async () => {
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-29T10:00:00Z',
+      metadata: {
+        status: 'ok',
+        generated_at: '2026-04-29T10:00:00Z',
+      },
+    });
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Probe OK/i)).toBeInTheDocument();
+    });
   });
 });
 
