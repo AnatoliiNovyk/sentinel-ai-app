@@ -338,6 +338,133 @@ async function testAgentHealthProbeSmokeScript(rootDir) {
   await closeServer(server);
 }
 
+async function testPersistAgentProbeAuditSuccess(rootDir) {
+  let insertCalled = false;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/projects') {
+      return sendJson(res, 200, [{ id: 'project-1', org_id: 'org-1', user_id: 'user-1' }]);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rest/v1/audit_logs') {
+      insertCalled = true;
+      const body = await parseJsonBody(req);
+      assert.equal(body.action, 'agent_health_probe_smoke');
+      assert.equal(body.status, 'success');
+      assert.equal(body.org_id, 'org-1');
+      assert.equal(body.user_id, 'user-1');
+      return sendJson(res, 201, [{ id: 'audit-1' }]);
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-probe-audit-ok-'));
+  const envFile = path.join(tempDir, '.env');
+  const reportFile = path.join(tempDir, 'report.json');
+  fs.writeFileSync(envFile, [
+    `SUPABASE_URL=http://127.0.0.1:${port}`,
+    'SUPABASE_SERVICE_ROLE_KEY=test-service-role-key',
+  ].join('\n') + '\n', 'utf8');
+  fs.writeFileSync(reportFile, JSON.stringify({
+    status: 'ok',
+    reachable: true,
+    http_status: 200,
+    request_id: 'req-audit-ok',
+    probed_url: 'http://95.67.75.146:9090/health',
+  }), 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'persist-agent-probe-audit.cjs');
+  const result = await runNode(scriptPath, ['--env-file', envFile, '--report-file', reportFile, '--run-id', '123']);
+  const json = extractJson(result.stdout);
+
+  assert.equal(json.ok, true);
+  assert.equal(json.persisted, true);
+  assert.equal(insertCalled, true);
+
+  await closeServer(server);
+}
+
+async function testPersistAgentProbeAuditInsertFail(rootDir) {
+  let insertCalled = false;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/projects') {
+      return sendJson(res, 200, [{ id: 'project-1', org_id: 'org-1', user_id: 'user-1' }]);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rest/v1/audit_logs') {
+      insertCalled = true;
+      return sendJson(res, 500, { error: 'db unavailable' });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-probe-audit-fail-'));
+  const envFile = path.join(tempDir, '.env');
+  const reportFile = path.join(tempDir, 'report.json');
+  fs.writeFileSync(envFile, [
+    `SUPABASE_URL=http://127.0.0.1:${port}`,
+    'SUPABASE_SERVICE_ROLE_KEY=test-service-role-key',
+  ].join('\n') + '\n', 'utf8');
+  fs.writeFileSync(reportFile, JSON.stringify({ status: 'error', error: 'probe failed' }), 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'persist-agent-probe-audit.cjs');
+  const result = await runNode(scriptPath, ['--env-file', envFile, '--report-file', reportFile, '--run-id', '456']);
+  const json = extractJson(result.stdout);
+
+  assert.equal(json.ok, true);
+  assert.equal(json.persisted, false);
+  assert.equal(json.reason, 'audit_insert_failed');
+  assert.equal(insertCalled, true);
+
+  await closeServer(server);
+}
+
+async function testPersistAgentProbeAuditMissingProjectContext(rootDir) {
+  let insertCalled = false;
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/projects') {
+      return sendJson(res, 200, []);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/rest/v1/audit_logs') {
+      insertCalled = true;
+      return sendJson(res, 201, [{ id: 'audit-should-not-happen' }]);
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-probe-audit-missing-ctx-'));
+  const envFile = path.join(tempDir, '.env');
+  const reportFile = path.join(tempDir, 'report.json');
+  fs.writeFileSync(envFile, [
+    `SUPABASE_URL=http://127.0.0.1:${port}`,
+    'SUPABASE_SERVICE_ROLE_KEY=test-service-role-key',
+  ].join('\n') + '\n', 'utf8');
+  fs.writeFileSync(reportFile, JSON.stringify({ status: 'ok' }), 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'persist-agent-probe-audit.cjs');
+  const result = await runNode(scriptPath, ['--env-file', envFile, '--report-file', reportFile, '--run-id', '789']);
+  const json = extractJson(result.stdout);
+
+  assert.equal(json.ok, true);
+  assert.equal(json.persisted, false);
+  assert.equal(json.reason, 'missing_project_context');
+  assert.equal(insertCalled, false);
+
+  await closeServer(server);
+}
+
 async function testTriageScript(rootDir) {
   const { server, port } = await startMockServer(async (req, res) => {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
@@ -1180,6 +1307,9 @@ async function main() {
 
   await testSmokeScript(rootDir);
   await testAgentHealthProbeSmokeScript(rootDir);
+  await testPersistAgentProbeAuditSuccess(rootDir);
+  await testPersistAgentProbeAuditInsertFail(rootDir);
+  await testPersistAgentProbeAuditMissingProjectContext(rootDir);
   await testTriageScript(rootDir);
   await testDailyReportScript(rootDir);
   await testDailyReportThresholdFail(rootDir);
