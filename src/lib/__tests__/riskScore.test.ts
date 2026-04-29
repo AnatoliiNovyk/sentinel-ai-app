@@ -3,7 +3,7 @@
  * Covers computeScoreFromCounts() and riskBand() — pure functions, no Supabase.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { computeScoreFromCounts, riskBand, recomputeRiskScoreFromScanId } from '../riskScore';
+import { computeScoreFromCounts, riskBand, recomputeRiskScoreFromScanId, recomputeProjectRiskScore } from '../riskScore';
 
 // ─── Supabase mock ─────────────────────────────────────────────────────────────
 
@@ -164,5 +164,112 @@ describe('recomputeRiskScoreFromScanId', () => {
     mockFrom.mockReturnValue(chain);
     await recomputeRiskScoreFromScanId('scan-missing');
     expect(mockFrom).toHaveBeenCalledWith('scans');
+  });
+});
+
+// ─── recomputeProjectRiskScore ────────────────────────────────────────────────
+
+describe('recomputeProjectRiskScore', () => {
+  function makeChain(overrides: {
+    projectEnv?: string | null;
+    scans?: { id: string }[];
+    vulns?: { severity: string; status: string }[];
+  } = {}) {
+    const { projectEnv = 'internal', scans = [], vulns = [] } = overrides;
+    const mockUpdate = vi.fn().mockReturnThis();
+    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    mockUpdate.mockReturnValue({ eq: mockUpdateEq });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'projects') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: projectEnv != null ? { environment: projectEnv } : null,
+            error: null,
+          }),
+          update: mockUpdate,
+        };
+      }
+      if (table === 'scans') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ data: scans, error: null }),
+        };
+      }
+      if (table === 'vulnerabilities') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: vulns, error: null }),
+        };
+      }
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+    });
+
+    return { mockUpdate, mockUpdateEq };
+  }
+
+  it('returns 0 when project has no scans', async () => {
+    makeChain({ scans: [] });
+    const score = await recomputeProjectRiskScore('proj-1');
+    expect(score).toBe(0);
+  });
+
+  it('counts open vulns and computes score', async () => {
+    makeChain({
+      scans: [{ id: 'scan-1' }],
+      vulns: [
+        { severity: 'critical', status: 'open' },
+        { severity: 'high', status: 'open' },
+      ],
+    });
+    const score = await recomputeProjectRiskScore('proj-1');
+    // 1 critical (25) + 1 high (12) = 37
+    expect(score).toBe(37);
+  });
+
+  it('skips resolved vulns', async () => {
+    makeChain({
+      scans: [{ id: 'scan-1' }],
+      vulns: [
+        { severity: 'critical', status: 'resolved' },
+        { severity: 'high', status: 'open' },
+      ],
+    });
+    const score = await recomputeProjectRiskScore('proj-1');
+    expect(score).toBe(12); // only high
+  });
+
+  it('skips false_positive vulns', async () => {
+    makeChain({
+      scans: [{ id: 'scan-1' }],
+      vulns: [
+        { severity: 'critical', status: 'false_positive' },
+        { severity: 'medium', status: 'open' },
+      ],
+    });
+    const score = await recomputeProjectRiskScore('proj-1');
+    expect(score).toBe(5); // only medium
+  });
+
+  it('skips accepted vulns', async () => {
+    makeChain({
+      scans: [{ id: 'scan-1' }],
+      vulns: [
+        { severity: 'critical', status: 'accepted' },
+      ],
+    });
+    const score = await recomputeProjectRiskScore('proj-1');
+    expect(score).toBe(0);
+  });
+
+  it('writes computed score back to projects table', async () => {
+    const { mockUpdateEq } = makeChain({
+      scans: [{ id: 'scan-1' }],
+      vulns: [{ severity: 'high', status: 'open' }],
+    });
+    await recomputeProjectRiskScore('proj-1');
+    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'proj-1');
   });
 });

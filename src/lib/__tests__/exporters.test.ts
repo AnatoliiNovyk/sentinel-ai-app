@@ -3,7 +3,7 @@
  * Tests toSarif() (generation) and fromSarif() (parsing) — pure functions, no DOM/Supabase.
  */
 import { describe, it, expect } from 'vitest';
-import { toSarif, fromSarif } from '../exporters';
+import { toSarif, fromSarif, summarize, toCsvExport, toJsonExport, downloadFile } from '../exporters';
 import type { Project, Scan, Vulnerability } from '../supabase';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -340,5 +340,134 @@ describe('toSarif — mock watermark', () => {
     const doc = JSON.parse(toSarif(makeProject(), makeScan(), []));
     expect(doc.properties).toBeUndefined();
     expect(doc.runs[0].invocations[0].properties._mockData).toBeUndefined();
+  });
+});
+
+// ─── summarize ────────────────────────────────────────────────────────────────
+
+describe('summarize', () => {
+  it('returns all-zero for empty array', () => {
+    expect(summarize([])).toEqual({ critical: 0, high: 0, medium: 0, low: 0, info: 0 });
+  });
+
+  it('counts each severity correctly', () => {
+    const findings = [
+      { severity: 'critical' },
+      { severity: 'critical' },
+      { severity: 'high' },
+      { severity: 'medium' },
+      { severity: 'low' },
+      { severity: 'info' },
+    ] as ReturnType<typeof fromSarif>['findings'];
+    expect(summarize(findings)).toEqual({ critical: 2, high: 1, medium: 1, low: 1, info: 1 });
+  });
+});
+
+// ─── toCsvExport ─────────────────────────────────────────────────────────────
+
+describe('toCsvExport', () => {
+  it('produces a CSV string with header row', () => {
+    const csv = toCsvExport([makeVuln()]);
+    const lines = csv.split('\n');
+    expect(lines[0]).toContain('id');
+    expect(lines[0]).toContain('severity');
+    expect(lines[0]).toContain('title');
+  });
+
+  it('has exactly header + N data rows', () => {
+    const csv = toCsvExport([makeVuln(), makeVuln({ id: 'v2' })]);
+    expect(csv.split('\n').length).toBe(3);
+  });
+
+  it('escapes double quotes in string values', () => {
+    const vuln = makeVuln({ title: 'He said "oops"' });
+    const csv = toCsvExport([vuln]);
+    expect(csv).toContain('He said ""oops""');
+  });
+
+  it('normalizes newlines in values to spaces', () => {
+    const vuln = makeVuln({ note: 'line1\nline2' });
+    const csv = toCsvExport([vuln]);
+    expect(csv).not.toContain('\nline2');
+    expect(csv).toContain('line1 line2');
+  });
+
+  it('returns only header for empty array', () => {
+    const csv = toCsvExport([]);
+    expect(csv.split('\n').length).toBe(1);
+  });
+});
+
+// ─── toJsonExport ─────────────────────────────────────────────────────────────
+
+describe('toJsonExport', () => {
+  it('produces valid JSON string', () => {
+    const json = toJsonExport(makeProject(), makeScan(), [makeVuln()]);
+    expect(() => JSON.parse(json)).not.toThrow();
+  });
+
+  it('includes project metadata', () => {
+    const json = JSON.parse(toJsonExport(makeProject(), makeScan(), []));
+    expect(json.project.id).toBe('proj-1');
+    expect(json.project.name).toBe('Test Project');
+    expect(json.project.target).toBe('https://example.com');
+  });
+
+  it('includes scan metadata', () => {
+    const json = JSON.parse(toJsonExport(makeProject(), makeScan(), []));
+    expect(json.scan.id).toBe('scan-1');
+    expect(json.scan.scanner).toBe('nmap');
+    expect(json.scan.status).toBe('completed');
+  });
+
+  it('includes all findings', () => {
+    const json = JSON.parse(toJsonExport(makeProject(), makeScan(), [makeVuln(), makeVuln({ id: 'v2' })]));
+    expect(json.findings.length).toBe(2);
+  });
+
+  it('includes triage_summary grouped by status', () => {
+    const vulns = [
+      makeVuln({ id: 'v1', status: 'open' }),
+      makeVuln({ id: 'v2', status: 'open' }),
+      makeVuln({ id: 'v3', status: 'resolved' }),
+    ];
+    const json = JSON.parse(toJsonExport(makeProject(), makeScan(), vulns));
+    expect(json.triage_summary.open).toBe(2);
+    expect(json.triage_summary.resolved).toBe(1);
+  });
+
+  it('includes exported_at timestamp', () => {
+    const json = JSON.parse(toJsonExport(makeProject(), makeScan(), []));
+    expect(json.exported_at).toBeTruthy();
+    expect(new Date(json.exported_at).getTime()).not.toBeNaN();
+  });
+});
+
+// ─── downloadFile ─────────────────────────────────────────────────────────────
+
+describe('downloadFile', () => {
+  it('calls URL.createObjectURL and URL.revokeObjectURL', () => {
+    const createObjectURL = vi.fn().mockReturnValue('blob:test');
+    const revokeObjectURL = vi.fn();
+    const clickFn = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    const origCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const el = origCreate('a');
+        el.click = clickFn;
+        return el;
+      }
+      return origCreate(tag);
+    });
+
+    downloadFile('report.csv', 'a,b,c', 'text/csv');
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(clickFn).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });
