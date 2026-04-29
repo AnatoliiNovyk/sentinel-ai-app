@@ -18,6 +18,7 @@ export default function OsintAnalyzer() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScanHistory[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [showRiskChart, setShowRiskChart] = useState(false);
   const [showPhishingDrill, setShowPhishingDrill] = useState(false);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
@@ -153,7 +154,22 @@ export default function OsintAnalyzer() {
   }, []);
 
   const analyze = async () => {
-    if (!query.trim()) return;
+    const trimmed = query.trim();
+    setValidationError(null);
+
+    if (!trimmed) {
+      setValidationError('Please enter an email, domain, IP address, or username.');
+      return;
+    }
+    if (trimmed.length > 253) {
+      setValidationError('Query is too long (max 253 characters).');
+      return;
+    }
+    // Reject obviously invalid patterns (script tags, SQL keywords, path traversal)
+    if (/[<>'"`;]|(\.\.)|(\/\/)|(select\s+\*|drop\s+table|insert\s+into)/i.test(trimmed)) {
+      setValidationError('Query contains invalid characters.');
+      return;
+    }
 
     const limiter = getRateLimiter('darkwebmonitor-ui', { maxRequests: 10, windowMs: 60 * 1000 });
     const rateLimitCheck = limiter.check('session');
@@ -169,24 +185,24 @@ export default function OsintAnalyzer() {
 
     try {
       const client = getGlobalDarkWebMonitor();
-      const result = await client.scan(query.trim());
+      const result = await client.scan(trimmed);
 
       if (!result.ok) {
         setResults(prev => [
-          { query: query.trim(), result: {} as LeakScanResult, error: result.error.message },
+          { query: trimmed, result: {} as LeakScanResult, error: result.error.message },
           ...prev
         ]);
         toast.error(`Scan failed: ${result.error.message}`);
       } else {
-        setResults(prev => [{ query: query.trim(), result: result.data }, ...prev]);
+        setResults(prev => [{ query: trimmed, result: result.data }, ...prev]);
         const leakCount = Object.keys(result.data).filter(k => result.data[k as keyof LeakScanResult]).length;
-        toast.info(`Scan complete for "${query.trim()}"${leakCount ? ` — ${leakCount} source${leakCount !== 1 ? 's' : ''} with findings` : ' — no leaks found'}.`);
+        toast.info(`Scan complete for "${trimmed}"${leakCount ? ` — ${leakCount} source${leakCount !== 1 ? 's' : ''} with findings` : ' — no leaks found'}.`);
       }
 
       setQuery('');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error during scan';
-      setResults(prev => [{ query: query.trim(), result: {} as LeakScanResult, error: errorMsg }, ...prev]);
+      setResults(prev => [{ query: trimmed, result: {} as LeakScanResult, error: errorMsg }, ...prev]);
     } finally {
       setLoading(false);
     }
@@ -220,6 +236,15 @@ export default function OsintAnalyzer() {
             <div className="flex items-center gap-2 text-sm text-amber-400">
               <AlertTriangle className="w-4 h-4" />
               {rateLimitError}
+            </div>
+          </div>
+        )}
+
+        {validationError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-sm text-red-400">
+              <AlertTriangle className="w-4 h-4" />
+              {validationError}
             </div>
           </div>
         )}

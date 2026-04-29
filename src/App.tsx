@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
 import { useAuth } from './context/useAuth';
 import AppLayout from './components/AppLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Shield } from 'lucide-react';
 import { ToastProvider } from './lib/toastContext';
 import ToastContainer from './components/ToastContainer';
@@ -53,9 +54,11 @@ function Shell() {
 
   if (shareToken) {
     return (
-      <Suspense fallback={<RouteFallback />}>
-        <PublicReport token={shareToken} />
-      </Suspense>
+      <ErrorBoundary context="Public Report">
+        <Suspense fallback={<RouteFallback />}>
+          <PublicReport token={shareToken} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
@@ -72,17 +75,20 @@ function Shell() {
 
   if (!user) {
     return (
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/landing" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="*" element={<Navigate to="/landing" replace />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary context="Auth">
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/landing" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="*" element={<Navigate to="/landing" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
   return (
+    <ErrorBoundary context="App">
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<AppLayout />}>
@@ -109,8 +115,7 @@ function Shell() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-    </Suspense>
-  );
+    </Suspense>    </ErrorBoundary>  );
 }
 
 export default function App() {

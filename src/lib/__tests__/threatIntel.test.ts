@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { fetchThreatIntel } from '../threatIntel';
+import { describe, expect, it, beforeEach } from 'vitest';
+import { fetchThreatIntel, clearThreatIntelCache } from '../threatIntel';
+
+beforeEach(() => {
+  clearThreatIntelCache();
+});
 
 describe('fetchThreatIntel', () => {
   describe('returns null for RFC-1918 / loopback addresses', () => {
@@ -41,15 +45,71 @@ describe('fetchThreatIntel', () => {
     });
   });
 
-  describe('returns null for public targets (placeholder implementation)', () => {
-    it('returns null for a public IP address', async () => {
+  describe('returns enriched result for public targets', () => {
+    it('returns a result object for a public IP address', async () => {
       const result = await fetchThreatIntel('8.8.8.8');
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result!.source).toBe('open-source');
     });
 
-    it('returns null for a public domain', async () => {
+    it('result has all required fields', async () => {
+      const result = await fetchThreatIntel('1.1.1.1');
+      expect(result).not.toBeNull();
+      expect(typeof result!.positives).toBe('number');
+      expect(typeof result!.total).toBe('number');
+      expect(typeof result!.reputation).toBe('number');
+      expect(typeof result!.owner).toBe('string');
+      expect(typeof result!.country).toBe('string');
+      expect(typeof result!.lastAnalysis).toBe('string');
+      expect(Array.isArray(result!.tags)).toBe(true);
+    });
+
+    it('reputation is between 0 and 100', async () => {
+      const result = await fetchThreatIntel('93.184.216.34');
+      expect(result!.reputation).toBeGreaterThanOrEqual(0);
+      expect(result!.reputation).toBeLessThanOrEqual(100);
+    });
+
+    it('returns result for a public domain', async () => {
       const result = await fetchThreatIntel('example.com');
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result!.source).toBe('open-source');
+    });
+
+    it('strips port — 8.8.8.8:443 equals 8.8.8.8', async () => {
+      const resultWithPort = await fetchThreatIntel('8.8.8.8:443');
+      clearThreatIntelCache();
+      const resultPlain = await fetchThreatIntel('8.8.8.8');
+      expect(resultWithPort).toEqual(resultPlain);
+    });
+
+    it('is deterministic — same asset produces same result across calls', async () => {
+      const a = await fetchThreatIntel('203.0.113.5');
+      clearThreatIntelCache();
+      const b = await fetchThreatIntel('203.0.113.5');
+      expect(a).toEqual(b);
+    });
+
+    it('different assets produce different results', async () => {
+      const a = await fetchThreatIntel('8.8.8.8');
+      const b = await fetchThreatIntel('1.1.1.1');
+      expect(a!.reputation !== b!.reputation || a!.country !== b!.country).toBe(true);
+    });
+  });
+
+  describe('caching', () => {
+    it('returns same object reference on second call (cached)', async () => {
+      const first  = await fetchThreatIntel('8.8.4.4');
+      const second = await fetchThreatIntel('8.8.4.4');
+      expect(first).toBe(second);
+    });
+
+    it('clearThreatIntelCache removes cached entries', async () => {
+      const first = await fetchThreatIntel('9.9.9.9');
+      clearThreatIntelCache();
+      const second = await fetchThreatIntel('9.9.9.9');
+      expect(first).toEqual(second);
+      expect(first).not.toBe(second); // different reference after cache clear
     });
   });
 });
