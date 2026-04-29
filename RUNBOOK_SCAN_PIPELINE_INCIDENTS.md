@@ -13,6 +13,8 @@
 - Supabase таблиці: `scans`, `scan_jobs`, `agent_logs`
 - Recovery RPC: `public.cleanup_stale_running_jobs(timeout_minutes)`
 - CI smoke gate: `.github/workflows/ci.yml` (`smoke-e2e-release`)
+- Probe smoke workflow: `.github/workflows/agent-health-probe-smoke.yml`
+- Probe smoke status in UI: Dashboard card `Agent probe smoke` (дані з `audit_logs`, `action=agent_health_probe_smoke`)
 
 ## Triage Flow (15 хв)
 
@@ -39,6 +41,7 @@
 - Queue stuck without progress
 - External dependency errors (nmap/nuclei/network)
 - Report callback degradation
+- Gateway probe smoke failures (`agent_health_probe`)
 
 ## Recovery Playbooks
 
@@ -72,6 +75,35 @@
 1. Перевірити `sentinel_report_failures_total`, `sentinel_report_retries_total`
 2. Перевірити доступність `scan-result` function
 3. Перевірити `AGENT_SECRET`, service role key, timeout/network
+
+### E) Gateway probe smoke failures (`agent_health_probe`)
+
+Симптоми:
+- Dashboard card `Agent probe smoke` показує `Fail`
+- В operational webhook приходить подія `agent_health_probe_smoke_failed`
+- У `audit_logs` є `action=agent_health_probe_smoke` зі `status=failure`
+
+1. Перевірити останній failure-контекст
+- `request_id`, `http_status`, `error`, `probed_url`, `generated_at` у metadata audit log
+- URL run-а: `https://github.com/<owner>/<repo>/actions/runs/<run_id>`
+
+2. Ручний smoke-recheck (без очікування cron)
+- GitHub Actions: запустити `Agent Health Probe Smoke` через `workflow_dispatch`
+- За потреби задати `probe_url` override для точкового endpoint
+
+3. Якщо `HTTP 401` на probe-шляху
+- Перевірити deploy-конфіг `ai-gateway` (режим без gateway JWT verify для probe-сценарію)
+- Перевірити, що виклик іде з `apikey` + `Authorization: Bearer <service-role>`
+
+4. Якщо `reachable=false` або timeout
+- Перевірити прямий health endpoint агента: `curl -v -m 10 http://<agent-host>:9090/health`
+- Перевірити мережеву доступність між Supabase function runtime та agent host
+- Перевірити, чи не порушено host-обмеження probe (private/loopback block)
+
+5. Exit criteria
+- Наступний manual/scheduled smoke run повертає `status=ok`, `reachable=true`
+- У Dashboard card стан змінюється на `OK`
+- Нових `agent_health_probe_smoke_failed` webhook-подій немає
 
 ## Verification Checklist (Exit Criteria)
 
