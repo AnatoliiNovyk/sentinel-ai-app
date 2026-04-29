@@ -139,7 +139,7 @@ describe('ai-gateway handler', () => {
     expect(body).toEqual({
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Authorization Bearer token is required.',
+        message: 'Authorization Bearer token or apikey header is required.',
       },
     });
   });
@@ -163,9 +163,27 @@ describe('ai-gateway handler', () => {
     expect(body).toEqual({
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Authorization Bearer token is required.',
+        message: 'Authorization Bearer token or apikey header is required.',
       },
     });
+  });
+
+  it('allows POST with apikey header when authorization header is missing', async () => {
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'POST',
+      headers: {
+        apikey: 'test-anon-key',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.21',
+      },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'scan audit quickly' }] }),
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(typeof body.content).toBe('string');
   });
 
   it('applies security headers on JSON responses', async () => {

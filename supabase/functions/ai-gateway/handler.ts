@@ -604,6 +604,15 @@ function hasValidBearerAuth(req: Request): boolean {
   return token.length > 0;
 }
 
+function hasValidApiKeyHeader(req: Request): boolean {
+  const apiKey = req.headers.get('apikey')?.trim() ?? '';
+  return apiKey.length > 0;
+}
+
+function hasValidClientAuth(req: Request): boolean {
+  return hasValidBearerAuth(req) || hasValidApiKeyHeader(req);
+}
+
 function hasValidAdminKey(req: Request): boolean {
   const configured = getEnvKey('AI_GATEWAY_ADMIN_KEY')?.trim() ?? '';
   const provided = req.headers.get(ADMIN_KEY_HEADER)?.trim() ?? '';
@@ -791,9 +800,9 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
       return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
     }
 
-    if (!hasValidBearerAuth(req)) {
+    if (!hasValidClientAuth(req)) {
       incrementTelemetry('unauthorized_count', requestId, 401);
-      const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token is required.', 401);
+      const err = gatewayError('UNAUTHORIZED', 'Authorization Bearer token or apikey header is required.', 401);
       return await jsonResponse(err.body, requestId, err.status, {}, acceptEncoding, traceCtx);
     }
 
