@@ -61,6 +61,14 @@ type AgentHealthData = {
   timestamp: string;
 };
 
+type ProbeSmokeStatus = {
+  status: 'ok' | 'error' | 'unknown';
+  reachable: boolean | null;
+  httpStatus: number | null;
+  requestId: string | null;
+  generatedAt: string | null;
+};
+
 function toAgentErrorMessage(url: string, err: unknown): string {
   if (isMixedContentAgentUrl(url)) {
     return 'Blocked by browser policy: HTTPS app cannot fetch HTTP agent URL. Configure HTTPS/reverse-proxy for the agent endpoint.';
@@ -78,6 +86,23 @@ function toAgentErrorMessage(url: string, err: unknown): string {
   }
 
   return err instanceof Error ? err.message : 'Unreachable';
+}
+
+function formatRelativeMinutes(iso: string): string {
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return 'n/a';
+  const diffMs = Date.now() - ts;
+  if (diffMs < 0) return 'just now';
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
@@ -249,6 +274,13 @@ export default function Settings() {
   const [agentHealth, setAgentHealth] = useState<AgentHealthData | null>(null);
   const [agentChecking, setAgentChecking] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
+  const [probeSmoke, setProbeSmoke] = useState<ProbeSmokeStatus>({
+    status: 'unknown',
+    reachable: null,
+    httpStatus: null,
+    requestId: null,
+    generatedAt: null,
+  });
 
   const commitAgentUrl = useCallback((url: string) => {
     const normalizedUrl = url.trim();
@@ -304,6 +336,60 @@ export default function Settings() {
     if (!normalizedUrl) return;
     checkAgent(normalizedUrl);
   };
+
+  useEffect(() => {
+    if (!user) {
+      setProbeSmoke({ status: 'unknown', reachable: null, httpStatus: null, requestId: null, generatedAt: null });
+      return;
+    }
+
+    let canceled = false;
+    const loadProbeSmoke = async () => {
+      try {
+        const res = await supabase
+          .from('audit_logs')
+          .select('status,created_at,metadata')
+          .eq('action', 'agent_health_probe_smoke')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (canceled) return;
+
+        const row = (res.data ?? [])[0] as { status?: string; created_at?: string; metadata?: unknown } | undefined;
+        const meta = row?.metadata && typeof row.metadata === 'object'
+          ? (row.metadata as Record<string, unknown>)
+          : null;
+
+        const status = meta?.status === 'ok' || meta?.status === 'error'
+          ? meta.status
+          : row?.status === 'success'
+            ? 'ok'
+            : row?.status === 'failure'
+              ? 'error'
+              : 'unknown';
+
+        setProbeSmoke({
+          status,
+          reachable: typeof meta?.reachable === 'boolean' ? meta.reachable : null,
+          httpStatus: typeof meta?.http_status === 'number' ? meta.http_status : null,
+          requestId: typeof meta?.request_id === 'string' ? meta.request_id : null,
+          generatedAt: typeof meta?.generated_at === 'string' ? meta.generated_at : (row?.created_at ?? null),
+        });
+      } catch {
+        if (!canceled) {
+          setProbeSmoke({ status: 'unknown', reachable: null, httpStatus: null, requestId: null, generatedAt: null });
+        }
+      }
+    };
+
+    loadProbeSmoke();
+    const id = window.setInterval(loadProbeSmoke, 60_000);
+    return () => {
+      canceled = true;
+      window.clearInterval(id);
+    };
+  }, [user]);
 
 
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -909,6 +995,50 @@ export default function Settings() {
             {agentChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {agentChecking ? 'Checking…' : 'Check'}
           </button>
+        </div>
+
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold text-slate-200">Latest probe smoke</div>
+            <span className={`text-[10px] px-2 py-1 rounded border font-semibold ${
+              probeSmoke.status === 'ok'
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                : probeSmoke.status === 'error'
+                  ? 'bg-red-500/10 text-red-300 border-red-500/30'
+                  : 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+            }`}>
+              {probeSmoke.status === 'ok' ? 'OK' : probeSmoke.status === 'error' ? 'Fail' : 'Unknown'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Reachable',
+                value: probeSmoke.reachable === null ? 'n/a' : probeSmoke.reachable ? 'yes' : 'no',
+                title: undefined,
+              },
+              {
+                label: 'HTTP',
+                value: probeSmoke.httpStatus ?? 'n/a',
+                title: undefined,
+              },
+              {
+                label: 'Request ID',
+                value: probeSmoke.requestId ? probeSmoke.requestId.slice(0, 12) : 'n/a',
+                title: probeSmoke.requestId ?? undefined,
+              },
+              {
+                label: 'Last run',
+                value: probeSmoke.generatedAt ? formatRelativeMinutes(probeSmoke.generatedAt) : 'n/a',
+                title: probeSmoke.generatedAt ? new Date(probeSmoke.generatedAt).toLocaleString() : undefined,
+              },
+            ].map(({ label, value, title }) => (
+              <div key={label} className="rounded-md bg-slate-900/50 border border-slate-800 p-3 text-center">
+                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{label}</div>
+                <div className="text-sm font-semibold text-slate-200" title={title}>{value}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {agentError && (

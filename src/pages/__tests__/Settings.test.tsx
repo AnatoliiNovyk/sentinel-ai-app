@@ -7,8 +7,9 @@ const originalLocation = window.location;
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockUpdateEq } = vi.hoisted(() => ({
+const { mockUpdateEq, mockProbeAuditRows } = vi.hoisted(() => ({
   mockUpdateEq: vi.fn().mockResolvedValue({ data: null, error: null }),
+  mockProbeAuditRows: [] as unknown[],
 }));
 
 const { mockProbeAgentHealth } = vi.hoisted(() => ({
@@ -35,7 +36,26 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
             insert: () => Promise.resolve({ data: null, error: null }),
           };
         }
+
+        if (table === 'audit_logs') {
+          const chain = {
+            eq: vi.fn(() => chain),
+            order: vi.fn(() => chain),
+            limit: vi.fn(() => Promise.resolve({ data: mockProbeAuditRows, error: null })),
+          };
+          return {
+            select: () => chain,
+          };
+        }
+
         return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: [], error: null }),
+              }),
+            }),
+          }),
           update: () => ({ eq: mockUpdateEq }),
         };
       },
@@ -68,6 +88,10 @@ vi.mock('../../lib/agentHealth', () => ({
 }));
 
 // ── Tests ─────────────────────────────────────────────────────────────────
+
+afterEach(() => {
+  mockProbeAuditRows.length = 0;
+});
 
 describe('Settings — layout', () => {
   it('renders "Settings" heading', () => {
@@ -342,5 +366,36 @@ describe('Settings — Agent mixed content', () => {
 
     const restored = screen.getByPlaceholderText('http://your-vps:9090/health') as HTMLInputElement;
     expect(restored.value).toBe('http://95.67.75.146:9090/health');
+  });
+
+  it('shows latest probe smoke fallback values by default', () => {
+    render(<Settings />);
+    expect(screen.getByText('Latest probe smoke')).toBeInTheDocument();
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText('Reachable')).toBeInTheDocument();
+    expect(screen.getByText('Request ID')).toBeInTheDocument();
+  });
+
+  it('shows latest probe smoke details from audit logs', async () => {
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-29T10:00:00Z',
+      metadata: {
+        status: 'ok',
+        reachable: true,
+        http_status: 200,
+        request_id: 'req-settings-probe-123456',
+        generated_at: '2026-04-29T10:00:00Z',
+      },
+    });
+
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(screen.getByText('OK')).toBeInTheDocument();
+      expect(screen.getByText('yes')).toBeInTheDocument();
+      expect(screen.getByText('200')).toBeInTheDocument();
+      expect(screen.getByText('req-settings-')).toHaveAttribute('title', 'req-settings-probe-123456');
+    });
   });
 });
