@@ -296,4 +296,23 @@ describe('Settings — Agent mixed content', () => {
     });
     expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
+
+  it('persists agent URL after blur and restores it after remount', async () => {
+    localStorage.removeItem('agentHealthUrl');
+    const { unmount } = render(<Settings />);
+
+    const input = screen.getByPlaceholderText('http://your-vps:9090/health') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'http://95.67.75.146:9090/health' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(localStorage.getItem('agentHealthUrl')).toBe('http://95.67.75.146:9090/health');
+    });
+
+    unmount();
+    render(<Settings />);
+
+    const restored = screen.getByPlaceholderText('http://your-vps:9090/health') as HTMLInputElement;
+    expect(restored.value).toBe('http://95.67.75.146:9090/health');
+  });
 });

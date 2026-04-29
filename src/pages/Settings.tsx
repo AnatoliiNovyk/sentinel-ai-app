@@ -250,6 +250,24 @@ export default function Settings() {
   const [agentChecking, setAgentChecking] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
 
+  const commitAgentUrl = useCallback((url: string) => {
+    const normalizedUrl = url.trim();
+    if (!normalizedUrl) return null;
+    localStorage.setItem('agentHealthUrl', normalizedUrl);
+    setAgentUrl(normalizedUrl);
+    return normalizedUrl;
+  }, []);
+
+  // Autosave agent URL drafts so a page reload does not lose the new value.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const normalizedUrl = agentUrl.trim();
+      if (!normalizedUrl) return;
+      localStorage.setItem('agentHealthUrl', normalizedUrl);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [agentUrl]);
+
   const checkAgent = useCallback(async (url = agentUrl) => {
     const normalizedUrl = url.trim();
     setAgentChecking(true);
@@ -278,9 +296,8 @@ export default function Settings() {
   }, [agentUrl]);
 
   const saveAgentUrl = () => {
-    const normalizedUrl = agentUrl.trim();
-    localStorage.setItem('agentHealthUrl', normalizedUrl);
-    setAgentUrl(normalizedUrl);
+    const normalizedUrl = commitAgentUrl(agentUrl);
+    if (!normalizedUrl) return;
     checkAgent(normalizedUrl);
   };
 
@@ -868,6 +885,15 @@ export default function Settings() {
             type="url"
             value={agentUrl}
             onChange={(e) => setAgentUrl(e.target.value)}
+            onBlur={() => {
+              commitAgentUrl(agentUrl);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                saveAgentUrl();
+              }
+            }}
             placeholder="http://your-vps:9090/health"
             className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           />
