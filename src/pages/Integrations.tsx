@@ -1129,9 +1129,9 @@ security-gate:
         image: stedolan/jq:latest
         script:
           - |
-            CRITICAL=\$(jq '.findings[] | select(.severity=="CRITICAL") | length' scan-result.json || echo 0)
-            if [ "\$CRITICAL" -gt 0 ]; then
-              echo "❌ BLOCKED: \$CRITICAL critical findings"
+            CRITICAL=$(jq '.findings[] | select(.severity=="CRITICAL") | length' scan-result.json || echo 0)
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "❌ BLOCKED: $CRITICAL critical findings"
               exit 1
             fi
 `;

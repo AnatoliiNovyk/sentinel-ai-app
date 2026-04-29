@@ -26,7 +26,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
   return {
     ...actual,
     supabase: {
-      from: (_table: string) => ({
+      from: (_: string) => ({
         select: () => ({
           eq: () => ({
             order: () => ({

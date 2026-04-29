@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Component, type ReactNode } from 'react';
 import ErrorBoundary from '../ErrorBoundary';
 
 // Suppress console.error noise from intentional throws
@@ -17,12 +16,6 @@ afterEach(() => {
 function Bomb({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) throw new Error('Boom! Test explosion');
   return <div>Safe content</div>;
-}
-
-// A component that throws on demand with custom message
-function CustomBomb({ message }: { message: string }) {
-  throw new Error(message);
-  return null; // eslint-disable-line no-unreachable
 }
 
 describe('ErrorBoundary — normal render', () => {

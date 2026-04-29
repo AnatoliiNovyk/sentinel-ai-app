@@ -6,10 +6,9 @@ import type { Project, Report } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockReportsOrder, mockProjectsEq, mockUpdateEq, mockDeleteIn, mockMaybeSingle } = vi.hoisted(() => ({
+const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle } = vi.hoisted(() => ({
   mockReportsOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockProjectsEq: vi.fn().mockResolvedValue({ data: [], error: null }),
-  mockUpdateEq: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockDeleteIn: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockMaybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
 }));

@@ -3,7 +3,7 @@
  * Covers computeScoreFromCounts() and riskBand() — pure functions, no Supabase.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { computeScoreFromCounts, riskBand, recomputeRiskScoreFromScanId, recomputeProjectRiskScore } from '../riskScore';
+import { computeScoreFromCounts, riskBand, recomputeRiskScoreFromScanId } from '../riskScore';
 
 // ─── Supabase mock ─────────────────────────────────────────────────────────────
 
