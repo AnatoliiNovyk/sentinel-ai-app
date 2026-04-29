@@ -7,6 +7,7 @@ name: Browserslist DB Maintenance
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -45,8 +46,11 @@ jobs:
 
             - Runs `npm run browserslist:update-db`
             - Updates lockfile data when caniuse-lite target metadata changes
+            - Uses a fixed branch (`chore/browserslist-db-refresh`) to avoid duplicate PRs
           branch: chore/browserslist-db-refresh
           delete-branch: true
+          assignees: |
+            ${{ github.repository_owner }}
           labels: |
             dependencies
             maintenance

@@ -86,3 +86,4 @@
 - [x] Реалізовано bundle optimization: route-level lazy loading через `React.lazy` + `Suspense` в `App.tsx` та `manualChunks` у Vite для `react/supabase/lucide` vendor split; підтверджено multi-chunk build (`src/App.tsx`, `vite.config.ts`).
 - [x] Оновлено Browserslist DB (`caniuse-lite`) через `npx update-browserslist-db@latest --yes`: warning `caniuse-lite is outdated` прибрано у build output; додано службовий npm-скрипт для регулярного оновлення (`package-lock.json`, `package.json`).
 - [x] Додано weekly automation для підтримки Browserslist DB: scheduled/manual workflow створює PR з оновленням `caniuse-lite`, щоб уникати повторної появи warning у CI/build (`.github/workflows/browserslist-db-maintenance.yml`).
+- [x] Посилено maintenance workflow для Browserslist DB: додано auto-assign PR на repository owner і явний anti-duplicate guard через fixed single-branch strategy (`chore/browserslist-db-refresh`) (`.github/workflows/browserslist-db-maintenance.yml`).
