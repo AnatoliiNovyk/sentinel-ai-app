@@ -194,3 +194,69 @@ describe('FindingsTab — selection (toggleAll / toggleOne)', () => {
     );
   });
 });
+
+describe('FindingsTab — asset breakdown panel', () => {
+  beforeEach(() => {
+    _id = 0;
+  });
+
+  it('shows "Findings by asset" toggle button when vulns exist', () => {
+    const vulns = [
+      makeVuln({ asset: 'web.example.com', severity: 'critical' }),
+      makeVuln({ asset: 'api.example.com', severity: 'high' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /findings by asset/i })).toBeInTheDocument();
+  });
+
+  it('expands asset panel and shows asset names', () => {
+    const vulns = [
+      makeVuln({ asset: 'db.example.com', severity: 'critical' }),
+      makeVuln({ asset: 'db.example.com', severity: 'high' }),
+      makeVuln({ asset: 'web.example.com', severity: 'medium' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /findings by asset/i }));
+    // Asset names appear in the panel (may also appear in vuln rows)
+    expect(screen.getAllByText('db.example.com').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('web.example.com').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows severity count badges in asset panel', () => {
+    const vulns = [
+      makeVuln({ asset: 'host.example.com', severity: 'critical' }),
+      makeVuln({ asset: 'host.example.com', severity: 'critical' }),
+      makeVuln({ asset: 'host.example.com', severity: 'high' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /findings by asset/i }));
+    // 2 critical badges with value "2", 1 high badge with value "1"
+    const criticalBadges = screen.getAllByTitle(/critical: 2/i);
+    expect(criticalBadges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hides asset panel when collapsed again', () => {
+    const vulns = [makeVuln({ asset: 'host.example.com' })];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    const toggle = screen.getByRole('button', { name: /findings by asset/i });
+    fireEvent.click(toggle); // open — asset name visible in panel (title attr)
+    // The panel has a span with title containing the asset name
+    expect(screen.getAllByText('host.example.com').length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(toggle); // close — asset name visible only in vuln row (not panel)
+    // After collapse, asset breakdown rows are hidden; asset still appears in vuln list
+    // Panel breakdown row has title attr; check it's gone from the panel
+    const panelSpans = screen.queryAllByTitle('host.example.com');
+    expect(panelSpans.length).toBe(0);
+  });
+
+  it('limits asset breakdown to top 5 assets', () => {
+    const assets = ['a.com', 'b.com', 'c.com', 'd.com', 'e.com', 'f.com'];
+    const vulns = assets.map(asset => makeVuln({ asset }));
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /findings by asset/i }));
+    // Only top 5 shown — f.com is the 6th (last added, but all equal total=1, so sorted by insertion, f.com is last)
+    const allAssets = screen.queryAllByTitle(/\.com/);
+    // At most 5 visible asset rows
+    expect(allAssets.length).toBeLessThanOrEqual(5);
+  });
+});

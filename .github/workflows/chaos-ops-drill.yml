@@ -180,11 +180,12 @@ jobs:
           }
 
       - name: Notify drill failure
-        if: failure() && steps.drill.outputs.send_webhook_on_failure == 'true' && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != ''
+        if: failure() && steps.drill.outputs.send_webhook_on_failure == 'true'
         shell: pwsh
         env:
           OPERATIONAL_ALERT_WEBHOOK_URL: ${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
         run: |
+          if (-not $env:OPERATIONAL_ALERT_WEBHOOK_URL) { exit 0 }
           if (-not (Test-Path 'reports/chaos-ops-drill.json')) {
             throw 'chaos-ops-drill report not found for failure notification'
           }

@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, Search, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Download, Filter, Pencil, Save, Search, Server, ShieldOff, Sparkles, Square, Timer, X } from 'lucide-react';
 import { supabase, Vulnerability, VULN_STATUSES, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { downloadFile, toCsvExport } from '../lib/exporters';
 import { recomputeRiskScoreFromScanId } from '../lib/riskScore';
@@ -64,6 +64,7 @@ export default function FindingsTab({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [assetPanelOpen, setAssetPanelOpen] = useState(false);
 
   const slaConfig = useMemo(
     () => ({ ...DEFAULT_SLA_CONFIG, ...(profile?.sla_config ?? {}) }),
@@ -133,6 +134,20 @@ export default function FindingsTab({
       return next;
     });
   }, []);
+
+  const assetBreakdown = useMemo(() => {
+    const map = new Map<string, Record<Vulnerability['severity'], number> & { total: number }>();
+    for (const v of filtered) {
+      const key = v.asset || '(unknown)';
+      if (!map.has(key)) map.set(key, { critical: 0, high: 0, medium: 0, low: 0, info: 0, total: 0 });
+      const entry = map.get(key)!;
+      entry[v.severity]++;
+      entry.total++;
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 5);
+  }, [filtered]);
 
   const bulkChangeStatus = useCallback(async (status: StatusValue) => {
     if (!someSelected) return;
@@ -288,6 +303,70 @@ export default function FindingsTab({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Asset Breakdown Panel */}
+      {assetBreakdown.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
+          <button
+            onClick={() => setAssetPanelOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-slate-800/30 transition"
+            aria-expanded={assetPanelOpen}
+            aria-label="Findings by asset"
+          >
+            <span className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <Server className="w-3.5 h-3.5 text-teal-400" />
+              Findings by asset
+              <span className="text-slate-600 font-normal">
+                (top {assetBreakdown.length})
+              </span>
+            </span>
+            {assetPanelOpen
+              ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+            }
+          </button>
+          {assetPanelOpen && (
+            <div className="border-t border-slate-800 divide-y divide-slate-800/60">
+              {assetBreakdown.map(([asset, counts]) => {
+                const maxTotal = assetBreakdown[0][1].total;
+                const pct = Math.round((counts.total / maxTotal) * 100);
+                return (
+                  <div key={asset} className="px-4 py-2.5 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-mono text-slate-300 truncate max-w-[240px]" title={asset}>{asset}</span>
+                        <span className="text-xs text-slate-500 tabular-nums shrink-0 ml-2">{counts.total}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 h-1.5">
+                        <div
+                          className="h-1.5 rounded-full bg-slate-800 flex-1 overflow-hidden"
+                          aria-label={`${asset} bar`}
+                        >
+                          <div
+                            className="h-full rounded-full bg-teal-500/70 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(['critical', 'high', 'medium', 'low'] as const).map(sev => counts[sev] > 0 && (
+                        <span
+                          key={sev}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border tabular-nums ${severityClass(sev)}`}
+                          title={`${sev}: ${counts[sev]}`}
+                        >
+                          {counts[sev]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

@@ -118,3 +118,28 @@
 - [x] Додано mock watermark у `toSarif()` (audit FINDING-005 / FINDING-007): коли `scan.is_mock === true`, SARIF-вивід містить `properties._mockData: true` та `properties._notice: 'DEMO DATA - NOT FOR PRODUCTION USE'` на рівні документа і invocation (`src/lib/exporters.ts`).
 - [x] Додано 4 нові тести для mock watermark у `toSarif()` (`src/lib/__tests__/exporters.test.ts`).
 - [x] Створено `scripts/release-checklist.md` — Release Security & Schema Checklist (audit FINDING-005): 7 розділів (Pre-flight, Env Vars, Supabase Schema, Security Baseline, Feature Flags, Post-Deploy Validation, Rollback Plan).
+
+## Batch-289 (2026-04-29)
+- [x] Додано `vulnAgingBuckets` useMemo (4 вікна: 0–7d, 7–30d, 30–90d, 90d+) та панель «Vulnerability aging» на Dashboard (`src/pages/Dashboard.tsx`).
+- [x] Додано `topRiskyProjects` useMemo (топ-5 за critical×10+high) та панель «Top risky projects» на Dashboard (`src/pages/Dashboard.tsx`).
+- [x] Додано 5 нових тестів для обох панелей; всього 20/20 тестів Dashboard проходять (`src/pages/__tests__/Dashboard.test.tsx`).
+- [x] Виправлено відсутній `useEffect` wrapper у `SupplyChain.tsx` (синтаксична помилка).
+- [x] Commit `690ac5f` запушено в `origin/main`.
+
+## Batch-290/291/292 — Audit Fixes (2026-04-29)
+- [x] **Batch-290**: Виправлено подвійне `${{ }}` у step-level `if:` в `chaos-ops-drill.yml` і `agent-health-probe-smoke.yml`; виправлено невалідний input `tfsec_args` → `format: sarif` + `additional_args` у `sentinel-scan.yml`.
+- [x] **Batch-291**: Встановлено `dompurify` + `@types/dompurify`; додано `DOMPurify.sanitize()` для `marked.parse()` у `Chat.tsx` та `ReportViewer.tsx` (XSS prevention).
+- [x] **Batch-292**: Додано `"MD013": false` у `.markdownlint.json`.
+- [x] Виправлено pre-existing test failures у `SupplyChain.test.tsx` та `DarkWebMonitor.test.tsx` (додано моки `useAuth`, `useToast`, `AuditService`, `exporters`).
+- [x] Test suite: 1310/1310 PASS (98 test files). Build clean.
+- [x] Commit `7a875d8` запушено в `origin/main`.
+
+## Batch-293 (2026-04-29)
+- [x] Виправлено step-level `if:` у `chaos-ops-drill.yml` та `agent-health-probe-smoke.yml`: видалено `secrets.*` з умови; додано runtime early-exit guard `if (-not $env:...) { exit 0 }` у PowerShell body.
+- [x] Додано `"forceConsistentCasingInFileNames": true` у `tsconfig.app.json`.
+
+## Batch-294 (2026-04-29)
+- [x] Додано Asset Breakdown Panel у `FindingsTab.tsx`: collapsible секція "Findings by asset" показує топ-5 активів за кількістю вразливостей зі severity-badges і progress bar.
+- [x] Додано 5 нових тестів у `FindingsTab.test.tsx` для Asset Breakdown Panel (17/17 pass, 1315/1315 total).
+- [x] Build ✅ · Tests 1315/1315 ✅
+
