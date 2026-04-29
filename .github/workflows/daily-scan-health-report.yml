@@ -50,7 +50,6 @@ jobs:
   daily-report:
     name: Generate Daily Health Report
     runs-on: ubuntu-latest
-    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
     timeout-minutes: 15
     concurrency:
       group: daily-scan-health-report

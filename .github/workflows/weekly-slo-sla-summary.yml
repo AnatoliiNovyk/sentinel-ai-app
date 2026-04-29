@@ -38,7 +38,6 @@ jobs:
   weekly-slo-sla:
     name: Generate Weekly SLO SLA Summary
     runs-on: ubuntu-latest
-    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
     timeout-minutes: 20
     concurrency:
       group: weekly-slo-sla-summary

@@ -26,7 +26,6 @@ jobs:
   stale-cleanup:
     name: Safe Stale Cleanup
     runs-on: ubuntu-latest
-    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != ''
     timeout-minutes: 15
     concurrency:
       group: scheduled-stale-cleanup
