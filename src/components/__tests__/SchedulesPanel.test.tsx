@@ -80,6 +80,11 @@ function mockSchedulesReturn(items: ScanSchedule[]) {
   mockSelect.mockReturnValue({ eq: mockEq });
 }
 
+async function renderPanel(projects: Project[]) {
+  render(<SchedulesPanel projects={projects} />);
+  await waitFor(() => expect(mockOrder).toHaveBeenCalled());
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 describe('SchedulesPanel — empty state', () => {
@@ -88,19 +93,19 @@ describe('SchedulesPanel — empty state', () => {
   });
 
   it('shows "No schedules configured" when empty', async () => {
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     await waitFor(() =>
       expect(screen.getByText('No schedules configured')).toBeInTheDocument(),
     );
   });
 
   it('shows "New schedule" button', async () => {
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     expect(screen.getByText('New schedule')).toBeInTheDocument();
   });
 
   it('"New schedule" button is disabled when no projects', async () => {
-    render(<SchedulesPanel projects={[]} />);
+    await renderPanel([]);
     expect(screen.getByText('New schedule').closest('button')).toBeDisabled();
   });
 });
@@ -108,14 +113,14 @@ describe('SchedulesPanel — empty state', () => {
 describe('SchedulesPanel — with schedules', () => {
   it('renders schedule scanner and project name', async () => {
     mockSchedulesReturn([makeSchedule()]);
-    render(<SchedulesPanel projects={[makeProject('proj-1', 'Prod API')]} />);
+    await renderPanel([makeProject('proj-1', 'Prod API')]);
     await waitFor(() => expect(screen.getByText('nmap')).toBeInTheDocument());
     expect(screen.getByText(/on Prod API/i)).toBeInTheDocument();
   });
 
   it('shows "Active" badge for enabled schedule', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: true })]);
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     // After data loads the stat pill AND the per-item badge both render 'Active',
     // so we use getAllByText and assert at least one element is present.
     await waitFor(() => expect(screen.getAllByText('Active').length).toBeGreaterThan(0));
@@ -123,13 +128,13 @@ describe('SchedulesPanel — with schedules', () => {
 
   it('shows "Paused" badge for disabled schedule', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: false })]);
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     await waitFor(() => expect(screen.getAllByText('Paused').length).toBeGreaterThan(0));
   });
 
   it('shows "Daily" cadence label for 24h schedule', async () => {
     mockSchedulesReturn([makeSchedule({ cadence_hours: 24 })]);
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     await waitFor(() => expect(screen.getByText(/Daily/)).toBeInTheDocument());
   });
 });
@@ -137,7 +142,7 @@ describe('SchedulesPanel — with schedules', () => {
 describe('SchedulesPanel — toggle & delete', () => {
   it('calls supabase update when Power button clicked', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: true })]);
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     await waitFor(() => expect(screen.getByTitle('Pause')).toBeInTheDocument());
     fireEvent.click(screen.getByTitle('Pause'));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith({ enabled: false }));
@@ -145,7 +150,7 @@ describe('SchedulesPanel — toggle & delete', () => {
 
   it('removes schedule from list when Delete button clicked', async () => {
     mockSchedulesReturn([makeSchedule()]);
-    render(<SchedulesPanel projects={[makeProject('proj-1', 'Prod API')]} />);
+    await renderPanel([makeProject('proj-1', 'Prod API')]);
     await waitFor(() => expect(screen.getByTitle('Delete')).toBeInTheDocument());
     fireEvent.click(screen.getByTitle('Delete'));
     await waitFor(() =>
@@ -160,7 +165,7 @@ describe('SchedulesPanel — new schedule modal', () => {
   });
 
   it('opens modal when "New schedule" clicked', async () => {
-    render(<SchedulesPanel projects={[makeProject()]} />);
+    await renderPanel([makeProject()]);
     fireEvent.click(screen.getByText('New schedule'));
     // Modal heading is "New schedule" inside the dialog
     await waitFor(() => {
