@@ -312,3 +312,33 @@ describe('fromSarif', () => {
     expect(parsed.findings[0].title).toBe('CWE-89');
   });
 });
+
+// ─── toSarif — mock watermark ─────────────────────────────────────────────────
+
+describe('toSarif — mock watermark', () => {
+  it('includes _mockData and _notice when scan.is_mock is true', () => {
+    const doc = JSON.parse(toSarif(makeProject(), makeScan({ is_mock: true }), []));
+    expect(doc.properties).toBeDefined();
+    expect(doc.properties._mockData).toBe(true);
+    expect(doc.properties._notice).toBe('DEMO DATA - NOT FOR PRODUCTION USE');
+  });
+
+  it('invocation properties also carry _mockData when scan.is_mock is true', () => {
+    const doc = JSON.parse(toSarif(makeProject(), makeScan({ is_mock: true }), []));
+    const invocation = doc.runs[0].invocations[0];
+    expect(invocation.properties._mockData).toBe(true);
+    expect(invocation.properties._notice).toBe('DEMO DATA - NOT FOR PRODUCTION USE');
+  });
+
+  it('does NOT include _mockData when scan.is_mock is false', () => {
+    const doc = JSON.parse(toSarif(makeProject(), makeScan({ is_mock: false }), []));
+    expect(doc.properties).toBeUndefined();
+    expect(doc.runs[0].invocations[0].properties._mockData).toBeUndefined();
+  });
+
+  it('does NOT include _mockData when scan.is_mock is undefined', () => {
+    const doc = JSON.parse(toSarif(makeProject(), makeScan(), []));
+    expect(doc.properties).toBeUndefined();
+    expect(doc.runs[0].invocations[0].properties._mockData).toBeUndefined();
+  });
+});

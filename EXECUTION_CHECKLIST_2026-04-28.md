@@ -103,3 +103,18 @@
 - [x] Додано Phishing Drill Plan модуль у OSINT Analyzer (DarkWebMonitor): показує 3 сценарії (Credential Harvest Email, Executive Impersonation, Password Reset Phishing) на основі risky breach результатів, з Copy-кнопкою (`src/pages/DarkWebMonitor.tsx`).
 - [x] Додано 10 нових тестів: 6 для Issue Tracker Templates, 4 для Phishing Drill Plan; всього 33/33 тестів проходять (`src/pages/__tests__/Integrations.test.tsx`, `src/pages/__tests__/DarkWebMonitor.test.tsx`).
 - [x] Commit `2cd5bc1` запушено в `origin/main`.
+
+## Batch-286 (2026-04-29)
+- [x] Додано Auto-Remediation Dry-Run Playbook у `RemediationModal`: функція `getAutoPlaybook()` генерує iptables/ufw/aws-cli/apt/yum команди з `asset`+`cve_id` контексту. Панель з DRY RUN badge, Copy кнопками та попередженням про preview (`src/components/RemediationModal.tsx`).
+- [x] Додано 5 нових тестів для Auto-Remediation Playbook (`src/components/__tests__/RemediationModal.test.tsx`).
+- [x] Commit `82c2891` запушено в `origin/main`.
+
+## Batch-287 (2026-04-29)
+- [x] Виправлено 17 pre-existing test failures у 7 файлах: async findBy* для lazy Suspense routes, mock auth.getUser, mock update().eq(), DEMO badge agentReachable, stale string assertions.
+- [x] Test suite: 1079/1079 PASS (78 test files).
+- [x] Commit `a863e6b` запушено в `origin/main`.
+
+## Batch-288 (2026-04-29)
+- [x] Додано mock watermark у `toSarif()` (audit FINDING-005 / FINDING-007): коли `scan.is_mock === true`, SARIF-вивід містить `properties._mockData: true` та `properties._notice: 'DEMO DATA - NOT FOR PRODUCTION USE'` на рівні документа і invocation (`src/lib/exporters.ts`).
+- [x] Додано 4 нові тести для mock watermark у `toSarif()` (`src/lib/__tests__/exporters.test.ts`).
+- [x] Створено `scripts/release-checklist.md` — Release Security & Schema Checklist (audit FINDING-005): 7 розділів (Pre-flight, Env Vars, Supabase Schema, Security Baseline, Feature Flags, Post-Deploy Validation, Rollback Plan).

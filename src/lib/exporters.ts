@@ -72,9 +72,13 @@ export function toSarif(project: Project, scan: Scan, vulns: Vulnerability[]): s
     };
   });
 
+  const isMock = scan.is_mock === true;
+  const mockNotice = isMock ? 'DEMO DATA - NOT FOR PRODUCTION USE' : undefined;
+
   const sarif = {
     $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
     version: '2.1.0',
+    ...(isMock && { properties: { _mockData: true, _notice: mockNotice } }),
     runs: [
       {
         tool: {
@@ -89,7 +93,12 @@ export function toSarif(project: Project, scan: Scan, vulns: Vulnerability[]): s
           {
             executionSuccessful: scan.status === 'completed',
             endTimeUtc: scan.created_at,
-            properties: { scanner: scan.scanner, project: project.name, target: project.target },
+            properties: {
+              scanner: scan.scanner,
+              project: project.name,
+              target: project.target,
+              ...(isMock && { _mockData: true, _notice: mockNotice }),
+            },
           },
         ],
         results,
