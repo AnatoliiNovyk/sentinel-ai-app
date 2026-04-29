@@ -1,6 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AppLayout from '../AppLayout';
+
+const originalLocation = window.location;
 
 const { mockSignOut, mockProfile, mockLocation } = vi.hoisted(() => ({
   mockSignOut: vi.fn().mockResolvedValue(undefined),
@@ -91,6 +93,15 @@ describe('AppLayout — header', () => {
     mockLocation.pathname = '/';
   });
 
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
+    localStorage.removeItem('agentHealthUrl');
+    vi.unstubAllGlobals();
+  });
+
   it('renders NotificationBell in header', () => {
     render(<AppLayout />);
     expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
@@ -112,6 +123,27 @@ describe('AppLayout — header', () => {
   it('renders Outlet content area', () => {
     render(<AppLayout />);
     expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
+  });
+
+  it('shows policy-blocked status for HTTPS app with HTTP agent URL', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        protocol: 'https:',
+        href: 'https://sentinel.local/',
+      },
+    });
+    localStorage.setItem('agentHealthUrl', 'http://95.67.75.146:9090/health');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent check blocked (HTTPS -> HTTP)')).toBeInTheDocument();
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

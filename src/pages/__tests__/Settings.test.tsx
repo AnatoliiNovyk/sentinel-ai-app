@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Settings from '../Settings';
+
+const originalLocation = window.location;
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
@@ -198,5 +200,39 @@ describe('Settings — Save', () => {
       () => expect(screen.getByRole('button', { name: /saved!/i })).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+});
+
+describe('Settings — Agent mixed content', () => {
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
+    localStorage.removeItem('agentHealthUrl');
+    vi.unstubAllGlobals();
+  });
+
+  it('shows policy-block message for HTTPS app + HTTP agent URL and skips fetch', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        protocol: 'https:',
+        href: 'https://sentinel.local/settings',
+      },
+    });
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<Settings />);
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'http://95.67.75.146:9090/health' } });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Blocked by browser policy/i)).toBeInTheDocument();
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
