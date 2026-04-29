@@ -285,6 +285,40 @@ export default function Dashboard() {
     return counts;
   }, [openVulns]);
 
+  // Vulnerability aging distribution (open vulns only)
+  const vulnAgingBuckets = useMemo(() => {
+    const buckets = [
+      { label: '0–7 days',   min: 0,  max: 7,        count: 0, barCls: 'bg-emerald-500', textCls: 'text-emerald-400' },
+      { label: '7–30 days',  min: 7,  max: 30,       count: 0, barCls: 'bg-yellow-400',  textCls: 'text-yellow-400'  },
+      { label: '30–90 days', min: 30, max: 90,       count: 0, barCls: 'bg-orange-500',  textCls: 'text-orange-400'  },
+      { label: '90d+',       min: 90, max: Infinity, count: 0, barCls: 'bg-red-500',     textCls: 'text-red-400'     },
+    ];
+    const nowTs = Date.now();
+    for (const v of openVulns) {
+      const ageDays = (nowTs - new Date(v.created_at).getTime()) / 86_400_000;
+      for (const b of buckets) {
+        if (ageDays >= b.min && ageDays < b.max) { b.count++; break; }
+      }
+    }
+    return buckets;
+  }, [openVulns]);
+
+  // Top 5 riskiest projects by open critical+high count
+  const topRiskyProjects = useMemo(() => {
+    return projects
+      .map(p => {
+        const pVulns = openVulns.filter(v => v.project_id === p.id);
+        const critical = pVulns.filter(v => v.severity === 'critical').length;
+        const high     = pVulns.filter(v => v.severity === 'high').length;
+        const medium   = pVulns.filter(v => v.severity === 'medium').length;
+        const total    = pVulns.length;
+        return { project: p, critical, high, medium, total };
+      })
+      .filter(r => r.total > 0)
+      .sort((a, b) => (b.critical * 10 + b.high) - (a.critical * 10 + a.high))
+      .slice(0, 5);
+  }, [projects, openVulns]);
+
   return (
     <div className="p-8 max-w-7xl space-y-8">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -910,6 +944,114 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── Top open findings ──────────────────────────────────────────── */}
+      {/* ── Aging Distribution + Top Risky Projects ─────────────────── */}
+      {openVulns.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Aging Distribution */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+            <div className="mb-4">
+              <h2 className="font-semibold text-sm">Vulnerability aging</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Age distribution of open findings</p>
+            </div>
+            {(() => {
+              const maxCount = Math.max(1, ...vulnAgingBuckets.map(b => b.count));
+              return (
+                <div className="space-y-3">
+                  {vulnAgingBuckets.map(b => {
+                    const pct = Math.round((b.count / maxCount) * 100);
+                    return (
+                      <div key={b.label}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className={`font-medium ${b.textCls}`}>{b.label}</span>
+                          <span className="text-slate-300 tabular-nums font-semibold">{b.count}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${b.barCls}`}
+                            ref={(el) => { if (el) el.style.width = `${pct}%`; }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            <div className="mt-4 pt-3 border-t border-slate-800 flex gap-4 text-xs">
+              <span className="text-slate-500">Total open: <span className="text-slate-200 font-semibold">{openVulns.length}</span></span>
+              <span className="text-red-400 font-medium">
+                Stale (90d+): {vulnAgingBuckets[3].count}
+              </span>
+            </div>
+          </div>
+
+          {/* Top Risky Projects */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-semibold text-sm">Top risky projects</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Ranked by critical + high exposure</p>
+              </div>
+              <button
+                onClick={() => navigate('/projects')}
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1"
+              >
+                All <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            {topRiskyProjects.length === 0 ? (
+              <div className="text-sm text-slate-500 py-4">No projects with open findings.</div>
+            ) : (
+              <div className="space-y-3">
+                {topRiskyProjects.map(({ project: p, critical, high, medium, total }) => {
+                  const maxExposure = topRiskyProjects[0].critical * 10 + topRiskyProjects[0].high;
+                  const exposure = critical * 10 + high;
+                  const barPct = maxExposure === 0 ? 0 : Math.round((exposure / maxExposure) * 100);
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-col gap-1.5 cursor-pointer group"
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-200 font-medium truncate group-hover:text-emerald-400 transition max-w-[60%]">
+                          {p.name}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {critical > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-red-300 bg-red-500/10 border-red-500/20 tabular-nums">
+                              {critical} crit
+                            </span>
+                          )}
+                          {high > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border text-orange-300 bg-orange-500/10 border-orange-500/20 tabular-nums">
+                              {high} high
+                            </span>
+                          )}
+                          {medium > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border text-yellow-300 bg-yellow-500/10 border-yellow-500/20 tabular-nums">
+                              {medium}m
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-500 tabular-nums">{total} total</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-700"
+                          ref={(el) => { if (el) el.style.width = `${barPct}%`; }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Top open findings ──────────────────────────────────────────── */}
       {openVulns.length > 0 && (

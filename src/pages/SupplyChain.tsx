@@ -36,6 +36,8 @@ export default function SupplyChain() {
   useSearchShortcut(pkgSearchRef, useCallback(() => setPkgSearch(''), []));
   const toast = useToast();
   const { user } = useAuth();
+
+  useEffect(() => {
     getCircuitBreaker('osv-api', {
       failureThreshold: 3,
       successThreshold: 2,

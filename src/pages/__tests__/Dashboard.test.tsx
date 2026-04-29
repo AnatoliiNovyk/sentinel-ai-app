@@ -5,7 +5,7 @@ import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows } = vi.hoisted(() => {
+const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows, mockVulnRows, mockProjectRows } = vi.hoisted(() => {
   const makeChannel = () => ({
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
@@ -31,6 +31,8 @@ const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockPro
       organizations: [] as { id: string }[],
     },
     mockProbeAuditRows: [] as unknown[],
+    mockVulnRows: [] as unknown[],
+    mockProjectRows: [] as unknown[],
   };
 });
 
@@ -64,8 +66,8 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
     supabase: {
       from: (table: string) => {
         if (table === 'scans') return { select: () => makeQueryChain([]) };
-        if (table === 'projects') return { select: () => makeChainNoLimit([]) };
-        if (table === 'vulnerabilities') return { select: () => makeQueryChain([]) };
+        if (table === 'projects') return { select: () => makeChainNoLimit(mockProjectRows) };
+        if (table === 'vulnerabilities') return { select: () => makeQueryChain(mockVulnRows) };
         if (table === 'scan_jobs') return { select: () => makeQueryChain([]) };
         if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
         if (table === 'audit_logs') return { select: () => makeQueryChain(mockProbeAuditRows) };
@@ -104,6 +106,8 @@ afterEach(() => {
   mockAuthState.user = null;
   mockAuthState.organizations = [];
   mockProbeAuditRows.length = 0;
+  mockVulnRows.length = 0;
+  mockProjectRows.length = 0;
 });
 
 describe('Dashboard — layout', () => {
@@ -266,6 +270,70 @@ describe('Dashboard — agent probe smoke summary', () => {
         expect(screen.getByText('req-12345678')).toBeInTheDocument();
         expect(screen.getByText('req-12345678')).toHaveAttribute('title', 'req-1234567890');
         expect(screen.getByText(/URL: http:\/\/95\.67\.75\.146:9090\/health/i)).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+});
+
+describe('Dashboard — vulnerability aging distribution', () => {
+  it('does not show aging panel when there are no open findings', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.queryByText('Vulnerability aging')).not.toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+
+  it('shows aging panel heading when open findings exist', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const recentDate = new Date(Date.now() - 3 * 86_400_000).toISOString(); // 3 days ago
+    mockVulnRows.push({ id: 'v1', severity: 'critical', status: 'open', title: 'Test', project_id: 'p1', created_at: recentDate, user_id: 'user-1' });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('Vulnerability aging')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+
+  it('shows aging bucket labels when open findings exist', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const recentDate = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    mockVulnRows.push({ id: 'v1', severity: 'high', status: 'open', title: 'Old vuln', project_id: 'p1', created_at: recentDate, user_id: 'user-1' });
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('0–7 days')).toBeInTheDocument();
+        expect(screen.getByText('7–30 days')).toBeInTheDocument();
+        expect(screen.getByText('30–90 days')).toBeInTheDocument();
+        expect(screen.getByText('90d+')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+});
+
+describe('Dashboard — top risky projects', () => {
+  it('does not show risky projects panel when no open findings', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.queryByText('Top risky projects')).not.toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+
+  it('shows top risky projects panel and project name when open findings exist', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const recentDate = new Date(Date.now() - 1 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'Risky App', user_id: 'user-1', created_at: recentDate });
+    mockVulnRows.push({ id: 'v1', severity: 'critical', status: 'open', title: 'RCE', project_id: 'p1', created_at: recentDate, user_id: 'user-1' });
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('Top risky projects')).toBeInTheDocument();
+        expect(screen.getAllByText('Risky App').length).toBeGreaterThanOrEqual(1);
       },
       { timeout: 5000 },
     );
