@@ -17,9 +17,19 @@ type AgentHealth = {
   lastError: string | null;
 };
 
+function isMixedContentAgentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return window.location.protocol === 'https:' && parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 function AgentStatus() {
   const [health, setHealth] = useState<AgentHealth | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
+  const [blockedByPolicy, setBlockedByPolicy] = useState(false);
   const [agentUrl, setAgentUrl] = useState<string>(() =>
     localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL,
   );
@@ -40,17 +50,26 @@ function AgentStatus() {
       if (latestUrl !== agentUrl) {
         setAgentUrl(latestUrl);
       }
+      if (isMixedContentAgentUrl(latestUrl)) {
+        setBlockedByPolicy(true);
+        setReachable(false);
+        setHealth(null);
+        return;
+      }
       const res = await fetch(latestUrl, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const data: AgentHealth = await res.json();
         setHealth(data);
         setReachable(true);
+        setBlockedByPolicy(false);
       } else {
         setReachable(false);
+        setBlockedByPolicy(false);
       }
     } catch {
       setReachable(false);
       setHealth(null);
+      setBlockedByPolicy(false);
     }
   }, [agentUrl]);
 
@@ -67,6 +86,7 @@ function AgentStatus() {
 
   const label =
     reachable === null ? 'Checking agent…' :
+    blockedByPolicy ? 'Agent check blocked (HTTPS -> HTTP)' :
     !reachable ? 'Agent offline' :
     `Agent online · ${health?.jobsProcessed ?? 0} jobs`;
 

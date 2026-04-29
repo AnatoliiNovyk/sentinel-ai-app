@@ -60,6 +60,31 @@ type AgentHealthData = {
   timestamp: string;
 };
 
+function isMixedContentAgentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return window.location.protocol === 'https:' && parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function toAgentErrorMessage(url: string, err: unknown): string {
+  if (isMixedContentAgentUrl(url)) {
+    return 'Blocked by browser policy: HTTPS app cannot fetch HTTP agent URL. Configure HTTPS/reverse-proxy for the agent endpoint.';
+  }
+
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return 'Request timeout while checking agent health.';
+  }
+
+  if (err instanceof Error && /Failed to fetch/i.test(err.message)) {
+    return 'Network/CORS error while checking agent health.';
+  }
+
+  return err instanceof Error ? err.message : 'Unreachable';
+}
+
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 const PLANS = [
   {
@@ -231,10 +256,17 @@ export default function Settings() {
   const [agentError, setAgentError] = useState<string | null>(null);
 
   const checkAgent = useCallback(async (url = agentUrl) => {
+    const normalizedUrl = url.trim();
     setAgentChecking(true);
     setAgentError(null);
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (isMixedContentAgentUrl(normalizedUrl)) {
+        setAgentError(toAgentErrorMessage(normalizedUrl, null));
+        setAgentHealth(null);
+        return;
+      }
+
+      const res = await fetch(normalizedUrl, { signal: AbortSignal.timeout(6000) });
       if (res.ok) {
         const data: AgentHealthData = await res.json();
         setAgentHealth(data);
@@ -243,7 +275,7 @@ export default function Settings() {
         setAgentHealth(null);
       }
     } catch (e) {
-      setAgentError(e instanceof Error ? e.message : 'Unreachable');
+      setAgentError(toAgentErrorMessage(normalizedUrl, e));
       setAgentHealth(null);
     } finally {
       setAgentChecking(false);
@@ -251,8 +283,10 @@ export default function Settings() {
   }, [agentUrl]);
 
   const saveAgentUrl = () => {
-    localStorage.setItem('agentHealthUrl', agentUrl);
-    checkAgent(agentUrl);
+    const normalizedUrl = agentUrl.trim();
+    localStorage.setItem('agentHealthUrl', normalizedUrl);
+    setAgentUrl(normalizedUrl);
+    checkAgent(normalizedUrl);
   };
 
 
