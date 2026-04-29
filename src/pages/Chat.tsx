@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Send, Bot, User, Plus, MessageSquare, Sparkles, Loader2, Zap, Copy, Check, Trash2, Search, Filter, BarChart2, Clock } from 'lucide-react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { supabase } from '../api/client';
 import type { AiConversation, AiMessage } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -388,7 +389,7 @@ export default function Chat() {
                     {m.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                   </div>
                   <div className="flex-1 relative">
-                    <div className="text-sm text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: marked.parse(m.content) as string }} />
+                    <div className="text-sm text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(m.content) as string) }} />
                     {m.role === 'assistant' && (
                       <button
                         onClick={() => copyMessage(m.id, m.content)}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Download, FileText, Copy, Check, Sparkles, BookOpen, Link, Loader2, Printer } from 'lucide-react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { Report } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { downloadFile } from '../lib/exporters';
@@ -68,7 +69,7 @@ export default function ReportViewer({ report, onClose }: ReportViewerProps) {
     downloadFile(`${slug}.md`, report.content, 'text/markdown');
   };
 
-  const htmlContent = marked.parse(report.content) as string;
+  const htmlContent = DOMPurify.sanitize(marked.parse(report.content) as string);
 
   const wordCount = report.content.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));

@@ -19,6 +19,23 @@ vi.mock('../../lib/rateLimiter', () => ({
   getRateLimiter: mockGetRateLimiter,
 }));
 
+vi.mock('../../context/useAuth', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
+vi.mock('../../lib/toastContext', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}));
+
+vi.mock('../../api/audit.service', () => ({
+  AuditService: { logAction: vi.fn().mockResolvedValue(undefined) },
+  AuditAction: {},
+}));
+
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: vi.fn(),
+}));
+
 describe('OsintAnalyzer (DarkWebMonitor)', () => {
   beforeEach(() => {
     mockScan.mockReset();

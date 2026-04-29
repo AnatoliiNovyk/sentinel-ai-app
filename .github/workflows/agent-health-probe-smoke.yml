@@ -83,7 +83,7 @@ jobs:
             --run-number "${{ github.run_number }}"
 
       - name: Escalate probe failure
-        if: ${{ failure() && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != '' }}
+        if: failure() && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != ''
         shell: pwsh
         env:
           ALERT_WEBHOOK_URL: ${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}

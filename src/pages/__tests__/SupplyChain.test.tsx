@@ -18,6 +18,27 @@ vi.mock('../../lib/rateLimiter', () => ({
   getCircuitBreaker: mockGetCircuitBreaker,
 }));
 
+vi.mock('../../context/useAuth', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
+vi.mock('../../lib/toastContext', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}));
+
+vi.mock('../../lib/useSearchShortcut', () => ({
+  useSearchShortcut: () => {},
+}));
+
+vi.mock('../../api/audit.service', () => ({
+  AuditService: { logAction: vi.fn().mockResolvedValue(undefined) },
+  AuditAction: {},
+}));
+
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: vi.fn(),
+}));
+
 describe('SupplyChain', () => {
   beforeEach(() => {
     mockScan.mockReset();

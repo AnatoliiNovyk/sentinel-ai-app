@@ -180,7 +180,7 @@ jobs:
           }
 
       - name: Notify drill failure
-        if: ${{ failure() && steps.drill.outputs.send_webhook_on_failure == 'true' && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != '' }}
+        if: failure() && steps.drill.outputs.send_webhook_on_failure == 'true' && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != ''
         shell: pwsh
         env:
           OPERATIONAL_ALERT_WEBHOOK_URL: ${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}

@@ -33,7 +33,8 @@ jobs:
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           soft_fail: true
-          tfsec_args: '--format sarif --out sentinel-tfsec.sarif'
+          format: sarif
+          additional_args: '--out sentinel-tfsec.sarif'
 
       # ─── Container Scan (Trivy) ───────────────────────────────────────────────
       - name: Run Trivy vulnerability scanner
