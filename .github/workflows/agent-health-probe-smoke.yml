@@ -36,6 +36,7 @@ jobs:
           SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
           AGENT_HEALTH_URL=${{ secrets.SENTINEL_AGENT_HEALTH_URL }}
+          OPERATIONAL_ALERT_WEBHOOK_URL=${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
           EOF
 
       - name: Run gateway probe smoke
@@ -69,6 +70,40 @@ jobs:
           ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/agent-health-probe-smoke.json
 
           Write-Host "request_id=$($json.request_id) reachable=$($json.reachable) http_status=$($json.http_status) status=$($json.status)"
+
+      - name: Escalate probe failure
+        if: failure() && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != ''
+        shell: pwsh
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.OPERATIONAL_ALERT_WEBHOOK_URL }}
+        run: |
+          $report = $null
+          if (Test-Path 'reports/agent-health-probe-smoke.json') {
+            $report = Get-Content 'reports/agent-health-probe-smoke.json' -Raw | ConvertFrom-Json
+          }
+
+          $payload = @{
+            event = 'agent_health_probe_smoke_failed'
+            severity = 'high'
+            repository = '${{ github.repository }}'
+            workflow = '${{ github.workflow }}'
+            run_id = '${{ github.run_id }}'
+            run_number = '${{ github.run_number }}'
+            run_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            probe = @{
+              status = if ($null -ne $report) { $report.status } else { 'unknown' }
+              reachable = if ($null -ne $report) { $report.reachable } else { $null }
+              http_status = if ($null -ne $report) { $report.http_status } else { $null }
+              error = if ($null -ne $report) { $report.error } else { 'probe report unavailable' }
+              probed_url = if ($null -ne $report) { $report.probed_url } else { $null }
+              request_id = if ($null -ne $report) { $report.request_id } else { $null }
+            }
+          }
+
+          $json = $payload | ConvertTo-Json -Depth 10
+          Invoke-RestMethod -Method POST -Uri $env:ALERT_WEBHOOK_URL -ContentType 'application/json' -Body $json | Out-Null
+          Write-Host 'Probe failure alert sent to operational webhook.'
 
       - name: Upload probe report artifact
         if: always()

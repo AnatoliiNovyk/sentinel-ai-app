@@ -37,6 +37,7 @@ jobs:
         run: npm run browserslist:update-db
 
       - name: Create Pull Request
+        id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: 'chore: refresh browserslist db (caniuse-lite)'
@@ -54,3 +55,10 @@ jobs:
           labels: |
             dependencies
             maintenance
+
+      - name: Enable Pull Request Auto-Merge
+        if: steps.create_pr.outputs.pull-request-number != ''
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          pull-request-number: ${{ steps.create_pr.outputs.pull-request-number }}
+          merge-method: squash
