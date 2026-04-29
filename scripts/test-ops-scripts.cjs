@@ -706,6 +706,9 @@ async function testRecoveryPlaybookScript(rootDir) {
     }
 
     if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      if (cleanupCalled) {
+        return sendJson(res, 200, []);
+      }
       return sendJson(res, 200, [
         {
           id: 'scan-recovery-1',
@@ -760,10 +763,86 @@ async function testRecoveryPlaybookScript(rootDir) {
   assert.equal(json.summary.mode, 'apply');
   assert.equal(json.summary.stale_running_jobs_before_count, 2);
   assert.equal(json.summary.stale_running_jobs_after_count, 0);
+  assert.equal(json.summary.orphan_running_scans_before_count, 0);
+  assert.equal(json.summary.orphan_running_scans_after_count, 0);
   assert.equal(json.summary.cleanup_attempted, true);
   assert.equal(json.summary.cleanup_ok, true);
   assert.equal(cleanupCalled, true);
   assert.equal(webhookCalled, true);
+
+  await closeServer(server);
+}
+
+async function testRecoveryPlaybookOrphanScanCleanup(rootDir) {
+  let orphanCleanupCalled = false;
+
+  const orphanScan = {
+    id: 'scan-orphan-1',
+    status: 'running',
+    started_at: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+    completed_at: null,
+  };
+
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scan_jobs') {
+      const status = url.searchParams.get('status');
+      const scanId = url.searchParams.get('scan_id');
+
+      if (status === 'eq.running') {
+        return sendJson(res, 200, []);
+      }
+
+      if (status === 'in.(pending,running)' && scanId === 'eq.scan-orphan-1') {
+        return sendJson(res, 200, []);
+      }
+
+      return sendJson(res, 200, []);
+    }
+
+    if (req.method === 'GET' && url.pathname === '/rest/v1/scans') {
+      const status = url.searchParams.get('status');
+      if (status === 'eq.running') {
+        return sendJson(res, 200, orphanCleanupCalled ? [] : [orphanScan]);
+      }
+      return sendJson(res, 200, []);
+    }
+
+    if (req.method === 'PATCH' && url.pathname === '/rest/v1/scans') {
+      const idFilter = url.searchParams.get('id');
+      if (idFilter === 'eq.scan-orphan-1') {
+        orphanCleanupCalled = true;
+        return sendJson(res, 200, [{ id: 'scan-orphan-1', status: 'failed' }]);
+      }
+      return sendJson(res, 404, { error: 'scan not found', idFilter });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-recovery-orphan-'));
+  const envFile = path.join(tempDir, '.env');
+  writeEnvFile(envFile, `http://127.0.0.1:${port}`, false);
+
+  const scriptPath = path.join(rootDir, 'scripts', 'recovery-playbook.ps1');
+  const stdout = await runPwsh(scriptPath, [
+    '-EnvFile', envFile,
+    '-TimeoutMinutes', '120',
+    '-MaxScans', '200',
+    '-ApplyCleanup',
+  ]);
+  const json = extractJson(stdout);
+
+  assert.equal(json.schema_version, '1.0');
+  assert.equal(json.report_type, 'scan_pipeline_recovery_playbook');
+  assert.equal(json.summary.stale_running_jobs_before_count, 0);
+  assert.equal(json.summary.orphan_running_scans_before_count, 1);
+  assert.equal(json.summary.orphan_running_scans_after_count, 0);
+  assert.equal(json.summary.orphan_running_scans_cleaned_count, 1);
+  assert.equal(json.summary.cleanup_attempted, true);
+  assert.equal(json.summary.cleanup_ok, true);
+  assert.equal(orphanCleanupCalled, true);
 
   await closeServer(server);
 }
@@ -1056,6 +1135,7 @@ async function main() {
   await testDailyBreachEscalationScript(rootDir);
   await testDailyBreachEscalationSkippedWhenHealthy(rootDir);
   await testRecoveryPlaybookScript(rootDir);
+  await testRecoveryPlaybookOrphanScanCleanup(rootDir);
   await testWeeklySloSlaSummaryScript(rootDir);
   await testEvidenceIntegrityVerifier(rootDir);
 
