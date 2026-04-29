@@ -1,3 +1,5 @@
+import { supabase } from '../api/client';
+
 export type AgentProbeResult = {
   reachable: boolean;
   statusCode: number | null;
@@ -25,42 +27,30 @@ export function isHttpsAgentUrl(url: string): boolean {
 }
 
 async function probeViaGateway(url: string): Promise<AgentProbeResult> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supabaseUrl || !anonKey) {
-    return {
-      reachable: false,
-      statusCode: null,
-      health: null,
-      error: 'Gateway probe unavailable: missing Supabase env configuration.',
-      via: 'gateway',
-    };
-  }
-
   try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/ai-gateway`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({ action: 'agent_health_probe', url }),
-      signal: AbortSignal.timeout(8_000),
+    const { data, error } = await supabase.functions.invoke('ai-gateway', {
+      body: { action: 'agent_health_probe', url },
     });
 
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = typeof body?.error?.message === 'string'
-        ? body.error.message
-        : `Gateway probe HTTP ${res.status}`;
+    if (error) {
+      const message = typeof error.message === 'string' && error.message.trim()
+        ? error.message
+        : 'Gateway probe request failed.';
       return {
         reachable: false,
-        statusCode: res.status,
+        statusCode: null,
         health: null,
         error: message,
         via: 'gateway',
       };
     }
+
+    const body = (data ?? {}) as {
+      reachable?: boolean;
+      http_status?: number | null;
+      health?: unknown;
+      error?: string | null;
+    };
 
     return {
       reachable: Boolean(body?.reachable),
