@@ -4,6 +4,8 @@ import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMoni
 import { getRateLimiter } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
 import { useToast } from '../lib/toastContext';
+import { AuditService, AuditAction } from '../api/audit.service';
+import { useAuth } from '../context/useAuth';
 
 interface ScanHistory {
   query: string;
@@ -25,6 +27,7 @@ export default function OsintAnalyzer() {
   const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
   const [copiedDrill, setCopiedDrill] = useState<string | null>(null);
   const toast = useToast();
+  const { user } = useAuth();
 
   const visibleResults = useMemo(() => {
     const filtered = sevFilter === 'all'
@@ -197,6 +200,16 @@ export default function OsintAnalyzer() {
         setResults(prev => [{ query: trimmed, result: result.data }, ...prev]);
         const leakCount = Object.keys(result.data).filter(k => result.data[k as keyof LeakScanResult]).length;
         toast.info(`Scan complete for "${trimmed}"${leakCount ? ` — ${leakCount} source${leakCount !== 1 ? 's' : ''} with findings` : ' — no leaks found'}.`);
+        if (user) {
+          AuditService.logSecurityEvent(
+            (user as { app_metadata?: { org_id?: string } }).app_metadata?.org_id ?? user.id,
+            user.id,
+            AuditAction.DARK_WEB_SCAN,
+            'dark_web_query',
+            trimmed,
+            { riskLevel: result.data.riskLevel, breachCount: result.data.breachCount },
+          );
+        }
       }
 
       setQuery('');

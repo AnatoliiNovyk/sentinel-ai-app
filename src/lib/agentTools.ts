@@ -130,8 +130,16 @@ function toRunScanArgs(args: Record<string, unknown>): { raw: string; scanner: s
 }
 
 async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
-  if (!args.query || args.query.length === 0) {
+  const query = (args.query ?? '').trim();
+
+  if (!query) {
     return { name: 'dark_web_scan', ok: false, summary: 'Please provide an email, domain, username, or IP to scan.' };
+  }
+  if (query.length > 253) {
+    return { name: 'dark_web_scan', ok: false, summary: 'Query is too long (max 253 characters).' };
+  }
+  if (/[<>'"`;]|(\.\.)|(\/\/)|(select\s+\*|drop\s+table|insert\s+into)/i.test(query)) {
+    return { name: 'dark_web_scan', ok: false, summary: 'Query contains invalid characters.' };
   }
 
   const limiter = getRateLimiter('agent-dark-web', { maxRequests: 10, windowMs: 60 * 1000 });
@@ -141,7 +149,7 @@ async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
   }
 
   const client = getGlobalDarkWebMonitor();
-  const result = await client.scan(args.query);
+  const result = await client.scan(query);
 
   if (!result.ok) {
     return { name: 'dark_web_scan', ok: false, summary: `Dark web scan failed: ${result.error.message}` };
@@ -149,8 +157,8 @@ async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
 
   const scanResult = result.data;
   const breachSummary = scanResult.breachCount === 0
-    ? `✅ **${args.query}** is clean — no breaches detected.`
-    : `🚨 **${args.query}** found in ${scanResult.breachCount} breach(es). Risk score: ${scanResult.riskScore}/100 (${scanResult.riskLevel.toUpperCase()}).\n\nBreaches:\n${scanResult.breaches.map((b) => `- ${b.source} (${b.severity})`).join('\n')}`;
+    ? `✅ **${query}** is clean — no breaches detected.`
+    : `🚨 **${query}** found in ${scanResult.breachCount} breach(es). Risk score: ${scanResult.riskScore}/100 (${scanResult.riskLevel.toUpperCase()}).\n\nBreaches:\n${scanResult.breaches.map((b) => `- ${b.source} (${b.severity})`).join('\n')}`;
 
   return {
     name: 'dark_web_scan',

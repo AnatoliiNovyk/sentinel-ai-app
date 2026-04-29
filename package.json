@@ -23,6 +23,8 @@
     "test:safe:full": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-safe.ps1 -Suite full",
     "test:ops:contracts": "node scripts/test-ops-scripts.cjs",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "test:ui": "vitest --ui",
     "browserslist:update-db": "npx update-browserslist-db@latest --yes",
     "quality:check": "npm run check:no-js-duplicates && npm run lint -- --max-warnings=0 && npm run typecheck && npm run test:run && npm run build"
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.3",

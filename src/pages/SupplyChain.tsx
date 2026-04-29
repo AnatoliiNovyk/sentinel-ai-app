@@ -5,6 +5,8 @@ import { getCircuitBreaker } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
 import { useToast } from '../lib/toastContext';
+import { AuditService, AuditAction } from '../api/audit.service';
+import { useAuth } from '../context/useAuth';
 
 interface ScanResultUI {
   dep: { name: string; version: string; type: 'prod' | 'dev' };
@@ -33,9 +35,7 @@ export default function SupplyChain() {
   const pkgSearchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(pkgSearchRef, useCallback(() => setPkgSearch(''), []));
   const toast = useToast();
-
-  useEffect(() => {
-    // Initialize circuit breaker for OSV API (3 failures → 30s timeout)
+  const { user } = useAuth();
     getCircuitBreaker('osv-api', {
       failureThreshold: 3,
       successThreshold: 2,
@@ -49,6 +49,11 @@ export default function SupplyChain() {
       setError('Only package.json and package-lock.json files are supported currently.');
       return;
     }
+    // Guard against excessively large files (> 5 MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File is too large. Maximum size is 5 MB.');
+      return;
+    }
     setError(null);
     setFileName(file.name);
     setScanning(true);
@@ -56,7 +61,26 @@ export default function SupplyChain() {
 
     try {
       const text = await file.text();
-      const json = JSON.parse(text);
+      let json: Record<string, unknown>;
+      try {
+        json = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        setError('Invalid JSON — the file could not be parsed.');
+        setScanning(false);
+        return;
+      }
+
+      // Basic structure validation
+      if (typeof json !== 'object' || json === null || Array.isArray(json)) {
+        setError('Invalid package.json — root must be a JSON object.');
+        setScanning(false);
+        return;
+      }
+      if (!json['name'] && !json['dependencies'] && !json['devDependencies'] && !json['packages']) {
+        setError('File does not appear to be a valid package.json or package-lock.json.');
+        setScanning(false);
+        return;
+      }
       
       const analyzer = getGlobalScaAnalyzer();
       const scanResult = await analyzer.scan(json);
@@ -91,6 +115,16 @@ export default function SupplyChain() {
         toast.warning(`Scan complete — ${vulnCount} vulnerable package${vulnCount !== 1 ? 's' : ''} found.`);
       } else {
         toast.success('Scan complete — no vulnerabilities found.');
+      }
+      if (user) {
+        AuditService.logSecurityEvent(
+          (user as { app_metadata?: { org_id?: string } }).app_metadata?.org_id ?? user.id,
+          user.id,
+          AuditAction.SBOM_ANALYSIS,
+          'supply_chain_scan',
+          file.name,
+          { vulnCount, totalPackages: uiResults.length },
+        );
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to parse package.json. Ensure it is valid JSON.';

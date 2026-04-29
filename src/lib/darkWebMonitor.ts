@@ -214,6 +214,83 @@ export function detectQueryType(query: string): QueryType {
   return 'username';
 }
 
+// ─── HaveIBeenPwned API Integration ──────────────────────────────────────
+//
+// Set VITE_HIBP_API_KEY in your .env to enable real breach lookups.
+// Free-tier key: https://haveibeenpwned.com/API/Key
+// When no key is present the engine falls back to deterministic simulation.
+
+const HIBP_API_KEY = import.meta.env.VITE_HIBP_API_KEY as string | undefined;
+
+interface HibpBreach {
+  Name: string;
+  Title: string;
+  BreachDate: string;
+  AddedDate: string;
+  DataClasses: string[];
+  IsVerified: boolean;
+  PwnCount: number;
+  Description: string;
+}
+
+function hibpBreachToEntry(b: HibpBreach): BreachEntry {
+  const dataClasses = b.DataClasses.map((dc): DataClass => {
+    const map: Record<string, DataClass> = {
+      'Passwords': 'Passwords',
+      'Email addresses': 'Email addresses',
+      'Usernames': 'Usernames',
+      'IP addresses': 'IP addresses',
+      'Phone numbers': 'Phone numbers',
+      'Credit/Debit Cards': 'Credit cards',
+      'Credit cards': 'Credit cards',
+      'Social security numbers': 'SSNs',
+      'Auth Tokens': 'Session tokens',
+      'Session tokens': 'Session tokens',
+      'API keys': 'API keys',
+    };
+    return map[dc] ?? 'PII';
+  }) as DataClass[];
+
+  const hasCritical = dataClasses.some((d) =>
+    ['Passwords', 'Credit cards', 'SSNs', 'API keys', 'Session tokens'].includes(d),
+  );
+  const severity: BreachSeverity = hasCritical ? (b.PwnCount > 1_000_000 ? 'critical' : 'high') : 'medium';
+
+  return {
+    id: `HIBP-${b.Name}`,
+    source: b.Title,
+    breachDate: b.BreachDate,
+    addedToDatabase: b.AddedDate,
+    dataClasses,
+    severity,
+    recordCount: b.PwnCount,
+    verified: b.IsVerified,
+    description: b.Description.replace(/<[^>]*>/g, ''), // strip HTML tags
+  };
+}
+
+async function fetchHibpBreaches(email: string): Promise<BreachEntry[]> {
+  const resp = await fetch(
+    `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`,
+    {
+      headers: {
+        'hibp-api-key': HIBP_API_KEY!,
+        'user-agent': 'Sentinel-AI Security Platform',
+      },
+    },
+  );
+
+  // 404 = clean (no breaches)
+  if (resp.status === 404) return [];
+
+  if (!resp.ok) {
+    throw new Error(`HIBP API error: ${resp.status} ${resp.statusText}`);
+  }
+
+  const data = (await resp.json()) as HibpBreach[];
+  return data.map(hibpBreachToEntry);
+}
+
 // ─── Breach Simulation ───────────────────────────────────────────────────
 
 function simulateBreachLookup(query: string): BreachEntry[] {
@@ -279,7 +356,15 @@ export class DarkWebMonitorClient {
 
     try {
       const queryType = detectQueryType(trimmed);
-      const breaches = simulateBreachLookup(trimmed);
+
+      // Use real HIBP API for email queries when an API key is configured
+      let breaches: BreachEntry[];
+      if (HIBP_API_KEY && queryType === 'email') {
+        breaches = await fetchHibpBreaches(trimmed);
+      } else {
+        breaches = simulateBreachLookup(trimmed);
+      }
+
       const riskScore = computeRiskScore(breaches);
       const riskLevel = riskLevelFromScore(riskScore);
       const hasActiveCredentials = breaches.some(
@@ -296,7 +381,9 @@ export class DarkWebMonitorClient {
         riskLevel,
         hasActiveCredentials,
         recommendedActions: buildRecommendations(breaches),
-        sources: ['Internal Breach DB v5.4', 'Community OSINT Feed', 'Open Leak Repository'],
+        sources: HIBP_API_KEY && queryType === 'email'
+          ? ['HaveIBeenPwned v3']
+          : ['Internal Breach DB v5.4', 'Community OSINT Feed', 'Open Leak Repository'],
       };
 
       if (breaches.length > 0) {

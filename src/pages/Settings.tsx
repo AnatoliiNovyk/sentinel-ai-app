@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
+import { AuditService, AuditAction } from '../api/audit.service';
 import { ApiRateLimitsPanel } from '../components/ApiRateLimitsPanel';
 import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../lib/agentHealth';
 
@@ -422,10 +423,18 @@ export default function Settings() {
     localStorage.setItem('sentinelRetention', JSON.stringify(retention));
     localStorage.setItem('sentinelNotifPrefs', JSON.stringify(notifPrefs));
     await supabase.from('profiles').update({ full_name: fullName, company, sla_config: sla }).eq('id', user.id);
+    AuditService.logSecurityEvent(
+      (user as { app_metadata?: { org_id?: string } }).app_metadata?.org_id ?? user.id,
+      user.id,
+      AuditAction.PROJECT_UPDATED,
+      'profile',
+      user.id,
+      { fields: ['full_name', 'company', 'sla_config'] },
+    );
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
+  };;
 
   const handleUpgrade = async (selectedPlan: typeof PLANS[0]) => {
     if (selectedPlan.id === 'free') return;
