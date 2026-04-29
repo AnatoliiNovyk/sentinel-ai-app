@@ -278,6 +278,27 @@ export default function Notifications() {
     toast.success('All read notifications deleted.');
   }, [user, toast]);
 
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const unreadCount   = useMemo(() => items.filter(n => !n.read_at).length, [items]);
+  const criticalCount = useMemo(() => items.filter(n => n.severity === 'critical' && !n.read_at).length, [items]);
+  const readCount     = useMemo(() => items.filter(n => !!n.read_at).length, [items]);
+  const todayCount    = useMemo(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    return items.filter(n => new Date(n.created_at) >= todayStart).length;
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter(n => {
+      if (readFilter === 'unread' && n.read_at) return false;
+      if (readFilter === 'read' && !n.read_at) return false;
+      if (sevFilter !== 'all' && n.severity !== sevFilter) return false;
+      if (typeFilter !== 'all' && n.type !== typeFilter) return false;
+      if (q && !n.title.toLowerCase().includes(q) && !(n.body ?? '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, readFilter, sevFilter, typeFilter, searchQuery]);
+
   // ── Export CSV ─────────────────────────────────────────────────────────────
   const exportCsv = useCallback(() => {
     const date = new Date().toISOString().split('T')[0];
@@ -300,27 +321,6 @@ export default function Notifications() {
     a.href = url; a.download = `notifications-${date}.csv`; a.click();
     URL.revokeObjectURL(url);
   }, [filtered, items]);
-
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const unreadCount   = useMemo(() => items.filter(n => !n.read_at).length, [items]);
-  const criticalCount = useMemo(() => items.filter(n => n.severity === 'critical' && !n.read_at).length, [items]);
-  const readCount     = useMemo(() => items.filter(n => !!n.read_at).length, [items]);
-  const todayCount    = useMemo(() => {
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    return items.filter(n => new Date(n.created_at) >= todayStart).length;
-  }, [items]);
-
-  const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return items.filter(n => {
-      if (readFilter === 'unread' && n.read_at) return false;
-      if (readFilter === 'read' && !n.read_at) return false;
-      if (sevFilter !== 'all' && n.severity !== sevFilter) return false;
-      if (typeFilter !== 'all' && n.type !== typeFilter) return false;
-      if (q && !n.title.toLowerCase().includes(q) && !(n.body ?? '').toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [items, readFilter, sevFilter, typeFilter, searchQuery]);
 
   const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
   const hasMore = paged.length < filtered.length;
