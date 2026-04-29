@@ -1,0 +1,52 @@
+name: Browserslist DB Maintenance
+
+"on":
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: browserslist-db-maintenance
+  cancel-in-progress: false
+
+jobs:
+  refresh-db:
+    name: Refresh caniuse-lite DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh Browserslist DB
+        run: npm run browserslist:update-db
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore: refresh browserslist db (caniuse-lite)'
+          title: 'chore: refresh browserslist db (caniuse-lite)'
+          body: |
+            Automated weekly refresh of Browserslist database.
+
+            - Runs `npm run browserslist:update-db`
+            - Updates lockfile data when caniuse-lite target metadata changes
+          branch: chore/browserslist-db-refresh
+          delete-branch: true
+          labels: |
+            dependencies
+            maintenance
