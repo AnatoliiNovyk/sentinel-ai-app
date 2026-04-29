@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAiGatewayRequest } from '../../../supabase/functions/ai-gateway/handler';
 import { resetGatewayRateLimitStoreForTests } from '../../../supabase/functions/ai-gateway/rateLimit';
 
 describe('ai-gateway handler', () => {
   beforeEach(() => {
     resetGatewayRateLimitStoreForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('returns 405 for unsupported method with safe error payload', async () => {
@@ -218,5 +222,63 @@ describe('ai-gateway handler', () => {
 
     expect(generated).toMatch(/^req-/);
     expect(generated.length).toBeGreaterThan(10);
+  });
+
+  it('probes agent health via action=agent_health_probe', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ status: 'ok', jobsProcessed: 5 }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.19',
+      },
+      body: JSON.stringify({
+        action: 'agent_health_probe',
+        url: 'http://95.67.75.146:9090/health',
+      }),
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe('agent_health_probe');
+    expect(body.reachable).toBe(true);
+    expect(body.http_status).toBe(200);
+    expect(body.health).toEqual({ status: 'ok', jobsProcessed: 5 });
+  });
+
+  it('blocks private host probe targets', async () => {
+    const req = new Request('https://example.com/functions/v1/ai-gateway', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.20',
+      },
+      body: JSON.stringify({
+        action: 'agent_health_probe',
+        url: 'http://127.0.0.1:9090/health',
+      }),
+    });
+
+    const res = await handleAiGatewayRequest(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe('agent_health_probe');
+    expect(body.reachable).toBe(false);
+    expect(body.error).toContain('not allowed');
   });
 });

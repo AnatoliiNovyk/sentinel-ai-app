@@ -5,7 +5,7 @@ export type ChatMessage = {
   content: string;
 };
 
-export type GatewayAction = 'chat' | 'generate_kill_chain';
+export type GatewayAction = 'chat' | 'generate_kill_chain' | 'agent_health_probe';
 
 export type GatewayErrorCode =
   | 'METHOD_NOT_ALLOWED'
@@ -36,6 +36,10 @@ export type ParsedGatewayRequest =
       messages: ChatMessage[];
       project: string;
       vulnerabilities: unknown[];
+    }
+  | {
+      action: 'agent_health_probe';
+      url: string;
     };
 
 const MAX_MESSAGES = 50;
@@ -43,6 +47,7 @@ const MAX_MESSAGE_CONTENT_LENGTH = 8000;
 const MAX_PROJECT_LENGTH = 200;
 const MAX_VULNERABILITIES = 100;
 const MAX_PROMPT_SOURCE_CHARS = 40_000;
+const MAX_AGENT_HEALTH_URL_LENGTH = 2048;
 
 const ALLOWED_ROLES = new Set<ChatMessageRole>(['user', 'assistant', 'system']);
 
@@ -54,8 +59,35 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function normalizeAction(value: unknown): GatewayAction {
+  if (value === 'agent_health_probe') return 'agent_health_probe';
   if (value === 'generate_kill_chain') return 'generate_kill_chain';
   return 'chat';
+}
+
+function validateAgentHealthUrl(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = sanitizeText(value);
+  if (normalized.length === 0 || normalized.length > MAX_AGENT_HEALTH_URL_LENGTH) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+
+    if (!parsed.hostname || parsed.username || parsed.password) {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeText(value: string): string {
@@ -165,6 +197,24 @@ export function parseGatewayRequest(body: unknown):
   }
 
   const action = normalizeAction(parsedBody.action);
+
+  if (action === 'agent_health_probe') {
+    const url = validateAgentHealthUrl(parsedBody.url);
+    if (!url) {
+      return {
+        ok: false,
+        error: gatewayError('INVALID_REQUEST', 'Field "url" must be a valid http/https URL.', 400),
+      };
+    }
+
+    return {
+      ok: true,
+      value: {
+        action,
+        url,
+      },
+    };
+  }
 
   if (action === 'generate_kill_chain') {
     const project = parsedBody.project;

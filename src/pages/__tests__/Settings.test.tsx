@@ -11,6 +11,10 @@ const { mockUpdateEq } = vi.hoisted(() => ({
   mockUpdateEq: vi.fn().mockResolvedValue({ data: null, error: null }),
 }));
 
+const { mockProbeAgentHealth } = vi.hoisted(() => ({
+  mockProbeAgentHealth: vi.fn(),
+}));
+
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
   const makeApiUsageSelectChain = () => ({
@@ -56,6 +60,12 @@ vi.mock('../../context/useAuth', () => {
     useAuth: () => ({ user: _user, profile: _profile }),
   };
 });
+
+vi.mock('../../lib/agentHealth', () => ({
+  probeAgentHealth: mockProbeAgentHealth,
+  isMixedContentAgentUrl: (url: string) => url.startsWith('http://'),
+  isHttpsAgentUrl: (url: string) => url.startsWith('https://'),
+}));
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -204,6 +214,16 @@ describe('Settings — Save', () => {
 });
 
 describe('Settings — Agent mixed content', () => {
+  beforeEach(() => {
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: 'Unreachable',
+      via: 'direct',
+    });
+  });
+
   afterEach(() => {
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -213,7 +233,7 @@ describe('Settings — Agent mixed content', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows policy-block message for HTTPS app + HTTP agent URL and skips fetch', async () => {
+  it('shows agent online from gateway probe for HTTPS app + HTTP agent URL', async () => {
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
@@ -222,8 +242,21 @@ describe('Settings — Agent mixed content', () => {
         href: 'https://sentinel.local/settings',
       },
     });
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: true,
+      statusCode: 200,
+      health: {
+        status: 'ok',
+        uptime: 120,
+        jobsProcessed: 1,
+        jobsFailed: 0,
+        lastJobAt: null,
+        lastError: null,
+        timestamp: '2026-04-29T00:00:00.000Z',
+      },
+      error: null,
+      via: 'gateway',
+    });
 
     render(<Settings />);
     const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
@@ -231,9 +264,9 @@ describe('Settings — Agent mixed content', () => {
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Blocked by browser policy/i)).toBeInTheDocument();
+      expect(screen.getByText(/Agent online/i)).toBeInTheDocument();
     });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
 
   it('shows TLS/CORS guidance for HTTPS agent URL when fetch fails', async () => {
@@ -245,8 +278,13 @@ describe('Settings — Agent mixed content', () => {
         href: 'https://sentinel.local/settings',
       },
     });
-    const fetchSpy = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
-    vi.stubGlobal('fetch', fetchSpy);
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: 'TypeError: Failed to fetch',
+      via: 'direct',
+    });
 
     render(<Settings />);
     const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
@@ -256,6 +294,6 @@ describe('Settings — Agent mixed content', () => {
     await waitFor(() => {
       expect(screen.getByText(/HTTPS endpoint check failed \(TLS\/CORS\)/i)).toBeInTheDocument();
     });
-    expect(fetchSpy).toHaveBeenCalled();
+    expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
 });

@@ -10,6 +10,10 @@ const { mockSignOut, mockProfile, mockLocation } = vi.hoisted(() => ({
   mockLocation: { pathname: '/' },
 }));
 
+const { mockProbeAgentHealth } = vi.hoisted(() => ({
+  mockProbeAgentHealth: vi.fn(),
+}));
+
 vi.mock('../../context/useAuth', () => {
   const _signOut = mockSignOut;
   const _profile = mockProfile;
@@ -38,6 +42,12 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('../NotificationBell', () => ({
   default: () => <div data-testid="notification-bell">NotificationBell</div>,
+}));
+
+vi.mock('../../lib/agentHealth', () => ({
+  probeAgentHealth: mockProbeAgentHealth,
+  isMixedContentAgentUrl: (url: string) => url.startsWith('http://'),
+  isHttpsAgentUrl: (url: string) => url.startsWith('https://'),
 }));
 
 describe('AppLayout — sidebar', () => {
@@ -91,6 +101,13 @@ describe('AppLayout — sidebar', () => {
 describe('AppLayout — header', () => {
   beforeEach(() => {
     mockLocation.pathname = '/';
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: 'Unreachable',
+      via: 'direct',
+    });
   });
 
   afterEach(() => {
@@ -125,7 +142,7 @@ describe('AppLayout — header', () => {
     expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
   });
 
-  it('shows policy-blocked status for HTTPS app with HTTP agent URL', async () => {
+  it('shows agent online when gateway probe succeeds for HTTP agent URL', async () => {
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
@@ -135,15 +152,27 @@ describe('AppLayout — header', () => {
       },
     });
     localStorage.setItem('agentHealthUrl', 'http://95.67.75.146:9090/health');
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: true,
+      statusCode: 200,
+      health: {
+        status: 'ok',
+        uptime: 3600,
+        jobsProcessed: 7,
+        jobsFailed: 0,
+        lastJobAt: null,
+        lastError: null,
+      },
+      error: null,
+      via: 'gateway',
+    });
 
     render(<AppLayout />);
 
     await waitFor(() => {
-      expect(screen.getByText('Agent check blocked (HTTPS -> HTTP)')).toBeInTheDocument();
+      expect(screen.getByText('Agent online · 7 jobs')).toBeInTheDocument();
     });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
 
   it('shows HTTPS TLS/CORS status when https agent URL check fails', async () => {
@@ -156,15 +185,20 @@ describe('AppLayout — header', () => {
       },
     });
     localStorage.setItem('agentHealthUrl', 'https://95.67.75.146:9090/health');
-    const fetchSpy = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
-    vi.stubGlobal('fetch', fetchSpy);
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: 'TypeError: Failed to fetch',
+      via: 'direct',
+    });
 
     render(<AppLayout />);
 
     await waitFor(() => {
       expect(screen.getByText('Agent HTTPS check failed (TLS/CORS)')).toBeInTheDocument();
     });
-    expect(fetchSpy).toHaveBeenCalled();
+    expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
 });
 

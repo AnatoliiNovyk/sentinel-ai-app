@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth';
 import NotificationBell from './NotificationBell';
 import CommandPalette from './CommandPalette';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../lib/agentHealth';
 
 const DEFAULT_AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined)
   ?? 'http://95.67.75.146:9090/health';
@@ -16,24 +17,6 @@ type AgentHealth = {
   lastJobAt: string | null;
   lastError: string | null;
 };
-
-function isMixedContentAgentUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return window.location.protocol === 'https:' && parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
-
-function isHttpsAgentUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 function AgentStatus() {
   const [health, setHealth] = useState<AgentHealth | null>(null);
@@ -60,24 +43,19 @@ function AgentStatus() {
       if (latestUrl !== agentUrl) {
         setAgentUrl(latestUrl);
       }
-      if (isMixedContentAgentUrl(latestUrl)) {
-        setBlockedByPolicy(true);
-        setTlsOrCorsHint(false);
-        setReachable(false);
-        setHealth(null);
-        return;
-      }
-      const res = await fetch(latestUrl, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) {
-        const data: AgentHealth = await res.json();
+      const probe = await probeAgentHealth(latestUrl);
+      if (probe.reachable && probe.health && typeof probe.health === 'object') {
+        const data = probe.health as AgentHealth;
         setHealth(data);
         setReachable(true);
         setBlockedByPolicy(false);
         setTlsOrCorsHint(false);
       } else {
+        const mixedContentBlocked = isMixedContentAgentUrl(latestUrl) && probe.via === 'direct';
         setReachable(false);
-        setBlockedByPolicy(false);
-        setTlsOrCorsHint(false);
+        setBlockedByPolicy(mixedContentBlocked);
+        setTlsOrCorsHint(!mixedContentBlocked && isHttpsAgentUrl(latestUrl));
+        setHealth(null);
       }
     } catch {
       setReachable(false);

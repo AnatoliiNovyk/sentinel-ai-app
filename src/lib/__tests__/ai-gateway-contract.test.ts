@@ -104,4 +104,33 @@ describe('ai-gateway contract', () => {
       expect(result.error.body.error.message).toContain('too large');
     }
   });
+
+  it('parses valid agent health probe payload', () => {
+    const result = parseGatewayRequest({
+      action: 'agent_health_probe',
+      url: 'http://95.67.75.146:9090/health',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.action).toBe('agent_health_probe');
+      if (result.value.action === 'agent_health_probe') {
+        expect(result.value.url).toBe('http://95.67.75.146:9090/health');
+      }
+    }
+  });
+
+  it('rejects invalid agent health probe url', () => {
+    const result = parseGatewayRequest({
+      action: 'agent_health_probe',
+      url: 'file:///etc/passwd',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.status).toBe(400);
+      expect(result.error.body.error.code).toBe('INVALID_REQUEST');
+      expect(result.error.body.error.message).toContain('url');
+    }
+  });
 });

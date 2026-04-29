@@ -9,15 +9,7 @@ import { supabase } from '../api/client';
 import { ScanHeader } from '../components/scans/ScanHeader';
 import { ScanStats } from '../components/scans/ScanStats';
 import { VulnerabilityList } from '../components/scans/VulnerabilityList';
-
-function isMixedContentAgentUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return window.location.protocol === 'https:' && parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
+import { probeAgentHealth } from '../lib/agentHealth';
 
 function toReadableErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message.trim()) return err.message;
@@ -141,15 +133,9 @@ const Scans = () => {
     const checkAgent = async () => {
       try {
         const url = localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL;
-        if (isMixedContentAgentUrl(url)) {
-          if (!active) return;
-          // Unknown reachability from this page context because browser blocks HTTPS -> HTTP fetch.
-          setAgentReachable(null);
-          return;
-        }
-        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        const probe = await probeAgentHealth(url);
         if (!active) return;
-        setAgentReachable(res.ok);
+        setAgentReachable(probe.reachable);
       } catch {
         if (!active) return;
         setAgentReachable(false);

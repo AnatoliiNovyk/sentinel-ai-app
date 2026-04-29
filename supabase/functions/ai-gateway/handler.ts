@@ -626,6 +626,93 @@ function getGatewayVersion(): string {
   return getEnvKey('AI_GATEWAY_VERSION')?.trim() || 'unknown';
 }
 
+function isPrivateOrLoopbackHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) return true;
+
+  if (
+    host === 'localhost' ||
+    host === '::1' ||
+    host.endsWith('.local') ||
+    host === '0.0.0.0' ||
+    host === '169.254.169.254'
+  ) {
+    return true;
+  }
+
+  // IPv6 loopback / unique-local / link-local ranges
+  if (host.includes(':')) {
+    return host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd');
+  }
+
+  // IPv4 private, loopback, link-local, CGNAT ranges
+  const parts = host.split('.').map((p) => Number(p));
+  if (parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    const [a, b] = parts;
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+  }
+
+  return false;
+}
+
+async function probeAgentHealthUrl(targetUrl: string, requestId: string): Promise<{
+  reachable: boolean;
+  http_status: number | null;
+  health: unknown | null;
+  error: string | null;
+}> {
+  try {
+    const parsed = new URL(targetUrl);
+    if (isPrivateOrLoopbackHost(parsed.hostname)) {
+      return {
+        reachable: false,
+        http_status: null,
+        health: null,
+        error: 'Target host is not allowed for probe.',
+      };
+    }
+
+    const res = await fetch(parsed.toString(), {
+      method: 'GET',
+      signal: AbortSignal.timeout(6_000),
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'sentinel-ai-gateway/agent-health-probe',
+        Accept: 'application/json, text/plain;q=0.9, */*;q=0.5',
+      },
+    });
+
+    const contentType = res.headers.get('content-type') ?? '';
+    let health: unknown | null = null;
+    if (contentType.toLowerCase().includes('application/json')) {
+      try {
+        health = await res.json();
+      } catch {
+        health = null;
+      }
+    }
+
+    return {
+      reachable: res.ok,
+      http_status: res.status,
+      health,
+      error: res.ok ? null : `HTTP ${res.status}`,
+    };
+  } catch (err) {
+    logWithRequestId(requestId, 'Agent health probe failed', err);
+    return {
+      reachable: false,
+      http_status: null,
+      health: null,
+      error: safeErrorDetails(err),
+    };
+  }
+}
+
 export async function handleAiGatewayRequest(req: Request): Promise<Response> {
   const requestId = resolveRequestId(req);
   const acceptEncoding = req.headers.get('accept-encoding');
@@ -743,6 +830,28 @@ export async function handleAiGatewayRequest(req: Request): Promise<Response> {
     const parsed = parseGatewayRequest(rawBody);
     if (!parsed.ok) {
       return await jsonResponse(parsed.error.body, requestId, parsed.error.status, {}, acceptEncoding, traceCtx);
+    }
+
+    if (parsed.value.action === 'agent_health_probe') {
+      const probe = await probeAgentHealthUrl(parsed.value.url, requestId);
+      return await jsonResponse(
+        {
+          request_id: requestId,
+          action: 'agent_health_probe',
+          status: probe.reachable ? 'ok' : 'error',
+          reachable: probe.reachable,
+          http_status: probe.http_status,
+          health: probe.health,
+          error: probe.error,
+          probed_url: parsed.value.url,
+          timestamp: new Date().toISOString(),
+        },
+        requestId,
+        200,
+        {},
+        acceptEncoding,
+        traceCtx,
+      );
     }
 
     const { action, messages } = parsed.value;

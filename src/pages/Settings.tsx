@@ -9,6 +9,7 @@ import {
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { ApiRateLimitsPanel } from '../components/ApiRateLimitsPanel';
+import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../lib/agentHealth';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
 
@@ -59,24 +60,6 @@ type AgentHealthData = {
   lastError: string | null;
   timestamp: string;
 };
-
-function isMixedContentAgentUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return window.location.protocol === 'https:' && parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
-
-function isHttpsAgentUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 function toAgentErrorMessage(url: string, err: unknown): string {
   if (isMixedContentAgentUrl(url)) {
@@ -272,19 +255,19 @@ export default function Settings() {
     setAgentChecking(true);
     setAgentError(null);
     try {
-      if (isMixedContentAgentUrl(normalizedUrl)) {
-        setAgentError(toAgentErrorMessage(normalizedUrl, null));
-        setAgentHealth(null);
+      const probe = await probeAgentHealth(normalizedUrl);
+      if (probe.reachable && probe.health && typeof probe.health === 'object') {
+        setAgentHealth(probe.health as AgentHealthData);
         return;
       }
 
-      const res = await fetch(normalizedUrl, { signal: AbortSignal.timeout(6000) });
-      if (res.ok) {
-        const data: AgentHealthData = await res.json();
-        setAgentHealth(data);
+      setAgentHealth(null);
+      if (probe.error) {
+        setAgentError(toAgentErrorMessage(normalizedUrl, new Error(probe.error)));
+      } else if (probe.statusCode !== null) {
+        setAgentError(`HTTP ${probe.statusCode}`);
       } else {
-        setAgentError(`HTTP ${res.status}`);
-        setAgentHealth(null);
+        setAgentError(toAgentErrorMessage(normalizedUrl, null));
       }
     } catch (e) {
       setAgentError(toAgentErrorMessage(normalizedUrl, e));
