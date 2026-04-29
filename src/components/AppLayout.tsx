@@ -22,6 +22,7 @@ type AgentHealth = {
 type ProbeSmokeStatus = {
   status: 'ok' | 'error' | 'unknown';
   generatedAt: string | null;
+  requestId: string | null;
 };
 
 function AgentStatus({ userId, orgId }: { userId: string | null; orgId: string | null }) {
@@ -29,7 +30,7 @@ function AgentStatus({ userId, orgId }: { userId: string | null; orgId: string |
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [blockedByPolicy, setBlockedByPolicy] = useState(false);
   const [tlsOrCorsHint, setTlsOrCorsHint] = useState(false);
-  const [probeSmoke, setProbeSmoke] = useState<ProbeSmokeStatus>({ status: 'unknown', generatedAt: null });
+  const [probeSmoke, setProbeSmoke] = useState<ProbeSmokeStatus>({ status: 'unknown', generatedAt: null, requestId: null });
   const [agentUrl, setAgentUrl] = useState<string>(() =>
     localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL,
   );
@@ -80,7 +81,7 @@ function AgentStatus({ userId, orgId }: { userId: string | null; orgId: string |
 
   const pollProbeSmoke = useCallback(async () => {
     if (!userId && !orgId) {
-      setProbeSmoke({ status: 'unknown', generatedAt: null });
+      setProbeSmoke({ status: 'unknown', generatedAt: null, requestId: null });
       return;
     }
 
@@ -111,9 +112,10 @@ function AgentStatus({ userId, orgId }: { userId: string | null; orgId: string |
             : 'unknown';
 
       const generatedAt = typeof meta?.generated_at === 'string' ? meta.generated_at : (row?.created_at ?? null);
-      setProbeSmoke({ status, generatedAt });
+      const requestId = typeof meta?.request_id === 'string' ? meta.request_id : null;
+      setProbeSmoke({ status, generatedAt, requestId });
     } catch {
-      setProbeSmoke({ status: 'unknown', generatedAt: null });
+      setProbeSmoke({ status: 'unknown', generatedAt: null, requestId: null });
     }
   }, [orgId, userId]);
 
@@ -153,7 +155,12 @@ function AgentStatus({ userId, orgId }: { userId: string | null; orgId: string |
     <div className="relative group flex items-center gap-2 cursor-default">
       <span className={`w-2 h-2 rounded-full ${dotColor} ${reachable ? 'animate-pulse' : ''}`} />
       <span className="text-xs text-slate-500 hidden sm:block">{label}</span>
-      <span className={`hidden md:inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${probeTone}`} title={probeSmoke.generatedAt ? `Last probe: ${new Date(probeSmoke.generatedAt).toLocaleString()}` : 'No probe run data'}>
+      <span
+        className={`hidden md:inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${probeTone}`}
+        title={probeSmoke.generatedAt
+          ? `Last probe: ${new Date(probeSmoke.generatedAt).toLocaleString()}${probeSmoke.requestId ? ` | request_id: ${probeSmoke.requestId}` : ''}`
+          : 'No probe run data'}
+      >
         {probeLabel}
       </span>
       {reachable && health && (

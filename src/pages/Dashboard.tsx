@@ -425,6 +425,7 @@ export default function Dashboard() {
             label="Request ID"
             value={probeSmokeStatus.requestId ? probeSmokeStatus.requestId.slice(0, 12) : 'n/a'}
             color="text-slate-300"
+            title={probeSmokeStatus.requestId ?? undefined}
           />
           <SummaryPill
             label="Last run"
@@ -1116,12 +1117,12 @@ function AreaTrendChart({ trend, max }: { trend: { day: string; label: string; o
   );
 }
 
-function SummaryPill({ label, value, color, signed, suffix }: { label: string; value: number | string; color: string; signed?: boolean; suffix?: string }) {
+function SummaryPill({ label, value, color, signed, suffix, title }: { label: string; value: number | string; color: string; signed?: boolean; suffix?: string; title?: string }) {
   const numericValue = typeof value === 'number' ? value : null;
   return (
     <div>
       <div className="text-xs text-slate-500 mb-1">{label}</div>
-      <div className={`text-xl font-bold tabular-nums ${color}`}>
+      <div className={`text-xl font-bold tabular-nums ${color}`} title={title}>
         {signed && numericValue !== null && numericValue > 0 ? '+' : ''}
         {value}
         {numericValue !== null ? (suffix ?? '') : ''}

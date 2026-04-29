@@ -264,6 +264,7 @@ describe('Dashboard — agent probe smoke summary', () => {
         expect(screen.getByText('yes')).toBeInTheDocument();
         expect(screen.getByText('200')).toBeInTheDocument();
         expect(screen.getByText('req-12345678')).toBeInTheDocument();
+        expect(screen.getByText('req-12345678')).toHaveAttribute('title', 'req-1234567890');
         expect(screen.getByText(/URL: http:\/\/95\.67\.75\.146:9090\/health/i)).toBeInTheDocument();
       },
       { timeout: 5000 },

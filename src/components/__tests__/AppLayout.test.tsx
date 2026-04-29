@@ -239,6 +239,7 @@ describe('AppLayout — header', () => {
       metadata: {
         status: 'ok',
         generated_at: '2026-04-29T10:00:00Z',
+        request_id: 'req-global-probe-123',
       },
     });
 
@@ -247,6 +248,7 @@ describe('AppLayout — header', () => {
     await waitFor(() => {
       expect(screen.getByText(/Probe OK/i)).toBeInTheDocument();
     });
+    expect(screen.getByText(/Probe OK/i)).toHaveAttribute('title', expect.stringContaining('request_id: req-global-probe-123'));
   });
 });
 
