@@ -69,6 +69,15 @@ function isMixedContentAgentUrl(url: string): boolean {
   }
 }
 
+function isHttpsAgentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function toAgentErrorMessage(url: string, err: unknown): string {
   if (isMixedContentAgentUrl(url)) {
     return 'Blocked by browser policy: HTTPS app cannot fetch HTTP agent URL. Configure HTTPS/reverse-proxy for the agent endpoint.';
@@ -79,6 +88,9 @@ function toAgentErrorMessage(url: string, err: unknown): string {
   }
 
   if (err instanceof Error && /Failed to fetch/i.test(err.message)) {
+    if (isHttpsAgentUrl(url)) {
+      return 'HTTPS endpoint check failed (TLS/CORS). This agent port may be HTTP-only; configure HTTPS reverse-proxy and valid TLS cert for the health URL.';
+    }
     return 'Network/CORS error while checking agent health.';
   }
 

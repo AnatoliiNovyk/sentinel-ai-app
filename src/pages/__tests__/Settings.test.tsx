@@ -235,4 +235,27 @@ describe('Settings — Agent mixed content', () => {
     });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('shows TLS/CORS guidance for HTTPS agent URL when fetch fails', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        protocol: 'https:',
+        href: 'https://sentinel.local/settings',
+      },
+    });
+    const fetchSpy = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<Settings />);
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'https://95.67.75.146:9090/health' } });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/HTTPS endpoint check failed \(TLS\/CORS\)/i)).toBeInTheDocument();
+    });
+    expect(fetchSpy).toHaveBeenCalled();
+  });
 });

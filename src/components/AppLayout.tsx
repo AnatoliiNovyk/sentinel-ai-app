@@ -26,10 +26,20 @@ function isMixedContentAgentUrl(url: string): boolean {
   }
 }
 
+function isHttpsAgentUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function AgentStatus() {
   const [health, setHealth] = useState<AgentHealth | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [blockedByPolicy, setBlockedByPolicy] = useState(false);
+  const [tlsOrCorsHint, setTlsOrCorsHint] = useState(false);
   const [agentUrl, setAgentUrl] = useState<string>(() =>
     localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL,
   );
@@ -52,6 +62,7 @@ function AgentStatus() {
       }
       if (isMixedContentAgentUrl(latestUrl)) {
         setBlockedByPolicy(true);
+        setTlsOrCorsHint(false);
         setReachable(false);
         setHealth(null);
         return;
@@ -62,14 +73,17 @@ function AgentStatus() {
         setHealth(data);
         setReachable(true);
         setBlockedByPolicy(false);
+        setTlsOrCorsHint(false);
       } else {
         setReachable(false);
         setBlockedByPolicy(false);
+        setTlsOrCorsHint(false);
       }
     } catch {
       setReachable(false);
       setHealth(null);
       setBlockedByPolicy(false);
+      setTlsOrCorsHint(isHttpsAgentUrl(localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL));
     }
   }, [agentUrl]);
 
@@ -87,6 +101,7 @@ function AgentStatus() {
   const label =
     reachable === null ? 'Checking agent…' :
     blockedByPolicy ? 'Agent check blocked (HTTPS -> HTTP)' :
+    tlsOrCorsHint ? 'Agent HTTPS check failed (TLS/CORS)' :
     !reachable ? 'Agent offline' :
     `Agent online · ${health?.jobsProcessed ?? 0} jobs`;
 

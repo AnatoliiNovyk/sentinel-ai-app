@@ -145,6 +145,27 @@ describe('AppLayout — header', () => {
     });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('shows HTTPS TLS/CORS status when https agent URL check fails', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        protocol: 'https:',
+        href: 'https://sentinel.local/',
+      },
+    });
+    localStorage.setItem('agentHealthUrl', 'https://95.67.75.146:9090/health');
+    const fetchSpy = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent HTTPS check failed (TLS/CORS)')).toBeInTheDocument();
+    });
+    expect(fetchSpy).toHaveBeenCalled();
+  });
 });
 
 describe('AppLayout — Scans link', () => {
