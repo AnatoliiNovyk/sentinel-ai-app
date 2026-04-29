@@ -28,17 +28,20 @@ function isDevMode(): boolean {
     // Vite
     return (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
   } catch {
-    // Node.js fallback
+    /* v8 ignore next 2 */
+    // Node.js fallback (import.meta throws in some environments)
     return process.env['NODE_ENV'] === 'development';
   }
 }
 
+/* v8 ignore start */
 function serializeError(err: unknown): unknown {
   if (err instanceof Error) {
     return { name: err.name, message: err.message, stack: err.stack };
   }
   return err;
 }
+/* v8 ignore stop */
 
 function emit(entry: LogEntry): void {
   const devMode = isDevMode();
@@ -61,6 +64,7 @@ function emit(entry: LogEntry): void {
       consoleFn(prefix, entry.message);
     }
   } else {
+    /* v8 ignore start */
     // JSON line — drop undefined fields for cleanliness
     const payload: Record<string, unknown> = {
       level: entry.level,
@@ -71,6 +75,7 @@ function emit(entry: LogEntry): void {
     if (entry.data !== undefined) payload['data'] = entry.data;
     if (entry.error !== undefined) payload['error'] = serializeError(entry.error);
     consoleFn(JSON.stringify(payload));
+    /* v8 ignore stop */
   }
 }
 

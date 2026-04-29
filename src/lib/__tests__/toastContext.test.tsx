@@ -1,3 +1,7 @@
+// Use real implementation for this test file — setup.ts globally mocks useToast
+// but this file tests the real context internals
+vi.unmock('../toastContext');
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
@@ -52,28 +56,16 @@ describe('toastContext — useToasts', () => {
   });
 });
 
-describe('toastContext — useToast', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+describe('toastContext — error boundaries', () => {
+  it('useToast throws when used outside ToastProvider', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => renderHook(() => useToast())).toThrow(/useToast must be used inside/i);
+    consoleSpy.mockRestore();
   });
 
-  it('success helper adds a success toast', () => {
-    const { result } = renderHook(() => useToasts(), { wrapper });
-    const { result: toastResult } = renderHook(() => useToast(), {
-      wrapper: ({ children }: { children: React.ReactNode }) => (
-        <ToastProvider>
-          {children}
-        </ToastProvider>
-      ),
-    });
-    // useToast in isolation: just verify the helper calls addToast via its own context
-    // The toasts list is in toastResult's own provider, so we test via useToasts together
-    // Instead: test that calling success doesn't throw
-    expect(() => act(() => toastResult.current.success('test'))).not.toThrow();
-    expect(() => act(() => toastResult.current.error('test'))).not.toThrow();
-    expect(() => act(() => toastResult.current.info('test'))).not.toThrow();
-    expect(() => act(() => toastResult.current.warning('test'))).not.toThrow();
-    // suppress unused result warning
-    expect(result.current.toasts).toBeDefined();
+  it('useToasts throws when used outside ToastProvider', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => renderHook(() => useToasts())).toThrow(/useToasts must be used inside/i);
+    consoleSpy.mockRestore();
   });
 });
