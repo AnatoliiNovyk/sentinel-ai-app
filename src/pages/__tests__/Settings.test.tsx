@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Settings from '../Settings';
@@ -89,64 +89,64 @@ vi.mock('../../lib/agentHealth', () => ({
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-afterEach(() => {
+afterEach(async () => {
   mockProbeAuditRows.length = 0;
+  // Flush any pending async state updates to prevent act() warnings
+  await act(async () => {});
 });
 
 describe('Settings — layout', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
   it('renders "Settings" heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
   it('renders "Profile" section heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Profile')).toBeInTheDocument();
   });
 
   it('renders "Subscription" section heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Subscription')).toBeInTheDocument();
   });
 
   it('renders "Remediation SLA" section heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Remediation SLA')).toBeInTheDocument();
   });
 
   it('renders "Team Members" section heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Team Members')).toBeInTheDocument();
   });
 
   it('renders "Webhook Integrations" section heading', () => {
-    render(<Settings />);
     expect(screen.getByText('Webhook Integrations')).toBeInTheDocument();
   });
 });
 
 describe('Settings — Profile section', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
   it('email input is disabled and pre-filled from profile', () => {
-    render(<Settings />);
     const emailInput = screen.getByLabelText('Email') as HTMLInputElement;
     expect(emailInput).toBeDisabled();
     expect(emailInput.value).toBe('test@example.com');
   });
 
   it('full name input is pre-filled from profile', () => {
-    render(<Settings />);
     const fullNameInput = screen.getByLabelText('Full name') as HTMLInputElement;
     expect(fullNameInput.value).toBe('Jane Doe');
   });
 
   it('company input is pre-filled from profile', () => {
-    render(<Settings />);
     const companyInput = screen.getByLabelText('Company') as HTMLInputElement;
     expect(companyInput.value).toBe('Acme Corp');
   });
 
   it('full name input updates on change', () => {
-    render(<Settings />);
     const input = screen.getByLabelText('Full name') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'John Smith' } });
     expect(input.value).toBe('John Smith');
@@ -154,8 +154,11 @@ describe('Settings — Profile section', () => {
 });
 
 describe('Settings — Plans', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
   it('renders all four plan names', () => {
-    render(<Settings />);
     expect(screen.getAllByText('Free').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Basic')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
@@ -163,26 +166,26 @@ describe('Settings — Plans', () => {
   });
 
   it('shows "Current plan ✓" for active plan (free)', () => {
-    render(<Settings />);
     expect(screen.getByText('Current plan ✓')).toBeInTheDocument();
   });
 
   it('shows "Most Popular" badge on Pro plan', () => {
-    render(<Settings />);
     expect(screen.getByText('Most Popular')).toBeInTheDocument();
   });
 });
 
 describe('Settings — SLA section', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
   it('renders SLA input for Critical with value from DEFAULT_SLA_CONFIG', () => {
-    render(<Settings />);
     const criticalInput = screen.getByLabelText('Critical') as HTMLInputElement;
     expect(criticalInput).toBeInTheDocument();
     expect(Number(criticalInput.value)).toBeGreaterThan(0);
   });
 
   it('renders SLA inputs for all four severities', () => {
-    render(<Settings />);
     expect(screen.getByLabelText('Critical')).toBeInTheDocument();
     expect(screen.getByLabelText('High')).toBeInTheDocument();
     expect(screen.getByLabelText('Medium')).toBeInTheDocument();
@@ -191,18 +194,19 @@ describe('Settings — SLA section', () => {
 });
 
 describe('Settings — Team Members', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
   it('renders owner email in team list', () => {
-    render(<Settings />);
     expect(screen.getByText('test@example.com')).toBeInTheDocument();
   });
 
   it('renders "Owner" role badge', () => {
-    render(<Settings />);
     expect(screen.getByText('Owner')).toBeInTheDocument();
   });
 
   it('adds a new team member when Invite button clicked', () => {
-    render(<Settings />);
     const emailInput = screen.getByPlaceholderText('colleague@company.com') as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: 'colleague@acme.com' } });
     fireEvent.click(screen.getByRole('button', { name: /invite/i }));
@@ -212,23 +216,21 @@ describe('Settings — Team Members', () => {
 });
 
 describe('Settings — Save', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockUpdateEq.mockResolvedValue({ data: null, error: null });
+    await act(async () => { render(<Settings />); });
   });
 
   it('renders "Save changes" button', () => {
-    render(<Settings />);
     expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
   });
 
   it('calls supabase update when Save clicked', async () => {
-    render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(mockUpdateEq).toHaveBeenCalledWith('id', 'user-1'));
   });
 
   it('shows "Saved!" after successful save', async () => {
-    render(<Settings />);
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(
       () => expect(screen.getByRole('button', { name: /saved!/i })).toBeInTheDocument(),
@@ -282,7 +284,7 @@ describe('Settings — Agent mixed content', () => {
       via: 'gateway',
     });
 
-    render(<Settings />);
+    await act(async () => { render(<Settings />); });
     const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
     fireEvent.change(agentInput, { target: { value: 'http://95.67.75.146:9090/health' } });
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
@@ -310,7 +312,7 @@ describe('Settings — Agent mixed content', () => {
       via: 'direct',
     });
 
-    render(<Settings />);
+    await act(async () => { render(<Settings />); });
     const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
     fireEvent.change(agentInput, { target: { value: 'https://95.67.75.146:9090/health' } });
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
@@ -338,7 +340,7 @@ describe('Settings — Agent mixed content', () => {
       via: 'gateway',
     });
 
-    render(<Settings />);
+    await act(async () => { render(<Settings />); });
     const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
     fireEvent.change(agentInput, { target: { value: 'http://95.67.75.146:9090/health' } });
     fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
@@ -351,7 +353,10 @@ describe('Settings — Agent mixed content', () => {
 
   it('persists agent URL after blur and restores it after remount', async () => {
     localStorage.removeItem('agentHealthUrl');
-    const { unmount } = render(<Settings />);
+    let unmount!: () => void;
+    await act(async () => {
+      ({ unmount } = render(<Settings />));
+    });
 
     const input = screen.getByPlaceholderText('http://your-vps:9090/health') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'http://95.67.75.146:9090/health' } });
@@ -362,14 +367,14 @@ describe('Settings — Agent mixed content', () => {
     });
 
     unmount();
-    render(<Settings />);
+    await act(async () => { render(<Settings />); });
 
     const restored = screen.getByPlaceholderText('http://your-vps:9090/health') as HTMLInputElement;
     expect(restored.value).toBe('http://95.67.75.146:9090/health');
   });
 
-  it('shows latest probe smoke fallback values by default', () => {
-    render(<Settings />);
+  it('shows latest probe smoke fallback values by default', async () => {
+    await act(async () => { render(<Settings />); });
     expect(screen.getByText('Latest probe smoke')).toBeInTheDocument();
     expect(screen.getByText('Unknown')).toBeInTheDocument();
     expect(screen.getByText('Reachable')).toBeInTheDocument();

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ApiRateLimitsPanel } from '../ApiRateLimitsPanel';
 
@@ -23,6 +24,11 @@ const FREE_LIMITS = {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+afterEach(async () => {
+  // Flush any pending async state updates to prevent act() warnings
+  await act(async () => {});
+});
+
 describe('ApiRateLimitsPanel — loading state', () => {
   beforeEach(() => {
     // Never resolve so loading stays visible
@@ -30,8 +36,10 @@ describe('ApiRateLimitsPanel — loading state', () => {
     mockGetCurrentUsage.mockResolvedValue(0);
   });
 
-  it('shows "Loading rate limit information..." while fetching', () => {
-    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+  it('shows "Loading rate limit information..." while fetching', async () => {
+    await act(async () => {
+      render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+    });
     expect(screen.getByText(/Loading rate limit information/i)).toBeInTheDocument();
   });
 });
