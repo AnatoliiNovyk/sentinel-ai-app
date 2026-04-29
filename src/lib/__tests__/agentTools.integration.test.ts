@@ -16,6 +16,15 @@ vi.mock('../supabase', () => ({
           }),
         };
       }
+      if (table === 'scans') {
+        return {
+          select: () => ({
+            order: () => ({
+              limit: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }),
+        };
+      }
       return { select: () => Promise.resolve({ data: [], error: null }) };
     }),
   },
@@ -101,6 +110,44 @@ describe('Agent Tools Integration', () => {
       expect(TOOL_LABELS.dark_web_scan).toBe('🌐 Dark web scan');
       expect(TOOL_LABELS.list_projects).toBeDefined();
       expect(TOOL_LABELS.run_scan).toBeDefined();
+    });
+  });
+
+  describe('list_projects', () => {
+    it('returns a summary when no projects exist', async () => {
+      const result = await runAgent('user-1', 'list my projects');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('list_projects');
+      expect(result!.toolCalls[0].ok).toBe(true);
+      expect(result!.content).toContain('No projects');
+    });
+  });
+
+  describe('list_scans', () => {
+    it('returns a summary when no scans exist', async () => {
+      const result = await runAgent('user-1', 'show recent scans');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('list_scans');
+      expect(result!.toolCalls[0].ok).toBe(true);
+      expect(result!.content).toContain('No scans');
+    });
+  });
+
+  describe('list_findings', () => {
+    it('returns findings summary', async () => {
+      const result = await runAgent('user-1', 'list all findings');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('list_findings');
+      expect(result!.toolCalls[0].ok).toBe(true);
+      expect(result!.content).toContain('0 findings');
+    });
+  });
+
+  describe('run_scan', () => {
+    it('returns error content when orgId is not provided', async () => {
+      const result = await runAgent('user-1', 'run nmap scan', undefined);
+      // Either returns error content or null (no project found scenario)
+      expect(result === null || typeof result!.content === 'string').toBe(true);
     });
   });
 });

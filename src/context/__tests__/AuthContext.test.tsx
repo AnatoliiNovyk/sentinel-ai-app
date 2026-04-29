@@ -262,5 +262,113 @@ describe('AuthContext', () => {
 
       expect(mockSignOut).toHaveBeenCalled();
     });
+
+    it('sets user when auth callback fires with a session', async () => {
+      let capturedCb: ((event: string, session: unknown) => void) | undefined;
+      mockOnAuthStateChange.mockImplementation((cb: (event: string, session: unknown) => void) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+      // Return existing profile so the insert branch is skipped
+      mockProfilesSelect.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'user-1', email: 'test@example.com', full_name: 'Test' },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
+      let capturedUser: ReturnType<typeof useAuth>['user'] | undefined;
+      const TestComponent = () => {
+        const { user } = useAuth();
+        capturedUser = user;
+        return null;
+      };
+
+      await act(async () => {
+        render(<AuthProvider><TestComponent /></AuthProvider>);
+      });
+
+      const mockUser = { id: 'user-1', email: 'test@example.com', user_metadata: {} };
+      await act(async () => {
+        capturedCb!('SIGNED_IN', { user: mockUser });
+      });
+
+      expect(capturedUser).toEqual(mockUser);
+    });
+
+    it('clears profile and organizations on SIGNED_OUT event', async () => {
+      let capturedCb: ((event: string, session: unknown) => void) | undefined;
+      mockOnAuthStateChange.mockImplementation((cb: (event: string, session: unknown) => void) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+
+      let capturedAuth: ReturnType<typeof useAuth> | undefined;
+      const TestComponent = () => {
+        capturedAuth = useAuth();
+        return null;
+      };
+
+      await act(async () => {
+        render(<AuthProvider><TestComponent /></AuthProvider>);
+      });
+
+      await act(async () => {
+        capturedCb!('SIGNED_OUT', null);
+      });
+
+      expect(capturedAuth!.profile).toBeNull();
+      expect(capturedAuth!.organizations).toEqual([]);
+    });
+
+    it('fetches existing profile when user is set via auth callback', async () => {
+      const mockUser = { id: 'user-1', email: 'test@example.com', user_metadata: {} };
+
+      let capturedCb: ((event: string, session: unknown) => void) | undefined;
+      mockOnAuthStateChange.mockImplementation((cb: (event: string, session: unknown) => void) => {
+        capturedCb = cb;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+
+      mockProfilesSelect.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'user-1', email: 'test@example.com', full_name: 'Test User' },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
+      mockOrgsSelect.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: [{ id: 'org-1', name: 'Org One' }], error: null }),
+        }),
+      });
+
+      let capturedAuth: ReturnType<typeof useAuth> | undefined;
+      const TestComponent = () => {
+        capturedAuth = useAuth();
+        return null;
+      };
+
+      await act(async () => {
+        render(<AuthProvider><TestComponent /></AuthProvider>);
+      });
+
+      await act(async () => {
+        capturedCb!('SIGNED_IN', { user: mockUser });
+      });
+
+      await waitFor(() => {
+        expect(capturedAuth!.profile?.id).toBe('user-1');
+        expect(capturedAuth!.organizations).toHaveLength(1);
+      });
+    });
   });
 });
