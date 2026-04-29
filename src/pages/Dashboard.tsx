@@ -65,9 +65,7 @@ export default function Dashboard() {
       let probeQuery = supabase
         .from('audit_logs')
         .select('status,created_at,metadata')
-        .eq('action', 'agent_health_probe_smoke')
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .eq('action', 'agent_health_probe_smoke');
 
       if (organizations.length > 0) {
         probeQuery = probeQuery.eq('org_id', organizations[0].id);
@@ -75,7 +73,9 @@ export default function Dashboard() {
         probeQuery = probeQuery.eq('user_id', user.id);
       }
 
-      const probeRes = await probeQuery;
+      const probeRes = await probeQuery
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       setScans(scansRes.data ?? []);
       setProjects(projectsRes.data ?? []);

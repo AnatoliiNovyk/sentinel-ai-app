@@ -5,7 +5,7 @@ import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockNavigate, mockRemoveChannel, mockMakeChannel } = vi.hoisted(() => {
+const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows } = vi.hoisted(() => {
   const makeChannel = () => ({
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
@@ -15,6 +15,22 @@ const { mockNavigate, mockRemoveChannel, mockMakeChannel } = vi.hoisted(() => {
     mockNavigate: vi.fn(),
     mockRemoveChannel: vi.fn(),
     mockMakeChannel: vi.fn(makeChannel),
+    mockAuthState: {
+      user: null as { id: string } | null,
+      profile: {
+        id: 'user-1',
+        email: 'test@example.com',
+        full_name: 'Jane Doe',
+        company: 'Acme Corp',
+        plan: 'free',
+        sla_config: null,
+        avatar_url: null,
+        created_at: '2026-01-01T00:00:00Z',
+        sla_warned_at: null,
+      },
+      organizations: [] as { id: string }[],
+    },
+    mockProbeAuditRows: [] as unknown[],
   };
 });
 
@@ -25,14 +41,16 @@ vi.mock('react-router-dom', () => ({
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
 
-  // chain with: eq → order → limit
-  const makeChain = (data: unknown[]) => ({
-    eq: () => ({
-      order: () => ({
-        limit: () => Promise.resolve({ data, error: null }),
-      }),
-    }),
-  });
+  // generic chain with repeated eq() + order() + limit()
+  const makeQueryChain = (data: unknown[]) => {
+    const chain = {
+      eq: vi.fn(() => chain),
+      in: vi.fn(() => chain),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => Promise.resolve({ data, error: null })),
+    };
+    return chain;
+  };
 
   // chain with: eq → order (no limit)
   const makeChainNoLimit = (data: unknown[]) => ({
@@ -41,26 +59,16 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
     }),
   });
 
-  // chain with: eq → in → order → limit  (for scan_jobs)
-  const makeChainInFilter = (data: unknown[]) => ({
-    eq: () => ({
-      in: () => ({
-        order: () => ({
-          limit: () => Promise.resolve({ data, error: null }),
-        }),
-      }),
-    }),
-  });
-
   return {
     ...actual,
     supabase: {
       from: (table: string) => {
-        if (table === 'scans') return { select: () => makeChain([]) };
+        if (table === 'scans') return { select: () => makeQueryChain([]) };
         if (table === 'projects') return { select: () => makeChainNoLimit([]) };
-        if (table === 'vulnerabilities') return { select: () => makeChain([]) };
-        if (table === 'scan_jobs') return { select: () => makeChainInFilter([]) };
+        if (table === 'vulnerabilities') return { select: () => makeQueryChain([]) };
+        if (table === 'scan_jobs') return { select: () => makeQueryChain([]) };
         if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+        if (table === 'audit_logs') return { select: () => makeQueryChain(mockProbeAuditRows) };
         // sla-related writes
         return {
           update: () => ({ eq: () => ({ is: () => Promise.resolve({ data: null, error: null }) }) }),
@@ -74,19 +82,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
 });
 
 vi.mock('../../context/useAuth', () => {
-  const _user = null;
-  const _profile = {
-    id: 'user-1',
-    email: 'test@example.com',
-    full_name: 'Jane Doe',
-    company: 'Acme Corp',
-    plan: 'free',
-    sla_config: null,
-    avatar_url: null,
-    created_at: '2026-01-01T00:00:00Z',
-    sla_warned_at: null,
-  };
-  return { useAuth: () => ({ user: _user, profile: _profile, organizations: [] }) };
+  return { useAuth: () => ({ user: mockAuthState.user, profile: mockAuthState.profile, organizations: mockAuthState.organizations }) };
 });
 
 // Prevent global key listener side-effects during suite runs.
@@ -105,6 +101,9 @@ const renderDashboard = () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mockAuthState.user = null;
+  mockAuthState.organizations = [];
+  mockProbeAuditRows.length = 0;
 });
 
 describe('Dashboard — layout', () => {
@@ -236,6 +235,36 @@ describe('Dashboard — agent probe smoke summary', () => {
         expect(screen.getByText('HTTP')).toBeInTheDocument();
         expect(screen.getByText('Request ID')).toBeInTheDocument();
         expect(screen.getByText('Last run')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  it('renders latest successful probe details from audit logs for authenticated user', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.organizations = [{ id: 'org-1' }];
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-29T10:00:00Z',
+      metadata: {
+        status: 'ok',
+        reachable: true,
+        http_status: 200,
+        request_id: 'req-1234567890',
+        probed_url: 'http://95.67.75.146:9090/health',
+        generated_at: '2026-04-29T10:00:00Z',
+      },
+    });
+
+    renderDashboard();
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('OK')).toBeInTheDocument();
+        expect(screen.getByText('yes')).toBeInTheDocument();
+        expect(screen.getByText('200')).toBeInTheDocument();
+        expect(screen.getByText('req-12345678')).toBeInTheDocument();
+        expect(screen.getByText(/URL: http:\/\/95\.67\.75\.146:9090\/health/i)).toBeInTheDocument();
       },
       { timeout: 5000 },
     );
