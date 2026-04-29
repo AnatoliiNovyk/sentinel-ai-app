@@ -17,6 +17,16 @@ type TeamMember = {
   auth?: { users?: { email?: string } };
 };
 
+type ProbeSmokeStatus = {
+  status: 'ok' | 'error' | 'unknown';
+  reachable: boolean | null;
+  httpStatus: number | null;
+  requestId: string | null;
+  probedUrl: string | null;
+  error: string | null;
+  generatedAt: string | null;
+};
+
 export default function Dashboard() {
   const { user, profile, organizations } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +36,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [probeSmokeStatus, setProbeSmokeStatus] = useState<ProbeSmokeStatus>({
+    status: 'unknown',
+    reachable: null,
+    httpStatus: null,
+    requestId: null,
+    probedUrl: null,
+    error: null,
+    generatedAt: null,
+  });
   const [riskFilter, setRiskFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [findingsSearch, setFindingsSearch] = useState('');
   const [findingsSort, setFindingsSort] = useState<'severity' | 'newest' | 'oldest' | 'title'>('severity');
@@ -42,11 +61,47 @@ export default function Dashboard() {
         supabase.from('scan_jobs').select('id,scanner,target,status,created_at,project_id').eq('user_id', user.id).in('status', ['pending','running']).order('created_at', { ascending: false }).limit(20),
         organizations.length > 0 ? supabase.from('team_members').select('*,auth.users(email,user_metadata)').eq('org_id', organizations[0].id) : Promise.resolve({ data: [] }),
       ]);
+
+      let probeQuery = supabase
+        .from('audit_logs')
+        .select('status,created_at,metadata')
+        .eq('action', 'agent_health_probe_smoke')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (organizations.length > 0) {
+        probeQuery = probeQuery.eq('org_id', organizations[0].id);
+      } else {
+        probeQuery = probeQuery.eq('user_id', user.id);
+      }
+
+      const probeRes = await probeQuery;
+
       setScans(scansRes.data ?? []);
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
       setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
       setTeamMembers((teamRes.data ?? []) as TeamMember[]);
+
+      const probeRow = (probeRes.data ?? [])[0] as { created_at?: string; status?: string; metadata?: unknown } | undefined;
+      const probeMeta = (probeRow?.metadata && typeof probeRow.metadata === 'object')
+        ? (probeRow.metadata as Record<string, unknown>)
+        : null;
+
+      const normalizedStatus = probeMeta?.status === 'ok' || probeMeta?.status === 'error'
+        ? probeMeta.status
+        : (probeRow?.status === 'success' ? 'ok' : probeRow?.status === 'failure' ? 'error' : 'unknown');
+
+      setProbeSmokeStatus({
+        status: normalizedStatus,
+        reachable: typeof probeMeta?.reachable === 'boolean' ? probeMeta.reachable : null,
+        httpStatus: typeof probeMeta?.http_status === 'number' ? probeMeta.http_status : null,
+        requestId: typeof probeMeta?.request_id === 'string' ? probeMeta.request_id : null,
+        probedUrl: typeof probeMeta?.probed_url === 'string' ? probeMeta.probed_url : null,
+        error: typeof probeMeta?.error === 'string' ? probeMeta.error : null,
+        generatedAt: typeof probeMeta?.generated_at === 'string' ? probeMeta.generated_at : (probeRow?.created_at ?? null),
+      });
+
       setLoading(false);
     };
     fetchAll();
@@ -337,6 +392,52 @@ export default function Dashboard() {
           <SummaryPill label="P95 min" value={weeklySloSummary.p95Duration} color="text-violet-300" />
           <SummaryPill label="SLA breach %" value={weeklySloSummary.slaBreachRate} color="text-amber-300" suffix="%" />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold">Agent probe smoke</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Latest gateway `agent_health_probe` scheduled check</p>
+          </div>
+          <span className={`text-xs px-2.5 py-1 rounded-md border ${
+            probeSmokeStatus.status === 'ok'
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              : probeSmokeStatus.status === 'error'
+                ? 'bg-red-500/10 text-red-300 border-red-500/30'
+                : 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+          }`}>
+            {probeSmokeStatus.status === 'ok' ? 'OK' : probeSmokeStatus.status === 'error' ? 'Fail' : 'Unknown'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <SummaryPill
+            label="Reachable"
+            value={probeSmokeStatus.reachable === null ? 'n/a' : probeSmokeStatus.reachable ? 'yes' : 'no'}
+            color={probeSmokeStatus.reachable === true ? 'text-emerald-300' : probeSmokeStatus.reachable === false ? 'text-red-300' : 'text-slate-300'}
+          />
+          <SummaryPill
+            label="HTTP"
+            value={probeSmokeStatus.httpStatus ?? 'n/a'}
+            color={typeof probeSmokeStatus.httpStatus === 'number' && probeSmokeStatus.httpStatus < 400 ? 'text-emerald-300' : 'text-amber-300'}
+          />
+          <SummaryPill
+            label="Request ID"
+            value={probeSmokeStatus.requestId ? probeSmokeStatus.requestId.slice(0, 12) : 'n/a'}
+            color="text-slate-300"
+          />
+          <SummaryPill
+            label="Last run"
+            value={probeSmokeStatus.generatedAt ? new Date(probeSmokeStatus.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'n/a'}
+            color="text-slate-300"
+          />
+        </div>
+        {(probeSmokeStatus.error || probeSmokeStatus.probedUrl) && (
+          <div className="mt-3 text-xs text-slate-400 space-y-1">
+            {probeSmokeStatus.probedUrl && <div>URL: {probeSmokeStatus.probedUrl}</div>}
+            {probeSmokeStatus.error && <div className="text-amber-300">Error: {probeSmokeStatus.error}</div>}
+          </div>
+        )}
       </div>
 
       {/* ── Critical findings alert banner ──────────────────────────────── */}
@@ -1015,12 +1116,15 @@ function AreaTrendChart({ trend, max }: { trend: { day: string; label: string; o
   );
 }
 
-function SummaryPill({ label, value, color, signed, suffix }: { label: string; value: number; color: string; signed?: boolean; suffix?: string }) {
+function SummaryPill({ label, value, color, signed, suffix }: { label: string; value: number | string; color: string; signed?: boolean; suffix?: string }) {
+  const numericValue = typeof value === 'number' ? value : null;
   return (
     <div>
       <div className="text-xs text-slate-500 mb-1">{label}</div>
       <div className={`text-xl font-bold tabular-nums ${color}`}>
-        {signed && value > 0 ? '+' : ''}{value}{suffix ?? ''}
+        {signed && numericValue !== null && numericValue > 0 ? '+' : ''}
+        {value}
+        {numericValue !== null ? (suffix ?? '') : ''}
       </div>
     </div>
   );

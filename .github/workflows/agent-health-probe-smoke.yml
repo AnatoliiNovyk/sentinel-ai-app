@@ -71,6 +71,87 @@ jobs:
 
           Write-Host "request_id=$($json.request_id) reachable=$($json.reachable) http_status=$($json.http_status) status=$($json.status)"
 
+      - name: Persist probe status to audit log
+        if: always()
+        shell: pwsh
+        run: |
+          $envContent = Get-Content 'sentinel-agent/.env' -Raw
+
+          $getEnv = {
+            param([string]$text, [string]$key)
+            $match = [regex]::Match($text, "(?m)^$key\s*=\s*(.+)$")
+            if (-not $match.Success) { return '' }
+            return $match.Groups[1].Value.Trim().Trim('"').Trim("'")
+          }
+
+          $supabaseUrl = & $getEnv $envContent 'SUPABASE_URL'
+          $serviceKey = & $getEnv $envContent 'SUPABASE_SERVICE_ROLE_KEY'
+
+          if ([string]::IsNullOrWhiteSpace($supabaseUrl) -or [string]::IsNullOrWhiteSpace($serviceKey)) {
+            Write-Host 'Skip audit log persistence: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.'
+            exit 0
+          }
+
+          $headers = @{
+            'apikey' = $serviceKey
+            'Authorization' = "Bearer $serviceKey"
+            'Content-Type' = 'application/json'
+          }
+
+          $projectResp = Invoke-WebRequest -Method GET -Uri "$supabaseUrl/rest/v1/projects?select=id,org_id,user_id&limit=1" -Headers $headers -UseBasicParsing
+          if ($projectResp.StatusCode -ne 200) {
+            Write-Host "Skip audit log persistence: projects lookup HTTP=$($projectResp.StatusCode)."
+            exit 0
+          }
+
+          $projects = $projectResp.Content | ConvertFrom-Json
+          if ($null -eq $projects -or $projects.Count -eq 0) {
+            Write-Host 'Skip audit log persistence: no projects found to resolve org/user context.'
+            exit 0
+          }
+
+          $project = $projects[0]
+          $report = $null
+          if (Test-Path 'reports/agent-health-probe-smoke.json') {
+            $report = Get-Content 'reports/agent-health-probe-smoke.json' -Raw | ConvertFrom-Json
+          }
+
+          $probeStatus = if ($null -ne $report -and $report.status) { [string]$report.status } else { 'error' }
+          $auditStatus = if ($probeStatus -eq 'ok') { 'success' } else { 'failure' }
+
+          $metadata = @{
+            status = $probeStatus
+            reachable = if ($null -ne $report) { $report.reachable } else { $false }
+            http_status = if ($null -ne $report) { $report.http_status } else { $null }
+            request_id = if ($null -ne $report) { $report.request_id } else { $null }
+            probed_url = if ($null -ne $report) { $report.probed_url } else { $null }
+            error = if ($null -ne $report) { $report.error } else { 'probe report unavailable' }
+            generated_at = if ($null -ne $report) { $report.generated_at } else { (Get-Date).ToUniversalTime().ToString('o') }
+            workflow = '${{ github.workflow }}'
+            run_id = '${{ github.run_id }}'
+            run_number = '${{ github.run_number }}'
+          }
+
+          $payload = @{
+            org_id = [string]$project.org_id
+            user_id = [string]$project.user_id
+            action = 'agent_health_probe_smoke'
+            resource_type = 'workflow'
+            resource_id = '${{ github.run_id }}'
+            status = $auditStatus
+            error_code = if ($probeStatus -eq 'ok') { $null } else { 'AGENT_PROBE_SMOKE_FAILED' }
+            error_message = if ($probeStatus -eq 'ok') { $null } else { [string]$metadata.error }
+            metadata = $metadata
+            created_at = (Get-Date).ToUniversalTime().ToString('o')
+          }
+
+          $body = $payload | ConvertTo-Json -Depth 12
+          $insertResp = Invoke-WebRequest -Method POST -Uri "$supabaseUrl/rest/v1/audit_logs" -Headers $headers -Body $body -UseBasicParsing
+          if ($insertResp.StatusCode -lt 200 -or $insertResp.StatusCode -ge 300) {
+            throw "Audit log insert failed. HTTP=$($insertResp.StatusCode) body=$($insertResp.Content)"
+          }
+          Write-Host 'Probe smoke status persisted to audit_logs.'
+
       - name: Escalate probe failure
         if: failure() && secrets.OPERATIONAL_ALERT_WEBHOOK_URL != ''
         shell: pwsh

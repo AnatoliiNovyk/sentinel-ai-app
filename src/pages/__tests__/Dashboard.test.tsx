@@ -214,3 +214,30 @@ describe('Dashboard — weekly SLO/SLA summary', () => {
     );
   });
 });
+
+describe('Dashboard — agent probe smoke summary', () => {
+  it('renders agent probe smoke section', async () => {
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('Agent probe smoke')).toBeInTheDocument();
+        expect(screen.getByText('Latest gateway `agent_health_probe` scheduled check')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  it('shows unknown state placeholders by default', async () => {
+    renderDashboard();
+    await waitFor(
+      () => {
+        expect(screen.getByText('Unknown')).toBeInTheDocument();
+        expect(screen.getByText('Reachable')).toBeInTheDocument();
+        expect(screen.getByText('HTTP')).toBeInTheDocument();
+        expect(screen.getByText('Request ID')).toBeInTheDocument();
+        expect(screen.getByText('Last run')).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+  });
+});
