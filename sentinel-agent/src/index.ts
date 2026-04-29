@@ -4,13 +4,28 @@ import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as http from 'http';
+import { resolve } from 'path';
+
+// Support both agent-root and dist runtime locations.
 dotenv.config();
+dotenv.config({ path: resolve(__dirname, '../.env') });
 
 const execFileAsync = promisify(execFile);
 
-const SUPABASE_URL    = process.env.SUPABASE_URL!;
-const SERVICE_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const AGENT_SECRET    = process.env.AGENT_SECRET!;
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `[agent-config] Missing required environment variable: ${name}. ` +
+      'Create/update sentinel-agent/.env from sentinel-agent/.env.example and restart the agent.',
+    );
+  }
+  return value;
+}
+
+const SUPABASE_URL    = getRequiredEnv('SUPABASE_URL');
+const SERVICE_KEY     = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+const AGENT_SECRET    = getRequiredEnv('AGENT_SECRET');
 const BASE_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 30_000;
 const REPORT_MAX_ATTEMPTS = 4;
