@@ -281,9 +281,13 @@ export default function Settings() {
 
       setAgentHealth(null);
       if (probe.error) {
-        setAgentError(toAgentErrorMessage(normalizedUrl, new Error(probe.error)));
+        if (probe.via === 'gateway') {
+          setAgentError(`Gateway probe failed: ${probe.error}`);
+        } else {
+          setAgentError(toAgentErrorMessage(normalizedUrl, new Error(probe.error)));
+        }
       } else if (probe.statusCode !== null) {
-        setAgentError(`HTTP ${probe.statusCode}`);
+        setAgentError(probe.via === 'gateway' ? `Gateway probe HTTP ${probe.statusCode}` : `HTTP ${probe.statusCode}`);
       } else {
         setAgentError(toAgentErrorMessage(normalizedUrl, null));
       }

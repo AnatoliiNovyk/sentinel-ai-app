@@ -24,11 +24,17 @@ export function isHttpsAgentUrl(url: string): boolean {
   }
 }
 
-async function probeViaGateway(url: string): Promise<AgentProbeResult | null> {
+async function probeViaGateway(url: string): Promise<AgentProbeResult> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   if (!supabaseUrl || !anonKey) {
-    return null;
+    return {
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: 'Gateway probe unavailable: missing Supabase env configuration.',
+      via: 'gateway',
+    };
   }
 
   try {
@@ -42,11 +48,20 @@ async function probeViaGateway(url: string): Promise<AgentProbeResult | null> {
       signal: AbortSignal.timeout(8_000),
     });
 
+    const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return null;
+      const message = typeof body?.error?.message === 'string'
+        ? body.error.message
+        : `Gateway probe HTTP ${res.status}`;
+      return {
+        reachable: false,
+        statusCode: res.status,
+        health: null,
+        error: message,
+        via: 'gateway',
+      };
     }
 
-    const body = await res.json();
     return {
       reachable: Boolean(body?.reachable),
       statusCode: typeof body?.http_status === 'number' ? body.http_status : null,
@@ -54,8 +69,15 @@ async function probeViaGateway(url: string): Promise<AgentProbeResult | null> {
       error: typeof body?.error === 'string' ? body.error : null,
       via: 'gateway',
     };
-  } catch {
-    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Gateway probe request failed.';
+    return {
+      reachable: false,
+      statusCode: null,
+      health: null,
+      error: message,
+      via: 'gateway',
+    };
   }
 }
 
@@ -81,7 +103,7 @@ export async function probeAgentHealth(url: string): Promise<AgentProbeResult> {
       };
     } catch (err) {
       const gatewayFallback = await probeViaGateway(normalizedUrl);
-      if (gatewayFallback) {
+      if (gatewayFallback.reachable) {
         return gatewayFallback;
       }
 
@@ -97,15 +119,5 @@ export async function probeAgentHealth(url: string): Promise<AgentProbeResult> {
   }
 
   const gatewayProbe = await probeViaGateway(normalizedUrl);
-  if (gatewayProbe) {
-    return gatewayProbe;
-  }
-
-  return {
-    reachable: false,
-    statusCode: null,
-    health: null,
-    error: 'Blocked by browser policy: HTTPS app cannot fetch HTTP agent URL. Configure HTTPS/reverse-proxy for the agent endpoint.',
-    via: 'direct',
-  };
+  return gatewayProbe;
 }

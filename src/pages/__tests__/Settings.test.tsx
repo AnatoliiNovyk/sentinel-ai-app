@@ -297,6 +297,34 @@ describe('Settings — Agent mixed content', () => {
     expect(mockProbeAgentHealth).toHaveBeenCalled();
   });
 
+  it('shows gateway probe error for mixed-content URL when gateway probe fails', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        protocol: 'https:',
+        href: 'https://sentinel.local/settings',
+      },
+    });
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: false,
+      statusCode: 401,
+      health: null,
+      error: 'Valid admin key is required.',
+      via: 'gateway',
+    });
+
+    render(<Settings />);
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'http://95.67.75.146:9090/health' } });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Gateway probe failed:/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Blocked by browser policy/i)).not.toBeInTheDocument();
+  });
+
   it('persists agent URL after blur and restores it after remount', async () => {
     localStorage.removeItem('agentHealthUrl');
     const { unmount } = render(<Settings />);
