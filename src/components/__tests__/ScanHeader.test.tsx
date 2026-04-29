@@ -64,8 +64,8 @@ describe('ScanHeader — mode badge', () => {
   });
 
   it('shows "⚠ DEMO MODE" badge in MOCK mode', () => {
-    render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" />);
-    expect(screen.getByText('⚠ DEMO MODE')).toBeInTheDocument();
+    render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" agentReachable={false} />);
+    expect(screen.getByText('DEMO MODE')).toBeInTheDocument();
   });
 
   it('shows "Mode: UNKNOWN" badge when mode is UNKNOWN', () => {

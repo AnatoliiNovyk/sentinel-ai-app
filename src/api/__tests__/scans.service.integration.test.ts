@@ -20,6 +20,7 @@ vi.mock('../client', () => {
             order: () => Promise.resolve({ data: [], error: null }),
           }),
         }),
+        update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
       };
     }
     if (table === 'vulnerabilities') {
@@ -43,6 +44,9 @@ vi.mock('../client', () => {
 
   return {
     supabase: {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }),
+      },
       from: mockFrom,
       functions: {
         invoke: vi.fn(() => Promise.resolve({ data: { job_id: 'job-123' }, error: null })),

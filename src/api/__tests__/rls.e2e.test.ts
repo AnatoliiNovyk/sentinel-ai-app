@@ -95,6 +95,9 @@ vi.mock('../client', () => {
                 }),
             }),
           });
+          (chain as Record<string, unknown>)['update'] = () => ({
+            eq: () => Promise.resolve({ data: null, error: null }),
+          });
           return chain;
         }
         if (table === 'vulnerabilities') {

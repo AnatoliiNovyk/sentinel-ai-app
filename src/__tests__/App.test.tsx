@@ -72,11 +72,11 @@ describe('App', () => {
   });
 
   describe('share token', () => {
-    it('renders PublicReport when share token is in URL (no auth required)', () => {
+    it('renders PublicReport when share token is in URL (no auth required)', async () => {
       vi.stubGlobal('location', { ...window.location, search: '?share=abc123' });
       mockUseAuth.mockReturnValue({ user: null, loading: false });
       render(<App />);
-      expect(screen.getByText('Public Report: abc123')).toBeInTheDocument();
+      expect(await screen.findByText('Public Report: abc123')).toBeInTheDocument();
     });
 
     it('renders PublicReport even for authenticated users with share token', () => {
@@ -88,18 +88,18 @@ describe('App', () => {
   });
 
   describe('unauthenticated routing', () => {
-    it('renders Landing page at /landing route for unauthenticated user', () => {
+    it('renders Landing page at /landing route for unauthenticated user', async () => {
       window.history.pushState({}, '', '/landing');
       mockUseAuth.mockReturnValue({ user: null, loading: false });
       render(<App />);
-      expect(screen.getByText('Landing Page')).toBeInTheDocument();
+      expect(await screen.findByText('Landing Page')).toBeInTheDocument();
     });
 
-    it('renders Auth page at /auth route for unauthenticated user', () => {
+    it('renders Auth page at /auth route for unauthenticated user', async () => {
       window.history.pushState({}, '', '/auth');
       mockUseAuth.mockReturnValue({ user: null, loading: false });
       render(<App />);
-      expect(screen.getByText('Auth Page')).toBeInTheDocument();
+      expect(await screen.findByText('Auth Page')).toBeInTheDocument();
     });
 
     it('does not render AppLayout for unauthenticated user', () => {
@@ -111,10 +111,10 @@ describe('App', () => {
   });
 
   describe('authenticated routing', () => {
-    it('renders AppLayout for authenticated user', () => {
+    it('renders AppLayout for authenticated user', async () => {
       mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
       render(<App />);
-      expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+      expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
     });
 
     it('renders Dashboard at index route for authenticated user', () => {

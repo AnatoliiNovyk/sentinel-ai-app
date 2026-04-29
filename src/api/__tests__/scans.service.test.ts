@@ -4,20 +4,26 @@ import { ScansService } from '../scans.service';
 // ── Mock Supabase client ───────────────────────────────────────────────────
 // vi.hoisted() ensures these are available when vi.mock factory runs (before module init)
 
-const { mockSingle, mockSelect, mockInsert, mockEq, mockOrder, mockInvoke } = vi.hoisted(() => ({
+const { mockSingle, mockSelect, mockInsert, mockEq, mockOrder, mockInvoke, mockGetUser, mockUpdate } = vi.hoisted(() => ({
   mockSingle: vi.fn(),
   mockSelect: vi.fn(),
   mockInsert: vi.fn(),
   mockEq: vi.fn(),
   mockOrder: vi.fn(),
   mockInvoke: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockUpdate: vi.fn(),
 }));
 
 vi.mock('../client', () => ({
   supabase: {
+    auth: {
+      getUser: mockGetUser,
+    },
     from: () => ({
       select: mockSelect,
       insert: mockInsert,
+      update: mockUpdate,
     }),
     functions: {
       invoke: mockInvoke,
@@ -28,6 +34,11 @@ vi.mock('../client', () => ({
 // Reset all mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: authenticated user
+  mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+  // Default: update().eq() resolves ok
+  mockUpdate.mockReturnValue({ eq: mockEq });
+  mockEq.mockResolvedValue({ data: null, error: null });
 });
 
 // ── getProjects ────────────────────────────────────────────────────────────

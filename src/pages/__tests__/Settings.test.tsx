@@ -395,7 +395,7 @@ describe('Settings — Agent mixed content', () => {
       expect(screen.getByText('OK')).toBeInTheDocument();
       expect(screen.getByText('yes')).toBeInTheDocument();
       expect(screen.getByText('200')).toBeInTheDocument();
-      expect(screen.getByText('req-settings-')).toHaveAttribute('title', 'req-settings-probe-123456');
+      expect(screen.getByText('req-settings')).toHaveAttribute('title', 'req-settings-probe-123456');
     });
   });
 });

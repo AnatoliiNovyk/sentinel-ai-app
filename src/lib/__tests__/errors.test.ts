@@ -9,7 +9,7 @@ describe('errorToUserMessage', () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(msg).toContain('mock mode');
+    expect(msg).toContain('Scan service unavailable');
   });
 
   it('returns fallback message for unknown errors', () => {
