@@ -96,3 +96,10 @@
 - [x] Додано global visibility probe smoke у хедері (`AppLayout`): компактний status badge `Probe OK/Fail/n/a` з relative-time; також оновлено Dashboard `Last run` до relative-time і додано тест AppLayout на рендер probe badge з `audit_logs` (`src/components/AppLayout.tsx`, `src/pages/Dashboard.tsx`, `src/components/__tests__/AppLayout.test.tsx`).
 - [x] Додано request-id triage polish: tooltip з повним `request_id` у global probe badge (`AppLayout`) і в Dashboard `Request ID` pill; додано регресійні тести на tooltip (`src/components/AppLayout.tsx`, `src/pages/Dashboard.tsx`, `src/components/__tests__/AppLayout.test.tsx`, `src/pages/__tests__/Dashboard.test.tsx`).
 - [x] Додано видимість `Latest probe smoke` у `Settings` (Agent Configuration): read-only status card з полями Reachable/HTTP/Request ID/Last run і relative-time; додано тести на fallback `Unknown` та на hydrated дані з `audit_logs` (`src/pages/Settings.tsx`, `src/pages/__tests__/Settings.test.tsx`).
+
+## Batch-285 (2026-04-29)
+- [x] Посилено CI/CD critical gates: GitHub Actions snippet має `fail-on-critical: true`, GitLab CI snippet має `--fail-on-critical` flag (`src/pages/Integrations.tsx`).
+- [x] Додано Issue Tracker Templates для Jira, Trello, ServiceNow: JSON-шаблони з полями severity/assignee/labels/due_date та кнопкою Copy в секції `Integrations` (`src/pages/Integrations.tsx`).
+- [x] Додано Phishing Drill Plan модуль у OSINT Analyzer (DarkWebMonitor): показує 3 сценарії (Credential Harvest Email, Executive Impersonation, Password Reset Phishing) на основі risky breach результатів, з Copy-кнопкою (`src/pages/DarkWebMonitor.tsx`).
+- [x] Додано 10 нових тестів: 6 для Issue Tracker Templates, 4 для Phishing Drill Plan; всього 33/33 тестів проходять (`src/pages/__tests__/Integrations.test.tsx`, `src/pages/__tests__/DarkWebMonitor.test.tsx`).
+- [x] Commit `2cd5bc1` запушено в `origin/main`.

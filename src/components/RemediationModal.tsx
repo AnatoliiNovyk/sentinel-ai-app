@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Terminal, Copy, Check, ExternalLink, ChevronRight, Shield, GitBranch, Cloud, Code2 } from 'lucide-react';
+import { X, Terminal, Copy, Check, ExternalLink, ChevronRight, Shield, GitBranch, Cloud, Code2, Zap, ChevronDown } from 'lucide-react';
 import { Vulnerability } from '../lib/supabase';
 
 type Step = { label: string; command?: string; note?: string };
@@ -41,6 +41,48 @@ function getSteps(v: Vulnerability): Step[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Auto-Remediation Dry-Run Playbook (preview only — no commands are executed)
+// ---------------------------------------------------------------------------
+type PlaybookEntry = { label: string; command: string };
+
+function getAutoPlaybook(vuln: Vulnerability): PlaybookEntry[] {
+  const asset = vuln.asset ?? '';
+  // Heuristic: extract bare IP or hostname from "host:port", "ip/cidr", etc.
+  const raw = asset.split(':')[0].split('/')[0].trim() || 'TARGET';
+
+  const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(raw);
+  const targetLabel = isIp ? raw : `$(dig +short ${raw} | head -1)`;
+
+  const entries: PlaybookEntry[] = [
+    {
+      label: 'Block inbound traffic (iptables)',
+      command: `# DRY RUN – review before executing\niptables -I INPUT -s ${targetLabel} -j DROP\niptables -I FORWARD -s ${targetLabel} -j DROP`,
+    },
+    {
+      label: 'Block inbound traffic (ufw)',
+      command: `# DRY RUN – review before executing\nufw deny from ${raw} to any`,
+    },
+    {
+      label: 'Revoke AWS Security Group ingress (aws-cli)',
+      command: `# DRY RUN – replace SG_ID and PORT\naws ec2 revoke-security-group-ingress \\\n  --group-id SG_ID \\\n  --protocol tcp \\\n  --port PORT \\\n  --cidr ${raw}/32`,
+    },
+  ];
+
+  if (vuln.cve_id) {
+    entries.push({
+      label: `Apply OS patch for ${vuln.cve_id} (apt)`,
+      command: `# DRY RUN – verify package name for your distro\napt-get update && apt-get install --only-upgrade <affected-package>`,
+    });
+    entries.push({
+      label: `Apply OS patch for ${vuln.cve_id} (yum/dnf)`,
+      command: `# DRY RUN – verify package name for your distro\nyum update <affected-package>`,
+    });
+  }
+
+  return entries;
+}
+
 const TYPE_META: Record<string, { label: string; icon: typeof Terminal; color: string }> = {
   terraform: { label: 'Terraform', icon: Code2, color: 'text-violet-400 border-violet-500/30 bg-violet-500/10' },
   hcl:       { label: 'Terraform', icon: Code2, color: 'text-violet-400 border-violet-500/30 bg-violet-500/10' },
@@ -62,7 +104,10 @@ const SEV_COLOR: Record<string, string> = {
 export default function RemediationModal({ vuln, onClose }: { vuln: Vulnerability; onClose: () => void }) {
   const [copied, setCopied] = useState<number | null>(null);
   const [completed, setCompleted] = useState<Set<number>>(new Set());
+  const [playbookOpen, setPlaybookOpen] = useState(false);
+  const [copiedPlaybook, setCopiedPlaybook] = useState<number | null>(null);
   const steps = getSteps(vuln);
+  const autoPlaybook = getAutoPlaybook(vuln);
   const meta = TYPE_META[vuln.remediation_type] ?? TYPE_META.manual;
   const Icon = meta.icon;
   const progress = Math.round((completed.size / steps.length) * 100);
@@ -71,6 +116,11 @@ export default function RemediationModal({ vuln, onClose }: { vuln: Vulnerabilit
     navigator.clipboard.writeText(text);
     setCopied(idx);
     setTimeout(() => setCopied(null), 2000);
+  };
+  const copyPlaybook = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedPlaybook(idx);
+    setTimeout(() => setCopiedPlaybook(null), 2000);
   };
   const toggle = (i: number) => setCompleted(prev => {
     const next = new Set(prev);
@@ -137,9 +187,43 @@ export default function RemediationModal({ vuln, onClose }: { vuln: Vulnerabilit
           ))}
         </div>
 
+        {/* Auto-Remediation Dry-Run Playbook */}
+        <div className="border-t border-slate-800">
+          <button
+            onClick={() => setPlaybookOpen(o => !o)}
+            className="w-full flex items-center gap-2 px-6 py-3 text-left hover:bg-slate-900/40 transition"
+            aria-expanded={playbookOpen}
+          >
+            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-sm font-medium text-amber-400">Auto-Remediation Playbook</span>
+            <span className="ml-1 text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">DRY RUN</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-500 ml-auto transition-transform ${playbookOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {playbookOpen && (
+            <div className="px-6 pb-4 space-y-3">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Preview-only commands generated from vulnerability context. <strong className="text-amber-400">Review and test</strong> in a staging environment before executing in production.
+              </p>
+              {autoPlaybook.map((entry, i) => (
+                <div key={i} className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800">
+                    <span className="text-[11px] text-slate-400 font-medium">{entry.label}</span>
+                    <button
+                      onClick={() => copyPlaybook(entry.command, i)}
+                      className="text-[10px] text-slate-500 hover:text-white flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded transition"
+                    >
+                      {copiedPlaybook === i ? <><Check className="w-3 h-3" />Copied</> : <><Copy className="w-3 h-3" />Copy</>}
+                    </button>
+                  </div>
+                  <pre className="font-mono text-xs text-amber-300/80 p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed">{entry.command}</pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between gap-3">
-          {vuln.cve_id && (
-            <a href={`https://nvd.nist.gov/vuln/detail/${vuln.cve_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition">
+          {vuln.cve_id && (            <a href={`https://nvd.nist.gov/vuln/detail/${vuln.cve_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition">
               <ExternalLink className="w-3 h-3" />{vuln.cve_id} on NVD
             </a>
           )}

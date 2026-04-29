@@ -118,6 +118,41 @@ describe('RemediationModal — progress & steps', () => {
   });
 });
 
+describe('RemediationModal — Auto-Remediation Playbook', () => {
+  it('renders playbook toggle button', () => {
+    render(<RemediationModal vuln={makeVuln()} onClose={vi.fn()} />);
+    expect(screen.getByText('Auto-Remediation Playbook')).toBeInTheDocument();
+    expect(screen.getByText('DRY RUN')).toBeInTheDocument();
+  });
+
+  it('does not show playbook entries before toggle is clicked', () => {
+    render(<RemediationModal vuln={makeVuln()} onClose={vi.fn()} />);
+    expect(screen.queryByText(/Block inbound traffic \(iptables\)/i)).not.toBeInTheDocument();
+  });
+
+  it('expands playbook entries when toggle is clicked', () => {
+    render(<RemediationModal vuln={makeVuln({ asset: '10.0.0.1' })} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+    expect(screen.getByText(/Block inbound traffic \(iptables\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Block inbound traffic \(ufw\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Revoke AWS Security Group ingress/i)).toBeInTheDocument();
+  });
+
+  it('shows CVE patch entries when cve_id is set', () => {
+    render(<RemediationModal vuln={makeVuln({ cve_id: 'CVE-2024-0001', asset: '192.168.1.1' })} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+    expect(screen.getByText(/Apply OS patch for CVE-2024-0001 \(apt\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Apply OS patch for CVE-2024-0001 \(yum\/dnf\)/i)).toBeInTheDocument();
+  });
+
+  it('shows preview warning note after expanding', () => {
+    render(<RemediationModal vuln={makeVuln()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+    expect(screen.getByText(/Preview-only commands/i)).toBeInTheDocument();
+  });
+});
+
+
 describe('RemediationModal — close interactions', () => {
   it('calls onClose when X button clicked', () => {
     const onClose = vi.fn();
