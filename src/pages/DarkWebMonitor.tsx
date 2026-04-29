@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X, BarChart2, ShieldOff, ShieldCheck, Clock } from 'lucide-react';
+import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X, BarChart2, ShieldOff, ShieldCheck, Clock, Copy, Check } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
 import { downloadFile } from '../lib/exporters';
@@ -19,8 +19,10 @@ export default function OsintAnalyzer() {
   const [results, setResults] = useState<ScanHistory[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [showRiskChart, setShowRiskChart] = useState(false);
+  const [showPhishingDrill, setShowPhishingDrill] = useState(false);
   const [sevFilter, setSevFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'risk_desc' | 'risk_asc' | 'query'>('newest');
+  const [copiedDrill, setCopiedDrill] = useState<string | null>(null);
   const toast = useToast();
 
   const visibleResults = useMemo(() => {
@@ -61,6 +63,62 @@ export default function OsintAnalyzer() {
     low:      results.filter(r => !r.error && r.result.riskLevel === 'low').length,
     totalBreaches: results.reduce((acc, r) => acc + (!r.error ? (r.result.breachCount ?? 0) : 0), 0),
   }), [results]);
+
+  // Phishing drill scenarios
+  const phishingScenarios = useMemo(() => [
+    {
+      id: 'credential-harvest',
+      name: 'Credential Harvest',
+      cadence: 'Weekly',
+      scenario: `Participants receive emails impersonating company IT department requesting password verification. Realistic formatting mimics actual internal communications with domain spoofing. Links redirect to near-identical login pages capturing credentials. Track click rates, submission rates, and time-to-report.`,
+      objective: 'Assess user susceptibility to urgent credential requests and verification phishing tactics.',
+    },
+    {
+      id: 'bec-pretexting',
+      name: 'Business Email Compromise',
+      cadence: 'Bi-weekly',
+      scenario: `CEO/CFO impersonation requesting urgent wire transfers or sensitive data. Uses urgency tactics ("ASAP - Do not forward") and references real projects/clients from LinkedIn. Includes spoofed executive signatures and legitimate-looking payment request templates.`,
+      objective: 'Evaluate organizational resilience to high-impact CEO fraud and BEC attack patterns.',
+    },
+    {
+      id: 'typosquatting',
+      name: 'Domain Typosquatting',
+      cadence: 'Monthly',
+      scenario: `Emails from look-alike domains (vendor.co vs vendor.com, microosft vs microsoft) requesting quote updates or system access. Includes realistic invoices, meeting confirmations, or software license renewals. Tests attention to domain details and email verification practices.`,
+      objective: 'Measure detection of homograph attacks and domain verification awareness.',
+    },
+    {
+      id: 'watering-hole',
+      name: 'Watering Hole',
+      cadence: 'Monthly',
+      scenario: `Compromised industry news site or industry tool portal distributing malicious browser plugins promising enhanced security. Appears in industry forums and shared with peers. Attempts to gather browser history, corporate credentials, or MFA tokens.`,
+      objective: 'Test awareness of software supply chain risks and suspicious plugin installation.',
+    },
+    {
+      id: 'smishing-vishing',
+      name: 'Smishing & Vishing Campaign',
+      cadence: 'Bi-weekly',
+      scenario: `SMS/voice calls claiming urgent account action needed or package delivery failed. Vishing calls from "company IT" with social engineering to bypass MFA. Smishing links redirect to credential capture or malware distribution points.`,
+      objective: 'Assess response to non-email channel attacks and voice-based social engineering.',
+    },
+  ], []);
+
+  // Determine if risky results exist for phishing drill display
+  const latestRiskyResult = useMemo(() => {
+    const risky = results.find(r => 
+      !r.error && (
+        (r.result.breachCount ?? 0) > 0 || 
+        ['critical', 'high'].includes(r.result.riskLevel ?? '')
+      )
+    );
+    return risky;
+  }, [results]);
+
+  const copyDrill = useCallback((text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedDrill(id);
+    setTimeout(() => setCopiedDrill(null), 2000);
+  }, []);
 
   const exportCsv = useCallback(() => {
     const rows = ['Query,BreachCount,RiskScore,RiskLevel,ScannedAt'];
@@ -245,6 +303,50 @@ export default function OsintAnalyzer() {
               </div>
             )}
           </div>
+
+          {/* Phishing Drill Plan */}
+          {latestRiskyResult && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+              <button
+                onClick={() => setShowPhishingDrill(p => !p)}
+                className="flex items-center gap-2 w-full text-left"
+              >
+                <AlertTriangle className="w-4 h-4 text-orange-400" />
+                <span className="text-sm font-semibold text-slate-200">Phishing Drill Plan</span>
+                <span className="text-xs text-slate-500 ml-auto">{showPhishingDrill ? '▲ collapse' : '▼ expand'}</span>
+              </button>
+              {showPhishingDrill && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-xs text-slate-400 mb-4">
+                    Based on detected threat exposure (<strong>{latestRiskyResult.result.riskLevel?.toUpperCase()}</strong> risk, {latestRiskyResult.result.breachCount ?? 0} breach(es)), 
+                    consider running controlled phishing simulations to raise awareness:
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {phishingScenarios.map((scenario) => (
+                      <div key={scenario.id} className="border border-slate-700 rounded-lg bg-slate-800/20 p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-100">{scenario.name}</h4>
+                            <p className="text-xs text-slate-500">Cadence: {scenario.cadence}</p>
+                          </div>
+                          <button
+                            onClick={() => copyDrill(scenario.scenario, `drill-${scenario.id}`)}
+                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white transition bg-slate-700/50 px-2 py-1.5 rounded"
+                          >
+                            {copiedDrill === `drill-${scenario.id}`
+                              ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</>
+                              : <><Copy className="w-3 h-3" /> Copy</>}
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">{scenario.scenario}</p>
+                        <p className="text-xs text-slate-600 mt-2 italic">Objective: {scenario.objective}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-white">Analysis Results</h2>

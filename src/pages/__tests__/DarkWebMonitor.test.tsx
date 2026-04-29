@@ -23,6 +23,7 @@ describe('OsintAnalyzer (DarkWebMonitor)', () => {
   beforeEach(() => {
     mockScan.mockReset();
     mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
   });
 
   it('renders OSINT Analyzer heading', () => {
@@ -120,5 +121,72 @@ describe('OsintAnalyzer (DarkWebMonitor)', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(screen.getByText(/Rate limit exceeded/i)).toBeInTheDocument());
+  });
+});
+
+describe('OsintAnalyzer — Phishing Drill Plan', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('does NOT show Phishing Drill Plan panel before any scan', () => {
+    render(<OsintAnalyzer />);
+    expect(screen.queryByText('Phishing Drill Plan')).not.toBeInTheDocument();
+  });
+
+  it('does NOT show Phishing Drill Plan panel when scan has no breaches', async () => {
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: { breachCount: 0, breaches: [], scannedAt: '2026-04-29T00:00:00Z', riskScore: 0, riskLevel: 'low', recommendedActions: [] },
+    });
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: 'clean@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Analysis Results')).toBeInTheDocument());
+    expect(screen.queryByText('Phishing Drill Plan')).not.toBeInTheDocument();
+  });
+
+  it('shows Phishing Drill Plan panel when scan returns high-risk breach result', async () => {
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: {
+        breachCount: 2,
+        breaches: [
+          { source: 'LinkedIn', severity: 'high', dataClasses: ['email', 'password'], breachDate: '2021-01-01' },
+        ],
+        scannedAt: '2026-04-29T00:00:00Z',
+        riskScore: 80,
+        riskLevel: 'high',
+        recommendedActions: ['Change passwords'],
+      },
+    });
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: 'victim@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Phishing Drill Plan')).toBeInTheDocument());
+  });
+
+  it('expands Phishing Drill Plan when toggle button clicked', async () => {
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: {
+        breachCount: 1,
+        breaches: [{ source: 'Adobe', severity: 'critical', dataClasses: ['email'], breachDate: '2020-06-01' }],
+        scannedAt: '2026-04-29T00:00:00Z',
+        riskScore: 90,
+        riskLevel: 'critical',
+        recommendedActions: ['Rotate credentials'],
+      },
+    });
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: 'hacked@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Phishing Drill Plan')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Phishing Drill Plan'));
+    await waitFor(() =>
+      expect(screen.getByText(/running controlled phishing simulations/i)).toBeInTheDocument()
+    );
   });
 });

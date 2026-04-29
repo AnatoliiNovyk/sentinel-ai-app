@@ -99,3 +99,42 @@ describe('Integrations — copy buttons', () => {
     );
   });
 });
+
+describe('Integrations — Issue Tracker Templates', () => {
+  it('renders "Issue Tracker Templates" section heading', () => {
+    render(<Integrations />);
+    expect(screen.getByText('Issue Tracker Templates')).toBeInTheDocument();
+  });
+
+  it('renders "Jira Issue Template" card title', () => {
+    render(<Integrations />);
+    expect(screen.getByText('Jira Issue Template')).toBeInTheDocument();
+  });
+
+  it('renders "Trello Card Template" card title', () => {
+    render(<Integrations />);
+    expect(screen.getByText('Trello Card Template')).toBeInTheDocument();
+  });
+
+  it('renders "ServiceNow" card title', () => {
+    render(<Integrations />);
+    expect(screen.getAllByText(/ServiceNow/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders Copy buttons for each template card', () => {
+    render(<Integrations />);
+    const copyBtns = screen.getAllByRole('button', { name: /copy/i });
+    // at least 2 YAML + 3 template copy buttons
+    expect(copyBtns.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('calls clipboard.writeText when Jira template Copy button clicked', async () => {
+    render(<Integrations />);
+    const jiraCard = screen.getByText('Jira Issue Template').closest('div')!;
+    const copyBtn = jiraCard.querySelector('button')!;
+    fireEvent.click(copyBtn);
+    expect(mockClipboardWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('summary'),
+    );
+  });
+});

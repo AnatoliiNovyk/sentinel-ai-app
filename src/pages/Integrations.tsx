@@ -1036,18 +1036,41 @@ jobs:
           target: "."
           scanner: "tfsec"
           fail-on-critical: true
+      
+      - name: Block deployment on critical findings
+        if: failure()
+        run: exit 1
 `;
 
-  const gitlabCi = `sentinel_ai_scan:
-  stage: test
+  const gitlabCi = `stages:
+  - scan
+  - gate
+
+sentinel_ai_scan:
+  stage: scan
   image: sentinelai/cli:latest
   script:
-    - sentinel-cli scan --target . --scanner checkov --project-id $CI_PROJECT_PATH
+    - sentinel-cli scan --target . --scanner checkov --project-id $CI_PROJECT_PATH --output json
+  artifacts:
+    reports:
+      sast: sentinel-report.json
   variables:
     SENTINEL_API_KEY: $SENTINEL_API_KEY
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+security-gate:
+  stage: gate
+  script:
+    - |
+      CRITICAL=$(jq '.[] | select(.severity=="critical") | length' sentinel-report.json || echo 0)
+      if [ "$CRITICAL" -gt 0 ]; then
+        echo "❌ BLOCKED: $CRITICAL critical issues"
+        exit 1
+      fi
+  dependencies:
+    - sentinel_ai_scan
 `;
 
   const jenkinsfile = `pipeline {
@@ -1062,9 +1085,26 @@ jobs:
           curl -X POST https://your-project.supabase.co/functions/v1/scan-dispatch \\
             -H "Authorization: Bearer $SENTINEL_API_KEY" \\
             -H "Content-Type: application/json" \\
-            -d '{"scanner": "tfsec", "target": ".", "project_id": "YOUR_PROJECT_ID"}'
+            -d '{"scanner": "tfsec", "target": ".", "project_id": "YOUR_PROJECT_ID"}' \\
+            -o scan-result.json
         '''
       }
+    }
+    stage('Critical Gate') {
+      steps {
+        sh '''
+          CRITICAL=$(jq '.findings[] | select(.severity=="CRITICAL") | length' scan-result.json || echo 0)
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ BLOCKED: $CRITICAL critical findings detected"
+            exit 1
+          fi
+        '''
+      }
+    }
+  }
+  post {
+    failure {
+      echo "❌ Pipeline failed due to critical security findings"
     }
   }
 }
@@ -1081,11 +1121,93 @@ jobs:
             -H "Authorization: Bearer $SENTINEL_API_KEY"
             -H "Content-Type: application/json"
             -d '{"scanner": "tfsec", "target": ".", "project_id": "$BITBUCKET_REPO_SLUG"}'
+            -o scan-result.json
         variables:
           SENTINEL_API_KEY: $SENTINEL_API_KEY
+    - step:
+        name: Critical Security Gate
+        image: stedolan/jq:latest
+        script:
+          - |
+            CRITICAL=\$(jq '.findings[] | select(.severity=="CRITICAL") | length' scan-result.json || echo 0)
+            if [ "\$CRITICAL" -gt 0 ]; then
+              echo "❌ BLOCKED: \$CRITICAL critical findings"
+              exit 1
+            fi
+`;
+
+  const jiraTemplate = `{
+  "fields": {
+    "project": { "key": "SEC" },
+    "issuetype": { "name": "Security Vulnerability" },
+    "summary": "Critical Security Finding from Sentinel AI",
+    "description": "Automated security scan detected a critical vulnerability.",
+    "customfield_10000": "critical",
+    "customfield_10001": {
+      "findings": [
+        {
+          "type": "IaC",
+          "resource": "example.tf:line 42",
+          "description": "Missing encryption at rest",
+          "severity": "CRITICAL",
+          "remediation": "Add encryption_key = aws_kms_key.example.id"
+        }
+      ],
+      "scanner": "tfsec",
+      "timestamp": "2026-04-29T10:00:00Z"
+    },
+    "labels": ["sentinel-ai", "security", "automated"],
+    "priority": { "id": "1" }
+  }
+}
+`;
+
+  const trelloTemplate = `{
+  "name": "🔴 CRITICAL: Sentinel AI Security Finding",
+  "desc": "**Severity:** CRITICAL\n**Scanner:** tfsec\n**Type:** Infrastructure as Code\n\nFindings:\n- Missing encryption at rest\n- Unencrypted database configuration\n\nRemediation:\n1. Add KMS encryption key\n2. Enable encryption in database config\n3. Re-run security scan\n4. Update documentation",
+  "pos": "top",
+  "due": "2026-05-06T17:00:00.000Z",
+  "labels": ["Security", "Critical", "Sentinel-AI"],
+  "members": [],
+  "customFields": {
+    "scanner": "tfsec",
+    "resources_affected": "3",
+    "cve_references": ["CVE-2024-1234"]
+  }
+}
+`;
+
+  const serviceNowTemplate = `{
+  "short_description": "Critical IaC Vulnerability - Sentinel AI Scan",
+  "description": "Automated security scan identified critical infrastructure vulnerabilities. Immediate remediation required to prevent exploitation.",
+  "assignment_group": "Security Team",
+  "urgency": "1",
+  "impact": "1",
+  "priority": "1",
+  "category": "security",
+  "subcategory": "infrastructure",
+  "u_findings": [
+    {
+      "resource": "terraform/main.tf:42",
+      "rule_id": "AVD-AWS-0037",
+      "rule_name": "Encryption at rest not enabled",
+      "severity": "CRITICAL",
+      "recommendation": "aws_s3_bucket_server_side_encryption_configuration"
+    }
+  ],
+  "u_scanner": "tfsec",
+  "u_scan_timestamp": "2026-04-29T10:00:00Z",
+  "u_cis_benchmark": "CIS AWS Foundations",
+  "u_auto_remediation": false,
+  "attachment": {
+    "file_name": "sentinel-ai-scan-report.json",
+    "content_type": "application/json"
+  }
+}
 `;
 
   type PlatformKey = 'github' | 'gitlab' | 'jenkins' | 'bitbucket';
+  type TemplateKey = 'jira' | 'trello' | 'servicenow';
 
   const CARDS: Array<{
     id: PlatformKey;
@@ -1126,6 +1248,40 @@ jobs:
       description: 'Add this step to bitbucket-pipelines.yml. Set SENTINEL_API_KEY in your repository variables.',
       filename: 'bitbucket-pipelines.yml',
       code: bitbucketPipeline,
+    },
+  ];
+
+  const TEMPLATE_CARDS: Array<{
+    id: TemplateKey;
+    title: string;
+    icon: React.ReactNode;
+    description: string;
+    filename: string;
+    code: string;
+  }> = [
+    {
+      id: 'jira',
+      title: 'Jira Issue Template',
+      icon: <span className="text-blue-400 font-bold text-sm">J</span>,
+      description: 'Auto-create Jira tickets with security findings and SLA tracking.',
+      filename: 'jira-issue.json',
+      code: jiraTemplate,
+    },
+    {
+      id: 'trello',
+      title: 'Trello Card Template',
+      icon: <span className="text-blue-500 font-bold text-sm">T</span>,
+      description: 'Create Trello cards for vulnerability tracking and team collaboration.',
+      filename: 'trello-card.json',
+      code: trelloTemplate,
+    },
+    {
+      id: 'servicenow',
+      title: 'ServiceNow Incident Template',
+      icon: <span className="text-slate-400 font-bold text-sm">S</span>,
+      description: 'Integrate with ServiceNow for centralized incident and change management.',
+      filename: 'servicenow-incident.json',
+      code: serviceNowTemplate,
     },
   ];
 
@@ -1196,6 +1352,39 @@ jobs:
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="border-t border-slate-800 pt-8">
+        <h2 className="text-2xl font-bold tracking-tight mb-4">Issue Tracker Templates</h2>
+        <p className="text-sm text-slate-500 mb-6">
+          Auto-format security findings for your favorite issue tracking systems. Copy templates and integrate with webhooks or API endpoints.
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {TEMPLATE_CARDS.map((card) => (
+            <div key={card.id} className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden flex flex-col">
+              <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/30">
+                <h3 className="font-semibold flex items-center gap-2">
+                  {card.icon} {card.title}
+                </h3>
+                <button
+                  onClick={() => copy(card.code, `template-${card.id}`)}
+                  className="text-xs flex items-center gap-1.5 text-slate-400 hover:text-white transition bg-slate-800 px-2.5 py-1.5 rounded-md"
+                >
+                  {copied === `template-${card.id}`
+                    ? <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</>
+                    : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+                </button>
+              </div>
+              <div className="p-5 flex-1 flex flex-col">
+                <p className="text-sm text-slate-400 mb-3">{card.description}</p>
+                <p className="text-xs text-slate-600 font-mono mb-4">{card.filename}</p>
+                <div className="relative flex-1 bg-[#0d1117] rounded-lg p-3 font-mono text-xs overflow-x-auto border border-slate-800">
+                  <pre className="text-slate-300"><code>{card.code}</code></pre>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
