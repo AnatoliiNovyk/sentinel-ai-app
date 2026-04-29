@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ActiveRecon from '../PassiveRecon';
 
 vi.mock('../../context/useAuth', () => {
@@ -7,7 +7,19 @@ vi.mock('../../context/useAuth', () => {
   return { useAuth: () => ({ user: _user }) };
 });
 
+const { mockDownloadFile } = vi.hoisted(() => ({ mockDownloadFile: vi.fn() }));
+
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: mockDownloadFile,
+}));
+
 describe('ActiveRecon (PassiveRecon)', () => {
+  beforeEach(() => {
+    mockDownloadFile.mockClear();
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+  });
   it('renders "Active Reconnaissance (Deep Nmap)" heading', () => {
     render(<ActiveRecon />);
     expect(screen.getByText('Active Reconnaissance (Deep Nmap)')).toBeInTheDocument();
@@ -72,5 +84,35 @@ describe('ActiveRecon (PassiveRecon)', () => {
       () => expect(screen.getByText(/Scan complete/i)).toBeInTheDocument(),
       { timeout: 8000 },
     );
+  }, 10000);
+
+  it('shows Copy and CSV buttons after scan and calls exportResults', async () => {
+    render(<ActiveRecon />);
+    const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+    fireEvent.change(input, { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+    await waitFor(
+      () => expect(screen.getByText(/Scan complete/i)).toBeInTheDocument(),
+      { timeout: 8000 },
+    );
+    const csvBtn = screen.getByRole('button', { name: /csv/i });
+    expect(csvBtn).toBeInTheDocument();
+    fireEvent.click(csvBtn);
+    expect(mockDownloadFile).toHaveBeenCalled();
+  }, 10000);
+
+  it('clicks Copy button after scan and calls clipboard', async () => {
+    render(<ActiveRecon />);
+    const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+    fireEvent.change(input, { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+    await waitFor(
+      () => expect(screen.getByText(/Scan complete/i)).toBeInTheDocument(),
+      { timeout: 8000 },
+    );
+    const copyBtn = screen.getByRole('button', { name: /copy output/i });
+    expect(copyBtn).toBeInTheDocument();
+    await act(async () => { fireEvent.click(copyBtn); });
+    expect(navigator.clipboard.writeText).toHaveBeenCalled();
   }, 10000);
 });

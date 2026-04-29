@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScanDiff from '../ScanDiff';
 import type { Scan, Vulnerability } from '../../lib/supabase';
+
+// ── Mocks ─────────────────────────────────────────────────────────────────
+
+const mockDownloadFile = vi.fn();
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: (...args: unknown[]) => mockDownloadFile(...args),
+}));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -160,6 +167,43 @@ describe('ScanDiff', () => {
       ];
       render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
       expect(screen.getByText('critical')).toBeInTheDocument();
+    });
+
+    it('Export CSV button calls downloadFile', async () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'SQL Injection', 'api.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      const csvBtn = screen.getByRole('button', { name: /export diff as csv/i });
+      expect(csvBtn).toBeInTheDocument();
+      fireEvent.click(csvBtn);
+      expect(mockDownloadFile).toHaveBeenCalledWith(
+        'scan-diff.csv',
+        expect.stringContaining('Status'),
+        'text/csv',
+      );
+    });
+
+    it('filter buttons change visible findings', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New finding', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host2.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      // Click "New" filter button
+      const newBtn = screen.getByRole('button', { name: /^new$/i });
+      fireEvent.click(newBtn);
+      // Should show only new findings
+      expect(screen.queryByText('Fixed finding')).not.toBeInTheDocument();
+
+      // Click "Fixed" filter button
+      const fixedBtn = screen.getByRole('button', { name: /^fixed$/i });
+      fireEvent.click(fixedBtn);
+      expect(screen.queryByText('New finding')).not.toBeInTheDocument();
+
+      // Click "All" to reset
+      const allBtn = screen.getByRole('button', { name: /^all$/i });
+      fireEvent.click(allBtn);
     });
   });
 });

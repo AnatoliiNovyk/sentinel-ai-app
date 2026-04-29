@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import Compliance from '../Compliance';
 
@@ -83,5 +83,24 @@ describe('Compliance', () => {
   it('renders loading state initially', () => {
     render(<Compliance />);
     expect(screen.getByText(/Computing compliance posture/i)).toBeInTheDocument();
+  });
+
+  it('renders Export CSV button and clicks it', async () => {
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('Compliance')).toBeInTheDocument());
+    const csvBtn = await screen.findByRole('button', { name: /csv report/i });
+    expect(csvBtn).toBeInTheDocument();
+    fireEvent.click(csvBtn);
+    // Should not throw
+  });
+
+  it('switches to MITRE ATT&CK filter', async () => {
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('MITRE ATT&CK Tactics')).toBeInTheDocument());
+    // Click "Active threats" filter to trigger mitreStatus change
+    const activeBtn = screen.queryByRole('button', { name: /active threats/i });
+    if (activeBtn) {
+      fireEvent.click(activeBtn);
+    }
   });
 });

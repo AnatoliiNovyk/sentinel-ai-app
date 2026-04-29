@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
+import { act } from '@testing-library/react';
+
+// Flush all pending async state updates after each test to silence act() warnings
+afterEach(async () => {
+  await act(async () => {});
+});
 
 if (!('IntersectionObserver' in globalThis)) {
   class MockIntersectionObserver {

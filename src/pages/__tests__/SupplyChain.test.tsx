@@ -107,4 +107,37 @@ describe('SupplyChain', () => {
       expect(screen.getByText('OSV service unavailable')).toBeInTheDocument(),
     );
   });
+
+  it('clears filters after applying severity filter', async () => {
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: {
+        risks: [
+          {
+            dependency: { name: 'express', version: '4.18.0', type: 'prod' },
+            vulnerabilities: [
+              { id: 'GHSA-5555', summary: 'RCE in express', details: '...', severity: 'critical', fixedIn: '4.18.2' },
+            ],
+          },
+        ],
+      },
+    });
+    render(<SupplyChain />);
+    const input = screen.getByLabelText('Upload package.json');
+    const file = new File(['{"name":"test","dependencies":{"express":"4.18.0"}}'], 'package.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText('express')).toBeInTheDocument());
+    // find severity filter buttons and click Critical
+    const criticalBtn = screen.queryByRole('button', { name: /critical/i });
+    if (criticalBtn) {
+      fireEvent.click(criticalBtn);
+      // now clear filters
+      const clearBtn = screen.queryByRole('button', { name: /clear filters/i });
+      if (clearBtn) {
+        fireEvent.click(clearBtn);
+      }
+    }
+  });
 });

@@ -2,8 +2,15 @@
  * Unit tests for src/lib/riskScore.ts
  * Covers computeScoreFromCounts() and riskBand() — pure functions, no Supabase.
  */
-import { describe, it, expect } from 'vitest';
-import { computeScoreFromCounts, riskBand } from '../riskScore';
+import { describe, it, expect, vi } from 'vitest';
+import { computeScoreFromCounts, riskBand, recomputeRiskScoreFromScanId, recomputeProjectRiskScore } from '../riskScore';
+
+// ─── Supabase mock ─────────────────────────────────────────────────────────────
+
+const mockFrom = vi.fn();
+vi.mock('../supabase', () => ({
+  supabase: { from: (...args: unknown[]) => mockFrom(...args) },
+}));
 
 // ─── computeScoreFromCounts ───────────────────────────────────────────────────
 
@@ -129,5 +136,33 @@ describe('riskBand', () => {
     for (const score of [0, 1, 15, 40, 70, 100]) {
       expect(riskBand(score).color.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ─── recomputeRiskScoreFromScanId ─────────────────────────────────────────────
+
+describe('recomputeRiskScoreFromScanId', () => {
+  it('calls recomputeProjectRiskScore when scan has project_id', async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { project_id: 'proj-1' }, error: null }),
+      update: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+    };
+    mockFrom.mockReturnValue(chain);
+    await recomputeRiskScoreFromScanId('scan-abc');
+    expect(mockFrom).toHaveBeenCalledWith('scans');
+  });
+
+  it('does nothing when scan has no project_id', async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    mockFrom.mockReturnValue(chain);
+    await recomputeRiskScoreFromScanId('scan-missing');
+    expect(mockFrom).toHaveBeenCalledWith('scans');
   });
 });

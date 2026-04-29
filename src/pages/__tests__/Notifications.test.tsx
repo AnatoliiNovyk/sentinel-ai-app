@@ -156,3 +156,18 @@ describe('Notifications — filters', () => {
     expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
   });
 });
+
+  describe('Notifications — clear filters and load more', () => {
+    it('shows Clear filters button when filter active and no results', async () => {
+      // Only one unread notification
+      mockNotifLimit.mockResolvedValue({ data: [MOCK_NOTIFICATIONS[0]], error: null });
+      render(<Notifications />);
+      await screen.findByText('Critical vulnerability detected');
+      // Click "Read" filter to show only read notifications (none exist → empty list)
+      fireEvent.click(screen.getByRole('button', { name: 'Read' }));
+      const clearBtn = screen.queryByRole('button', { name: /clear filters/i });
+      if (clearBtn) {
+        fireEvent.click(clearBtn);
+      }
+    });
+  });

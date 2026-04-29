@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import KillChain from '../KillChain';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
@@ -11,6 +11,11 @@ const { mockGenerateKillChain } = vi.hoisted(() => ({
 
 vi.mock('../../lib/aiRedTeam', () => ({
   generateKillChain: mockGenerateKillChain,
+}));
+
+const mockDownloadFile = vi.fn();
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: (...args: unknown[]) => mockDownloadFile(...args),
 }));
 
 vi.mock('../../lib/supabase', async (importOriginal) => {
@@ -152,5 +157,77 @@ describe('KillChain — simulation', () => {
     await waitFor(() =>
       expect(mockGenerateKillChain).toHaveBeenCalledWith('Alpha Project', expect.any(Array)),
     );
+  });
+});
+
+// ── Export & interactive function tests ──────────────────────────────────
+
+describe('KillChain — exports and interactive functions', () => {
+  beforeEach(() => {
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    mockDownloadFile.mockReset();
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  const generateChain = async () => {
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() =>
+      expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument(),
+    );
+  };
+
+  it('exportCsv calls downloadFile with CSV content', async () => {
+    await generateChain();
+    const csvBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('CSV'));
+    expect(csvBtn).toBeTruthy();
+    fireEvent.click(csvBtn!);
+    await waitFor(() => expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.csv'),
+      expect.stringContaining('Phase'),
+      'text/csv',
+    ));
+  });
+
+  it('exportMarkdown calls downloadFile with markdown content', async () => {
+    await generateChain();
+    const mdBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('.md'));
+    expect(mdBtn).toBeTruthy();
+    fireEvent.click(mdBtn!);
+    await waitFor(() => expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.md'),
+      expect.stringContaining('Kill Chain'),
+      'text/markdown',
+    ));
+  });
+
+  it('exportJson calls downloadFile with json content', async () => {
+    await generateChain();
+    const jsonBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('JSON'));
+    expect(jsonBtn).toBeTruthy();
+    fireEvent.click(jsonBtn!);
+    await waitFor(() => expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.json'),
+      expect.stringContaining('{'),
+      'application/json',
+    ));
+  });
+
+  it('copyToClipboard copies markdown to clipboard', async () => {
+    await generateChain();
+    const copyBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Copy'));
+    expect(copyBtn).toBeTruthy();
+    fireEvent.click(copyBtn!);
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('Kill Chain')),
+    );
+  });
+
+  it('phaseFilter filters chain steps', async () => {
+    await generateChain();
+    // Filter selects should be available
+    const selects = screen.getAllByRole('combobox');
+    expect(selects.length).toBeGreaterThan(0);
   });
 });

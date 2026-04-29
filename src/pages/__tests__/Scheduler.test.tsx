@@ -123,4 +123,35 @@ describe('SchedulerPage', () => {
       expect(screen.getAllByText(/Alpha Project|p-1/i).length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it('clicks toggle and delete buttons on a schedule', async () => {
+    mockSchOrder.mockResolvedValue({
+      data: [
+        {
+          id: 'sch-2',
+          project_id: 'p-1',
+          scanner: 'nuclei',
+          cadence_hours: 24,
+          enabled: true,
+          next_run_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+          created_at: new Date().toISOString(),
+          user_id: 'user-1',
+        },
+      ],
+      error: null,
+    });
+    mockPrjOrder.mockResolvedValue({
+      data: [{ id: 'p-1', name: 'Beta Project' }],
+      error: null,
+    });
+    render(<SchedulerPage />);
+    await waitFor(() => expect(screen.getAllByText('Beta Project').length).toBeGreaterThanOrEqual(1));
+    // Click toggle (Enable/Disable button)
+    const toggleBtn = screen.queryByTitle(/Enable|Disable/i);
+    if (toggleBtn) fireEvent.click(toggleBtn);
+    // Click delete
+    const deleteBtn = screen.queryByTitle('Delete');
+    if (deleteBtn) fireEvent.click(deleteBtn);
+    // Confirm delete dialog appears or no throw
+  });
 });

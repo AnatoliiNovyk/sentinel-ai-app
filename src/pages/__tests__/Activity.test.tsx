@@ -10,6 +10,13 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const { mockDownloadFile } = vi.hoisted(() => ({
+  mockDownloadFile: vi.fn(),
+}));
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: (...args: unknown[]) => mockDownloadFile(...args),
+}));
+
 vi.mock('../../context/useAuth', () => {
   // Stable reference: prevents useCallback/useEffect re-firing on every render
   const _user = { id: 'user-1' };
@@ -179,5 +186,15 @@ describe('Activity — tab switching', () => {
     await screen.findByText('Activity Log');
     fireEvent.click(screen.getByText('Anomalies'));
     expect(screen.queryByText('Scan started for target example.com')).not.toBeInTheDocument();
+  });
+});
+
+describe('Activity — exportCsv function', () => {
+  it('Export CSV button click calls downloadFile', async () => {
+    render(<ActivityPage />);
+    await screen.findByText('Scan started for target example.com');
+    const csvBtn = screen.getByTitle('Export filtered logs as CSV');
+    fireEvent.click(csvBtn);
+    expect(mockDownloadFile).toHaveBeenCalled();
   });
 });

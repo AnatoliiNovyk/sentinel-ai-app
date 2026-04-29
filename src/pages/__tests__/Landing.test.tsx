@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import Landing from '../Landing';
 
@@ -56,5 +56,49 @@ describe('Landing', () => {
   it('renders "Dark Web Monitoring" feature card', () => {
     render(<Landing />);
     expect(screen.getByText('Dark Web Monitoring')).toBeInTheDocument();
+  });
+});
+
+describe('Landing — handleSubscribe & FAQ', () => {
+  it('shows success message after valid email subscription', async () => {
+    render(<Landing />);
+    const emailInput = screen.getByPlaceholderText(/enter your email/i);
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.submit(emailInput.closest('form')!);
+    await waitFor(() =>
+      expect(screen.getByText(/thanks for subscribing/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('does not subscribe with invalid email', () => {
+    render(<Landing />);
+    const emailInput = screen.getByPlaceholderText(/enter your email/i);
+    fireEvent.change(emailInput, { target: { value: 'not-an-email' } });
+    fireEvent.submit(emailInput.closest('form')!);
+    // No success message should appear
+    expect(screen.queryByText(/subscribed|thank you/i)).not.toBeInTheDocument();
+  });
+
+  it('opens FAQ answer when question clicked', async () => {
+    render(<Landing />);
+    const faqQuestion = screen.getByText(/What is Sentinel AI\?/i);
+    fireEvent.click(faqQuestion);
+    await waitFor(() =>
+      expect(screen.getByText(/autonomous threat exposure/i)).toBeVisible(),
+    );
+  });
+
+  it('closes FAQ answer when same question clicked again', async () => {
+    render(<Landing />);
+    const faqQuestion = screen.getByText(/What is Sentinel AI\?/i);
+    fireEvent.click(faqQuestion);
+    await waitFor(() =>
+      expect(screen.getByText(/autonomous threat exposure/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(faqQuestion);
+    // Answer is conditionally rendered — should be removed from DOM
+    await waitFor(() =>
+      expect(screen.queryByText(/autonomous threat exposure/i)).not.toBeInTheDocument(),
+    );
   });
 });

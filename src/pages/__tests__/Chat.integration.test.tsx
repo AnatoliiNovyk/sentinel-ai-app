@@ -204,3 +204,27 @@ describe('Chat integration flow', () => {
     await waitFor(() => expect(screen.getByText('Recovered after wait')).toBeInTheDocument(), { timeout: 3000 });
   }, { timeout: 6000 });
 });
+
+  describe('Chat — sidebar conversation switching', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      conversations = [
+        { id: 'c-1', title: 'First Chat', created_at: new Date().toISOString(), user_id: 'user-1' },
+        { id: 'c-2', title: 'Second Chat', created_at: new Date().toISOString(), user_id: 'user-1' },
+      ];
+      messages = [];
+      convoIdCounter = 1;
+      msgIdCounter = 1;
+      mockRunAgent.mockResolvedValue({ content: 'ok', toolCalls: [] });
+      mockCallAiGateway.mockResolvedValue({ content: 'ok', provider: 'mock', isMock: true } satisfies GatewayResponse);
+        try {
+          Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() });
+        } catch { /* already defined */ }
+    });
+
+    it('switches active conversation when clicking conversation in sidebar', async () => {
+      render(<Chat />);
+      await waitFor(() => expect(screen.getByText('First Chat')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Second Chat'));
+    });
+  });

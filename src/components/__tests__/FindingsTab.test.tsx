@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import FindingsTab from '../FindingsTab';
 import type { Vulnerability } from '../../lib/supabase';
 
@@ -153,6 +153,44 @@ describe('FindingsTab — export', () => {
       expect.stringMatching(/findings.*\.csv/),
       'csv-data',
       'text/csv',
+    );
+  });
+});
+
+describe('FindingsTab — selection (toggleAll / toggleOne)', () => {
+  beforeEach(() => {
+    _id = 0;
+  });
+
+  it('toggleAll selects all findings', () => {
+    const vulns = [makeVuln({ title: 'Bug A' }), makeVuln({ title: 'Bug B' })];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    // Initially "Select all (2)" text is visible
+    expect(screen.getByText(/select all \(2\)/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    // After select all, text changes to "Deselect all"
+    expect(screen.getByText(/deselect all/i)).toBeInTheDocument();
+  });
+
+  it('toggleAll deselects all when all are selected', () => {
+    const vulns = [makeVuln({ title: 'Bug C' })];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    expect(screen.getByText(/deselect all/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /deselect all/i }));
+    expect(screen.getByText(/select all/i)).toBeInTheDocument();
+  });
+
+  it('toggleOne selects individual finding via checkbox', () => {
+    const vulns = [makeVuln({ title: 'Bug D' }), makeVuln({ title: 'Bug E' })];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    // Each FindingRow has a select button
+    const selectBtns = screen.getAllByRole('button', { name: /select finding/i });
+    expect(selectBtns.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(selectBtns[0]);
+    // Bulk action panel should appear (some selected)
+    waitFor(() =>
+      expect(screen.getByText(/bulk action/i)).toBeInTheDocument(),
     );
   });
 });

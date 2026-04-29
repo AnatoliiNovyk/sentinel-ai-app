@@ -16,6 +16,7 @@ export default defineConfig({
       reportsDirectory: './coverage',
       exclude: [
         'node_modules/**',
+        'dist/**',
         'src/__tests__/setup.ts',
         'src/vite-env.d.ts',
         'src/main.tsx',
