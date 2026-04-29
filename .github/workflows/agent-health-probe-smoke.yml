@@ -1,0 +1,79 @@
+name: Agent Health Probe Smoke
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      probe_url:
+        description: "Optional probe URL override"
+        required: false
+        default: ""
+      require_reachable:
+        description: "Fail run when probe is unreachable (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  probe-smoke:
+    name: Probe ai-gateway agent health
+    runs-on: ubuntu-latest
+    if: secrets.SENTINEL_SUPABASE_URL != '' && secrets.SENTINEL_SERVICE_ROLE_KEY != '' && secrets.SENTINEL_AGENT_HEALTH_URL != ''
+    timeout-minutes: 10
+    concurrency:
+      group: agent-health-probe-smoke
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare probe env
+        shell: bash
+        run: |
+          mkdir -p sentinel-agent
+          cat > sentinel-agent/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SENTINEL_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SENTINEL_SERVICE_ROLE_KEY }}
+          AGENT_HEALTH_URL=${{ secrets.SENTINEL_AGENT_HEALTH_URL }}
+          EOF
+
+      - name: Run gateway probe smoke
+        shell: pwsh
+        env:
+          INPUT_PROBE_URL: ${{ github.event.inputs.probe_url }}
+          INPUT_REQUIRE_REACHABLE: ${{ github.event.inputs.require_reachable }}
+        run: |
+          $probeUrl = if ([string]::IsNullOrWhiteSpace($env:INPUT_PROBE_URL)) { '' } else { $env:INPUT_PROBE_URL }
+          $requireReachable = if ([string]::IsNullOrWhiteSpace($env:INPUT_REQUIRE_REACHABLE)) { $true } else { [bool]::Parse($env:INPUT_REQUIRE_REACHABLE) }
+
+          $args = @(
+            '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/agent-health-probe-smoke.ps1',
+            '-EnvFile', 'sentinel-agent/.env',
+            '-TimeoutSeconds', '12'
+          )
+
+          if (-not [string]::IsNullOrWhiteSpace($probeUrl)) {
+            $args += @('-ProbeUrl', $probeUrl)
+          }
+
+          if ($requireReachable) {
+            $args += '-RequireReachable'
+          }
+
+          $output = powershell @args
+          $json = $output | Out-String | ConvertFrom-Json
+
+          New-Item -ItemType Directory -Force -Path reports | Out-Null
+          ($json | ConvertTo-Json -Depth 12) | Out-File -Encoding utf8 reports/agent-health-probe-smoke.json
+
+          Write-Host "request_id=$($json.request_id) reachable=$($json.reachable) http_status=$($json.http_status) status=$($json.status)"
+
+      - name: Upload probe report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-health-probe-smoke
+          path: reports/agent-health-probe-smoke.json
+          if-no-files-found: error

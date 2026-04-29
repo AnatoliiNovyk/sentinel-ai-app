@@ -286,6 +286,58 @@ async function testSmokeScript(rootDir) {
   await closeServer(server);
 }
 
+async function testAgentHealthProbeSmokeScript(rootDir) {
+  const { server, port } = await startMockServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+
+    if (req.method === 'POST' && url.pathname === '/functions/v1/ai-gateway') {
+      const body = await parseJsonBody(req);
+      assert.equal(body.action, 'agent_health_probe');
+      assert.equal(body.url, 'http://95.67.75.146:9090/health');
+
+      const authHeader = req.headers.authorization || '';
+      const apiKeyHeader = req.headers.apikey || '';
+      assert.ok(String(authHeader).startsWith('Bearer '));
+      assert.equal(String(apiKeyHeader), 'test-service-role-key');
+
+      return sendJson(res, 200, {
+        request_id: 'req-probe-smoke-1',
+        action: 'agent_health_probe',
+        status: 'ok',
+        reachable: true,
+        http_status: 200,
+        error: null,
+        probed_url: body.url,
+      });
+    }
+
+    return sendJson(res, 404, { error: 'not found', method: req.method, path: url.pathname });
+  });
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ops-agent-probe-smoke-'));
+  const envFile = path.join(tempDir, '.env');
+  const lines = [
+    `SUPABASE_URL=http://127.0.0.1:${port}`,
+    'SUPABASE_SERVICE_ROLE_KEY=test-service-role-key',
+    'AGENT_HEALTH_URL=http://95.67.75.146:9090/health',
+  ];
+  fs.writeFileSync(envFile, `${lines.join('\n')}\n`, 'utf8');
+
+  const scriptPath = path.join(rootDir, 'scripts', 'agent-health-probe-smoke.ps1');
+  const stdout = await runPwsh(scriptPath, ['-EnvFile', envFile, '-RequireReachable', '-TimeoutSeconds', '5']);
+  const json = extractJson(stdout);
+
+  assert.equal(json.schema_version, '1.0');
+  assert.equal(json.report_type, 'agent_health_probe_smoke');
+  assert.equal(json.gateway_http, 200);
+  assert.equal(json.action, 'agent_health_probe');
+  assert.equal(json.reachable, true);
+  assert.equal(json.http_status, 200);
+  assert.equal(json.probed_url, 'http://95.67.75.146:9090/health');
+
+  await closeServer(server);
+}
+
 async function testTriageScript(rootDir) {
   const { server, port } = await startMockServer(async (req, res) => {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
@@ -1127,6 +1179,7 @@ async function main() {
   const rootDir = path.resolve(__dirname, '..');
 
   await testSmokeScript(rootDir);
+  await testAgentHealthProbeSmokeScript(rootDir);
   await testTriageScript(rootDir);
   await testDailyReportScript(rootDir);
   await testDailyReportThresholdFail(rootDir);
