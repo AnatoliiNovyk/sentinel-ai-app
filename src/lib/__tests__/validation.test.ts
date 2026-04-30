@@ -11,6 +11,10 @@ import {
   validateApiKey,
   validateEmail,
   validateIpAddress,
+  validateUrl,
+  validateRequestRate,
+  combineValidationResults,
+  sanitizeString,
   ValidationLimits,
 } from '../validation';
 
@@ -314,5 +318,127 @@ describe('validateIpAddress', () => {
 
   it('rejects plain hostname', () => {
     expect(validateIpAddress('not-an-ip').valid).toBe(false);
+  });
+});
+
+// ─── validateUrl ─────────────────────────────────────────────────────────────
+
+describe('validateUrl', () => {
+  it('accepts valid http URL', () => {
+    expect(validateUrl('http://example.com').valid).toBe(true);
+  });
+
+  it('accepts valid https URL with path', () => {
+    expect(validateUrl('https://api.example.com/v1/endpoint').valid).toBe(true);
+  });
+
+  it('rejects plain string without protocol', () => {
+    expect(validateUrl('example.com').valid).toBe(false);
+  });
+
+  it('rejects empty string', () => {
+    expect(validateUrl('').valid).toBe(false);
+  });
+
+  it('rejects non-string input', () => {
+    // @ts-expect-error testing runtime guard
+    expect(validateUrl(null).valid).toBe(false);
+  });
+
+  it('rejects garbage string', () => {
+    expect(validateUrl('not a url at all').valid).toBe(false);
+  });
+});
+
+// ─── sanitizeString ───────────────────────────────────────────────────────────
+
+describe('sanitizeString', () => {
+  it('escapes &', () => {
+    expect(sanitizeString('a & b')).toBe('a &amp; b');
+  });
+
+  it('escapes < and >', () => {
+    expect(sanitizeString('<script>')).toBe('&lt;script&gt;');
+  });
+
+  it('escapes double quotes', () => {
+    expect(sanitizeString('"hello"')).toBe('&quot;hello&quot;');
+  });
+
+  it('escapes single quotes', () => {
+    expect(sanitizeString("it's")).toBe('it&#x27;s');
+  });
+
+  it('escapes forward slash', () => {
+    expect(sanitizeString('a/b')).toBe('a&#x2F;b');
+  });
+
+  it('returns empty string for non-string input', () => {
+    // @ts-expect-error testing runtime guard
+    expect(sanitizeString(42)).toBe('');
+  });
+
+  it('returns unchanged string with no special chars', () => {
+    expect(sanitizeString('hello world 123')).toBe('hello world 123');
+  });
+});
+
+// ─── validateRequestRate ─────────────────────────────────────────────────────
+
+describe('validateRequestRate', () => {
+  it('accepts request count under the limit', () => {
+    expect(validateRequestRate(5, 60000, 10).valid).toBe(true);
+  });
+
+  it('accepts request count at exactly the limit', () => {
+    expect(validateRequestRate(10, 60000, 10).valid).toBe(true);
+  });
+
+  it('rejects request count over the limit', () => {
+    const r = validateRequestRate(11, 60000, 10);
+    expect(r.valid).toBe(false);
+    expect(r.error).toContain('Rate limit exceeded');
+  });
+
+  it('includes actual counts in the error message', () => {
+    const r = validateRequestRate(25, 1000, 20);
+    expect(r.error).toContain('25');
+    expect(r.error).toContain('20');
+  });
+});
+
+// ─── combineValidationResults ────────────────────────────────────────────────
+
+describe('combineValidationResults', () => {
+  it('returns valid when all results are valid', () => {
+    const r = combineValidationResults(
+      { valid: true },
+      { valid: true },
+      { valid: true },
+    );
+    expect(r.valid).toBe(true);
+  });
+
+  it('returns first failure when one result is invalid', () => {
+    const r = combineValidationResults(
+      { valid: true },
+      { valid: false, error: 'first error' },
+      { valid: false, error: 'second error' },
+    );
+    expect(r.valid).toBe(false);
+    expect(r.error).toBe('first error');
+  });
+
+  it('returns first result failure immediately', () => {
+    const r = combineValidationResults(
+      { valid: false, error: 'early fail' },
+      { valid: true },
+    );
+    expect(r.valid).toBe(false);
+    expect(r.error).toBe('early fail');
+  });
+
+  it('returns valid for empty results list', () => {
+    expect(combineValidationResults().valid).toBe(true);
   });
 });

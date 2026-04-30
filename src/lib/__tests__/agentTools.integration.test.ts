@@ -36,6 +36,15 @@ vi.mock('../../api/scans.service', () => ({
   },
 }));
 
+vi.mock('../darkWebMonitor', () => ({
+  getGlobalDarkWebMonitor: vi.fn().mockReturnValue({
+    scan: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { breachCount: 0, riskScore: 0, riskLevel: 'low', breaches: [] },
+    }),
+  }),
+}));
+
 describe('Agent Tools Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -148,6 +157,30 @@ describe('Agent Tools Integration', () => {
       const result = await runAgent('user-1', 'run nmap scan', undefined);
       // Either returns error content or null (no project found scenario)
       expect(result === null || typeof result!.content === 'string').toBe(true);
+    });
+
+    it('calls toolRunScan when orgId is provided (no projects → not-found result)', async () => {
+      const result = await runAgent('user-1', 'run nmap scan', 'org-1');
+      // toolRunScan is called, projects mock returns [] → 'No project found to scan.'
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('run_scan');
+      expect(result!.toolCalls[0].ok).toBe(false);
+      expect(result!.content).toContain('No project found');
+    });
+  });
+
+  describe('Dark Web Monitor — failure path', () => {
+    it('returns failure summary when DarkWebMonitor.scan returns error', async () => {
+      const { getGlobalDarkWebMonitor } = await import('../darkWebMonitor');
+      vi.mocked(getGlobalDarkWebMonitor).mockReturnValueOnce({
+        scan: vi.fn().mockResolvedValue({ ok: false, error: { message: 'Service unavailable' } }),
+      } as unknown as ReturnType<typeof getGlobalDarkWebMonitor>);
+
+      const result = await runAgent('user-1', 'dark web scan for admin@corp.com');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('dark_web_scan');
+      expect(result!.toolCalls[0].ok).toBe(false);
+      expect(result!.toolCalls[0].summary).toContain('Dark web scan failed');
     });
   });
 });
