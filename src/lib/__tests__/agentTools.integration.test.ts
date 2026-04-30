@@ -247,4 +247,119 @@ describe('Agent Tools Integration', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ── keywordScanner branches ────────────────────────────────────────────────
+
+  describe('keywordScanner branches (via run_scan intent)', () => {
+    it('detects amass/subdomain scanner keyword', async () => {
+      const result = await runAgent('user-1', 'run amass subdomain enumeration', 'org-1');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('run_scan');
+    });
+
+    it('detects prowler/aws/cloud scanner keyword', async () => {
+      const result = await runAgent('user-1', 'scan aws cloud environment', 'org-1');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('run_scan');
+    });
+
+    it('detects tfsec/terraform/iac scanner keyword', async () => {
+      const result = await runAgent('user-1', 'run tfsec terraform iac check', 'org-1');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('run_scan');
+    });
+
+    it('handles no scanner keyword match (null path)', async () => {
+      const result = await runAgent('user-1', 'run a security audit', 'org-1');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('run_scan');
+    });
+  });
+
+  // ── Unimplemented switch intents (default: return null) ────────────────────
+
+  describe('recognized intents not yet implemented in switch', () => {
+    it('returns null for compliance_check intent', async () => {
+      const result = await runAgent('user-1', 'check soc2 compliance status');
+      expect(result).toBeNull();
+    });
+
+    it('returns null for sla_status intent', async () => {
+      const result = await runAgent('user-1', 'show sla overdue items');
+      expect(result).toBeNull();
+    });
+
+    it('returns null for generate_report intent', async () => {
+      const result = await runAgent('user-1', 'generate executive report');
+      expect(result).toBeNull();
+    });
+
+    it('returns null for summarize_findings intent', async () => {
+      const result = await runAgent('user-1', 'summarize current state');
+      expect(result).toBeNull();
+    });
+
+    it('returns null for resolve_finding intent', async () => {
+      const result = await runAgent('user-1', 'resolve finding CVE-2024-1234');
+      expect(result).toBeNull();
+    });
+  });
+
+  // ── toolListProjects & toolListScans with data ─────────────────────────────
+
+  describe('toolListProjects with data', () => {
+    it('returns formatted project list when projects exist', async () => {
+      const mod = await import('../supabase');
+      vi.mocked(mod.supabase.from).mockImplementationOnce((_table: string) => ({
+        select: () => Promise.resolve({
+          data: [{ id: 'p-1', name: 'MyProject', environment: 'web', target: 'example.com', created_at: new Date().toISOString() }],
+          error: null,
+        }),
+      }) as ReturnType<typeof mod.supabase.from>);
+      const result = await runAgent('user-1', 'list my projects');
+      expect(result).not.toBeNull();
+      expect(result!.content).toContain('MyProject');
+      expect(result!.content).toContain('example.com');
+    });
+  });
+
+  describe('toolListScans with data', () => {
+    it('returns formatted scan list when scans exist', async () => {
+      const mod = await import('../supabase');
+      vi.mocked(mod.supabase.from).mockImplementationOnce((_table: string) => ({
+        select: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({
+              data: [{ id: 's-1', scanner: 'nmap', status: 'done', created_at: new Date().toISOString() }],
+              error: null,
+            }),
+          }),
+        }),
+      }) as ReturnType<typeof mod.supabase.from>);
+      const result = await runAgent('user-1', 'show recent scans');
+      expect(result).not.toBeNull();
+      expect(result!.content).toContain('nmap');
+      expect(result!.content).toContain('done');
+    });
+  });
+
+  describe('toolRunScan success path', () => {
+    it('launches scan successfully when project exists and dispatchScan succeeds', async () => {
+      const mod = await import('../supabase');
+      vi.mocked(mod.supabase.from).mockImplementationOnce((_table: string) => ({
+        select: () => Promise.resolve({
+          data: [{ id: 'p-1', name: 'WebApp', environment: 'web', target: 'webapp.example.com', created_at: new Date().toISOString() }],
+          error: null,
+        }),
+      }) as ReturnType<typeof mod.supabase.from>);
+      const { ScansService } = await import('../../api/scans.service');
+      vi.mocked(ScansService.dispatchScan).mockResolvedValueOnce({
+        scan: { id: 'scan-abc', scanner: 'nmap', status: 'running', created_at: new Date().toISOString(), project_id: 'p-1', target: 'webapp.example.com', org_id: 'org-1', scan_metadata: null, summary: null },
+      } as Awaited<ReturnType<typeof ScansService.dispatchScan>>);
+      const result = await runAgent('user-1', 'run nmap scan', 'org-1');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].ok).toBe(true);
+      expect(result!.content).toContain('nmap');
+    });
+  });
 });
