@@ -162,3 +162,142 @@ describe('SupplyChain', () => {
     }
   });
 });
+
+// ── File validation errors ────────────────────────────────────────────────────
+
+describe('SupplyChain — file validation errors', () => {
+  it('shows error for oversized file', async () => {
+    render(<SupplyChain />);
+    const input = screen.getByLabelText('Upload package.json');
+    const bigFile = new File(['{"name":"test"}'], 'package.json', { type: 'application/json' });
+    Object.defineProperty(bigFile, 'size', { value: 6 * 1024 * 1024, configurable: true });
+    fireEvent.change(input, { target: { files: [bigFile] } });
+    await waitFor(() =>
+      expect(screen.getByText(/File is too large/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows error for invalid JSON content', async () => {
+    render(<SupplyChain />);
+    const input = screen.getByLabelText('Upload package.json');
+    const file = new File(['not valid json{{'], 'package.json', { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(screen.getByText(/Invalid JSON/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows error for invalid package structure', async () => {
+    render(<SupplyChain />);
+    const input = screen.getByLabelText('Upload package.json');
+    const file = new File(['{"foo":"bar","baz":true}'], 'package.json', { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(screen.getByText(/does not appear to be a valid package\.json/i)).toBeInTheDocument(),
+    );
+  });
+});
+
+// ── Results actions and filtering ─────────────────────────────────────────────
+
+describe('SupplyChain — results with safe deps', () => {
+  const mixedScanResult = {
+    ok: true,
+    data: {
+      risks: [
+        {
+          dependency: { name: 'lodash', version: '4.17.15', type: 'prod' },
+          vulnerabilities: [
+            { id: 'GHSA-1234', summary: 'Prototype pollution', details: '...', severity: 'high', fixedIn: '4.17.21' },
+          ],
+        },
+        {
+          dependency: { name: 'safe-pkg', version: '1.0.0', type: 'dev' },
+          vulnerabilities: [],
+        },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    mockScan.mockResolvedValue(mixedScanResult);
+  });
+
+  const uploadFile = () => {
+    const input = screen.getByLabelText('Upload package.json');
+    const file = new File(
+      ['{"name":"test","dependencies":{"lodash":"4.17.15"},"devDependencies":{"safe-pkg":"1.0.0"}}'],
+      'package.json',
+      { type: 'application/json' },
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+
+  it('shows "Verified Safe" section for packages without vulnerabilities', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('Verified Safe')).toBeInTheDocument());
+    expect(screen.getByText('safe-pkg')).toBeInTheDocument();
+  });
+
+  it('clicking "Scan another file" resets results', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /scan another file/i }));
+    await waitFor(() => expect(screen.getByText('Upload package.json')).toBeInTheDocument());
+  });
+
+  it('clicking "Export CSV" calls downloadFile', async () => {
+    const { downloadFile: mockDl } = await import('../../lib/exporters');
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    expect(mockDl).toHaveBeenCalled();
+  });
+
+  it('search input shows "No packages match" when no results', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('Search package name…'), {
+      target: { value: 'zzz-not-found' },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('No packages match the current filters.')).toBeInTheDocument(),
+    );
+  });
+
+  it('sort "A→Z" button reorders results', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /A→Z/i }));
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+  });
+
+  it('sort "Vulns ↓" button reorders results', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Vulns ↓/i }));
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+  });
+
+  it('type filter "Production" filters to prod deps', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Production$/i }));
+    await waitFor(() => expect(screen.getByText('lodash')).toBeInTheDocument());
+  });
+
+  it('shows Dependency Risk Score bar in results', async () => {
+    render(<SupplyChain />);
+    uploadFile();
+    await waitFor(() =>
+      expect(screen.getByText('Dependency Risk Score')).toBeInTheDocument(),
+    );
+  });
+});
