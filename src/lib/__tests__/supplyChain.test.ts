@@ -116,6 +116,23 @@ describe('parsePackageLock', () => {
     });
     expect(deps[0].name).toBe('@types/node');
   });
+
+  it('falls back to raw.dependencies when packages is absent (npm lock v1)', () => {
+    const deps = parsePackageLock({
+      dependencies: {
+        lodash: { version: '4.17.21', dev: false },
+        typescript: { version: '5.0.0', dev: true },
+      },
+    });
+    const names = deps.map((d) => d.name);
+    expect(names).toContain('lodash');
+    expect(names).toContain('typescript');
+    expect(deps.find((d) => d.name === 'typescript')?.type).toBe('dev');
+  });
+
+  it('returns empty array when both packages and dependencies are absent', () => {
+    expect(parsePackageLock({})).toHaveLength(0);
+  });
 });
 
 // ─── parseCycloneDx ──────────────────────────────────────────────────────
@@ -206,6 +223,56 @@ describe('resolveLicense', () => {
   it('handles AGPL restriction note', () => {
     const lic = resolveLicense('AGPL');
     expect(lic?.risk).toBe('restrictive');
+  });
+
+  it('resolves BSD-2-Clause as permissive (exact match)', () => {
+    const lic = resolveLicense('BSD-2-Clause');
+    expect(lic?.risk).toBe('permissive');
+    expect(lic?.isOsiApproved).toBe(true);
+  });
+
+  it('resolves ISC as permissive (exact match)', () => {
+    const lic = resolveLicense('ISC');
+    expect(lic?.risk).toBe('permissive');
+  });
+
+  it('resolves UNLICENSED as unknown risk', () => {
+    const lic = resolveLicense('UNLICENSED');
+    expect(lic?.risk).toBe('unknown');
+    expect(lic?.isOsiApproved).toBe(false);
+  });
+
+  it('resolves LGPL-2.1 via exact match', () => {
+    const lic = resolveLicense('LGPL-2.1');
+    expect(lic?.risk).toBe('restrictive');
+  });
+
+  it('resolves license containing "lgpl" (lowercase) via LGPL branch', () => {
+    // No exact DB match → falls through to clean.includes('LGPL') branch
+    const lic = resolveLicense('Some-LGPL-License');
+    expect(lic?.risk).toBe('restrictive');
+  });
+
+  it('resolves license containing "gpl" without version number → GPL-2.0 branch', () => {
+    const lic = resolveLicense('Custom-GPL-License');
+    expect(lic?.risk).toBe('restrictive');
+  });
+
+  it('resolves license containing "apache" (case-insensitive) → Apache-2.0', () => {
+    const lic = resolveLicense('apache-something');
+    expect(lic?.risk).toBe('permissive');
+  });
+
+  it('resolves license containing "mit" (lowercase) → MIT branch', () => {
+    const lic = resolveLicense('some-mit-variant');
+    expect(lic?.risk).toBe('permissive');
+  });
+
+  it('falls back to unknown risk for unrecognized license string', () => {
+    const lic = resolveLicense('Proprietary-Custom-v2');
+    expect(lic?.risk).toBe('unknown');
+    expect(lic?.isOsiApproved).toBe(false);
+    expect(lic?.name).toBe('Proprietary-Custom-v2');
   });
 });
 
@@ -382,6 +449,187 @@ describe('ScaAnalyzer', () => {
     if (result.ok) {
       expect(typeof result.data.scannedAt).toBe('string');
       expect(new Date(result.data.scannedAt).getTime()).not.toBeNaN();
+    }
+  });
+
+  // ─── extractSeverity branches via fetch mock ──────────────────────────
+
+  it('maps OSV vuln with severity score "HIGH" to high', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-HIGH', summary: 'High vuln', details: '', severity: [{ score: 'HIGH' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const vuln = result.data.risks[0].vulnerabilities[0];
+      expect(vuln.severity).toBe('high');
+    }
+  });
+
+  it('maps OSV vuln with severity score "LOW" to low', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-LOW', summary: 'Low vuln', details: '', severity: [{ score: 'LOW' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('low');
+  });
+
+  it('maps OSV vuln with severity score "MODERATE" to medium', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-MOD', summary: 'Moderate vuln', details: '', severity: [{ score: 'MODERATE' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('medium');
+  });
+
+  it('maps OSV vuln with numeric CVSS 9.5 to critical', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-NUM-C', summary: 'Num critical', details: '', severity: [{ score: '9.5' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('critical');
+  });
+
+  it('maps OSV vuln with numeric CVSS 7.5 to high', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-NUM-H', summary: 'Num high', details: '', severity: [{ score: '7.5' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('high');
+  });
+
+  it('maps OSV vuln with numeric CVSS 5.0 to medium', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-NUM-M', summary: 'Num medium', details: '', severity: [{ score: '5.0' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('medium');
+  });
+
+  it('maps OSV vuln with numeric CVSS 2.0 to low', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-NUM-L', summary: 'Num low', details: '', severity: [{ score: '2.0' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('low');
+  });
+
+  it('maps OSV vuln with non-numeric unrecognized score to unknown', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-UNK', summary: 'Unknown', details: '', severity: [{ score: 'UNRECOGNIZED_SCORE' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities[0].severity).toBe('unknown');
+  });
+
+  it('maps OSV vuln with no summary/details/affected to defaults', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-SPARSE', severity: [{ score: 'CRITICAL' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const vuln = result.data.risks[0].vulnerabilities[0];
+      expect(vuln.summary).toBe('Known vulnerability');
+      expect(vuln.details).toBe('');
+      expect(vuln.fixedIn).toBeUndefined();
+    }
+  });
+
+  it('maps OSV vuln with references to reference list (max 3)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{
+          id: 'GHSA-REFS',
+          summary: 'Ref vuln',
+          details: '',
+          severity: [{ score: 'HIGH' }],
+          references: [
+            { url: 'https://a.com' },
+            { url: 'https://b.com' },
+            { url: 'https://c.com' },
+            { url: 'https://d.com' },
+          ],
+        }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.risks[0].vulnerabilities[0].references).toHaveLength(3);
+    }
+  });
+
+  it('handles OSV response with non-ok HTTP status (returns empty vulns)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.risks[0].vulnerabilities).toHaveLength(0);
+  });
+
+  // ─── buildScaRecommendations branches ─────────────────────────────────
+
+  it('recommendations include high-severity action when high vulns found', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-H1', summary: 'High', details: '', severity: [{ score: 'HIGH' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.recommendations.some((r) => r.includes('high-severity'))).toBe(true);
+    }
+  });
+
+  it('recommendations include critical + pin action when critical vulns found', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        vulns: [{ id: 'GHSA-C1', summary: 'Crit', details: '', severity: [{ score: 'CRITICAL' }] }],
+      }),
+    }));
+    const result = await analyzer.scan({ dependencies: { pkg: '1.0.0' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.recommendations.some((r) => r.includes('Immediately patch'))).toBe(true);
+      expect(result.data.recommendations.some((r) => r.includes('Pin affected packages'))).toBe(true);
     }
   });
 });
