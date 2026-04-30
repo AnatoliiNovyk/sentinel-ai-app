@@ -223,3 +223,248 @@ describe('RemediationAssistant — error state', () => {
     expect(mockGenerateRemediation).toHaveBeenCalledOnce();
   });
 });
+
+describe('RemediationAssistant — expanded suggestion content', () => {
+  beforeEach(() => {
+    mockGetSavedRemediation.mockResolvedValue(null);
+    mockClearRemediationCache.mockReturnValue(undefined);
+  });
+
+  async function renderWithSuggestion(overrides: Parameters<typeof makeSuggestion>[0] = {}) {
+    const suggestion = makeSuggestion(overrides);
+    mockGenerateRemediation.mockResolvedValue(suggestion);
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByRole('button', { name: /Generate Fix/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Generate Fix/i }));
+    });
+    await waitFor(() => screen.getByText('AI Remediation Plan'));
+    return suggestion;
+  }
+
+  it('shows "Remediation Steps" label in expanded view', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByText('Remediation Steps')).toBeInTheDocument();
+  });
+
+  it('shows step title in expanded view', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByText('Replace raw queries')).toBeInTheDocument();
+  });
+
+  it('shows references link', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByText('OWASP SQL Injection')).toBeInTheDocument();
+  });
+
+  it('shows "Regenerate" button', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByTitle(/Regenerate AI remediation plan/i)).toBeInTheDocument();
+  });
+
+  it('shows estimated time', async () => {
+    await renderWithSuggestion({ estimated_time: '2 hours' });
+    expect(screen.getByText('2 hours')).toBeInTheDocument();
+  });
+
+  it('shows "1 step" (singular) badge', async () => {
+    await renderWithSuggestion({ steps: [makeSuggestion().steps[0]] });
+    expect(screen.getByText('1 step')).toBeInTheDocument();
+  });
+
+  it('shows "N steps" (plural) badge for multiple steps', async () => {
+    const steps = [
+      { order: 1, title: 'Step A', description: 'desc A' },
+      { order: 2, title: 'Step B', description: 'desc B' },
+    ];
+    await renderWithSuggestion({ steps });
+    expect(screen.getByText('2 steps')).toBeInTheDocument();
+  });
+
+  it('shows effort "moderate" icon and label', async () => {
+    await renderWithSuggestion({ effort: 'moderate' });
+    expect(screen.getByText(/Moderate/)).toBeInTheDocument();
+  });
+
+  it('shows effort "quick-win" label', async () => {
+    await renderWithSuggestion({ effort: 'quick-win' });
+    expect(screen.getByText(/Quick win/)).toBeInTheDocument();
+  });
+
+  it('shows effort "complex" label', async () => {
+    await renderWithSuggestion({ effort: 'complex' });
+    expect(screen.getByText(/Complex/)).toBeInTheDocument();
+  });
+
+  it('shows priority "high" badge', async () => {
+    await renderWithSuggestion({ priority: 'high' });
+    expect(screen.getByText('High')).toBeInTheDocument();
+  });
+
+  it('shows priority "medium" badge', async () => {
+    await renderWithSuggestion({ priority: 'medium' });
+    expect(screen.getByText('Medium')).toBeInTheDocument();
+  });
+
+  it('shows priority "low" badge', async () => {
+    await renderWithSuggestion({ priority: 'low' });
+    expect(screen.getByText('Low')).toBeInTheDocument();
+  });
+
+  it('renders code block with Copy button when step has command', async () => {
+    await renderWithSuggestion();
+    // step has command: 'npm install knex'
+    expect(screen.getByText('npm install knex')).toBeInTheDocument();
+    expect(screen.getByTitle('Copy to clipboard')).toBeInTheDocument();
+  });
+
+  it('renders step note when step.note is present', async () => {
+    const steps = [{ ...makeSuggestion().steps[0], note: 'Run as sudo' }];
+    await renderWithSuggestion({ steps });
+    expect(screen.getByText('Run as sudo')).toBeInTheDocument();
+  });
+
+  it('renders language label "bash" in code block', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByText('bash')).toBeInTheDocument();
+  });
+
+  it('shows "Copy all" button when steps have commands', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByTitle('Copy all commands')).toBeInTheDocument();
+  });
+
+  it('does not show "Copy all" when no step has a command', async () => {
+    const steps = [{ order: 1, title: 'Manual step', description: 'No code required' }];
+    await renderWithSuggestion({ steps });
+    expect(screen.queryByTitle('Copy all commands')).not.toBeInTheDocument();
+  });
+
+  it('shows generated timestamp in footer', async () => {
+    await renderWithSuggestion();
+    expect(screen.getByText(/Generated /)).toBeInTheDocument();
+  });
+});
+
+describe('RemediationAssistant — expand/collapse toggle', () => {
+  beforeEach(() => {
+    mockGetSavedRemediation.mockResolvedValue(null);
+    mockClearRemediationCache.mockReturnValue(undefined);
+  });
+
+  it('collapses expanded suggestion when header is clicked', async () => {
+    mockGenerateRemediation.mockResolvedValue(makeSuggestion());
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByRole('button', { name: /Generate Fix/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Generate Fix/i }));
+    });
+    await waitFor(() => screen.getByText('Remediation Steps'));
+
+    // Click header to collapse
+    fireEvent.click(screen.getByTitle('Collapse remediation plan'));
+    await waitFor(() =>
+      expect(screen.queryByText('Remediation Steps')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTitle('Expand remediation plan')).toBeInTheDocument();
+  });
+
+  it('expands collapsed suggestion when header is clicked again', async () => {
+    const saved = makeSuggestion({ summary: 'Saved suggestion' });
+    mockGetSavedRemediation.mockResolvedValue(saved);
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByText('Saved suggestion'));
+    // Initially collapsed (expanded=false by default when loaded from cache)
+    const expandBtn = screen.getByTitle('Expand remediation plan');
+    fireEvent.click(expandBtn);
+    await waitFor(() => screen.getByText('Remediation Steps'));
+  });
+});
+
+describe('RemediationAssistant — StepCard collapse', () => {
+  beforeEach(() => {
+    mockGetSavedRemediation.mockResolvedValue(null);
+    mockClearRemediationCache.mockReturnValue(undefined);
+  });
+
+  it('collapses a step when its header is clicked', async () => {
+    mockGenerateRemediation.mockResolvedValue(makeSuggestion());
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByRole('button', { name: /Generate Fix/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Generate Fix/i }));
+    });
+    await waitFor(() => screen.getByText('Replace raw queries'));
+
+    // Step description is visible
+    expect(screen.getByText('Use prepared statements in your ORM.')).toBeInTheDocument();
+    // Click step header to collapse
+    fireEvent.click(screen.getByTitle('Collapse step'));
+    await waitFor(() =>
+      expect(screen.queryByText('Use prepared statements in your ORM.')).not.toBeInTheDocument(),
+    );
+  });
+});
+
+describe('RemediationAssistant — Regenerate', () => {
+  beforeEach(() => {
+    mockGetSavedRemediation.mockResolvedValue(null);
+    mockClearRemediationCache.mockReturnValue(undefined);
+  });
+
+  it('clicking Regenerate calls clearRemediationCache and generateRemediation again', async () => {
+    mockGenerateRemediation.mockClear();
+    mockGenerateRemediation.mockResolvedValue(makeSuggestion());
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByRole('button', { name: /Generate Fix/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Generate Fix/i }));
+    });
+    await waitFor(() => screen.getByTitle(/Regenerate AI remediation plan/i));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Regenerate AI remediation plan/i));
+    });
+
+    expect(mockClearRemediationCache).toHaveBeenCalledWith('vuln-1');
+    expect(mockGenerateRemediation).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('RemediationAssistant — clipboard copy', () => {
+  beforeEach(() => {
+    mockGetSavedRemediation.mockResolvedValue(null);
+    mockClearRemediationCache.mockReturnValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+  });
+
+  async function openExpanded() {
+    mockGenerateRemediation.mockResolvedValue(makeSuggestion());
+    render(<RemediationAssistant vuln={makeVuln()} />);
+    await waitFor(() => screen.getByRole('button', { name: /Generate Fix/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Generate Fix/i }));
+    });
+    await waitFor(() => screen.getByText('Remediation Steps'));
+  }
+
+  it('clicking Copy button in code block calls clipboard.writeText', async () => {
+    await openExpanded();
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Copy to clipboard'));
+    });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('npm install knex');
+  });
+
+  it('clicking Copy all calls clipboard.writeText with all commands', async () => {
+    await openExpanded();
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Copy all commands'));
+    });
+    expect(navigator.clipboard.writeText).toHaveBeenCalled();
+    const callArg = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(callArg).toContain('npm install knex');
+  });
+});
