@@ -184,4 +184,47 @@ describe('ScansService.dispatchScan', () => {
       ScansService.dispatchScan('proj-2', 'prowler', 'aws-account', 'org-2'),
     ).rejects.toThrow('Edge function error');
   });
+
+  it('throws authentication error when getUser fails', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: new Error('Not authenticated') });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('Authentication required');
+  });
+
+  it('throws authentication error when user is null', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('Authentication required');
+  });
+
+  it('throws with error details when insert error has message field (record error)', async () => {
+    mockInsert.mockReturnValue({
+      select: () => ({ single: mockSingle }),
+    });
+    // Pass a plain object with message field (not Error instance)
+    mockSingle.mockResolvedValue({ data: null, error: { message: 'Constraint violation' } });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('Constraint violation');
+  });
+
+  it('returns generic error message when insert error has no readable fields', async () => {
+    mockInsert.mockReturnValue({
+      select: () => ({ single: mockSingle }),
+    });
+    mockSingle.mockResolvedValue({ data: null, error: null });
+    // Make scan null so scanErr check triggers via missing data
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: {} }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow();
+  });
 });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runAgent, TOOL_LABELS } from '../agentTools';
+import { getRateLimiter } from '../rateLimiter';
 
 vi.mock('../supabase', () => ({
   supabase: {
@@ -42,6 +43,12 @@ vi.mock('../darkWebMonitor', () => ({
       ok: true,
       data: { breachCount: 0, riskScore: 0, riskLevel: 'low', breaches: [] },
     }),
+  }),
+}));
+
+vi.mock('../rateLimiter', () => ({
+  getRateLimiter: vi.fn().mockReturnValue({
+    check: vi.fn().mockReturnValue({ allowed: true, retryAfterMs: 0 }),
   }),
 }));
 
@@ -181,6 +188,63 @@ describe('Agent Tools Integration', () => {
       expect(result!.toolCalls[0].name).toBe('dark_web_scan');
       expect(result!.toolCalls[0].ok).toBe(false);
       expect(result!.toolCalls[0].summary).toContain('Dark web scan failed');
+    });
+  });
+
+  describe('Dark Web Monitor — injection & rate limit', () => {
+    it('returns "too long" error when extracted query exceeds 253 chars', async () => {
+      // "dark web leak check <longWord>" → extractQueryFromText captures <longWord> after "check"
+      // A 300-char alphanumeric string exceeds the 253-char limit
+      const longQuery = 'a'.repeat(300);
+      const result = await runAgent('user-1', `dark web leak check ${longQuery}`);
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('dark_web_scan');
+      expect(result!.toolCalls[0].ok).toBe(false);
+      expect(result!.toolCalls[0].summary).toContain('too long');
+    });
+
+    it('returns rate limit exceeded when limiter denies request', async () => {
+      vi.mocked(getRateLimiter).mockReturnValueOnce({
+        check: vi.fn().mockReturnValue({ allowed: false, retryAfterMs: 5000 }),
+      } as unknown as ReturnType<typeof getRateLimiter>);
+
+      const result = await runAgent('user-1', 'dark web scan for user@example.com');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('dark_web_scan');
+      expect(result!.toolCalls[0].ok).toBe(false);
+      expect(result!.toolCalls[0].summary).toContain('Rate limit exceeded');
+    });
+
+    it('returns breach details when breachCount > 0', async () => {
+      const { getGlobalDarkWebMonitor } = await import('../darkWebMonitor');
+      vi.mocked(getGlobalDarkWebMonitor).mockReturnValueOnce({
+        scan: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            breachCount: 2,
+            riskScore: 75,
+            riskLevel: 'high',
+            breaches: [
+              { source: 'HaveIBeenPwned', severity: 'high' },
+              { source: 'DarkSearch', severity: 'medium' },
+            ],
+          },
+        }),
+      } as unknown as ReturnType<typeof getGlobalDarkWebMonitor>);
+
+      const result = await runAgent('user-1', 'dark web scan for pwned@example.com');
+      expect(result).not.toBeNull();
+      expect(result!.toolCalls[0].name).toBe('dark_web_scan');
+      expect(result!.toolCalls[0].ok).toBe(true);
+      expect(result!.content).toContain('2 breach');
+      expect(result!.content).toContain('HaveIBeenPwned');
+    });
+  });
+
+  describe('unrecognized intent', () => {
+    it('returns null for completely unrecognized input', async () => {
+      const result = await runAgent('user-1', 'xyzzy frobulate the whatchamacallit');
+      expect(result).toBeNull();
     });
   });
 });

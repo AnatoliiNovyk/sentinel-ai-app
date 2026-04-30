@@ -25,6 +25,7 @@ function makeEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
 // ─────────────────────────────────────────────────────────────────────────────
 const insertMock = vi.fn();
 const selectMock = vi.fn();
+const deleteMock = vi.fn();
 
 vi.mock('../client', () => ({
   supabase: {
@@ -33,9 +34,10 @@ vi.mock('../client', () => ({
         return {
           insert: insertMock,
           select: selectMock,
+          delete: deleteMock,
         };
       }
-      return { insert: vi.fn(), select: vi.fn() };
+      return { insert: vi.fn(), select: vi.fn(), delete: vi.fn() };
     }),
   },
 }));
@@ -328,6 +330,113 @@ describe('AuditService', () => {
       expect(anomalies.rateLimitedUsers).toHaveLength(0);
       expect(anomalies.failedAuthAttempts).toHaveLength(0);
       expect(anomalies.circuitBreakerEvents).toBe(0);
+    });
+  });
+
+  // ── exportLogs ─────────────────────────────────────────────────────────────
+
+  describe('exportLogs', () => {
+    it('returns CSV string with header row', async () => {
+      const logs: AuditLogEntry[] = [
+        makeEntry({
+          timestamp: '2026-04-30T10:00:00Z',
+          userId: 'user-1',
+          action: AuditAction.SCAN_CREATED,
+          resourceType: 'scan',
+          resourceId: 'scan-1',
+          status: 'success',
+        }),
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(logs);
+
+      const csv = await AuditService.exportLogs('org-1', new Date('2026-04-01'), new Date('2026-04-30'));
+
+      expect(typeof csv).toBe('string');
+      expect(csv).toContain('Timestamp');
+      expect(csv).toContain('User ID');
+      expect(csv).toContain('Action');
+      expect(csv).toContain('scan_created');
+    });
+
+    it('handles logs with optional fields as empty strings in CSV', async () => {
+      const logs: AuditLogEntry[] = [
+        makeEntry({ errorCode: undefined, errorMessage: undefined, ipAddress: undefined }),
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(logs);
+
+      const csv = await AuditService.exportLogs('org-1', new Date('2026-04-01'), new Date('2026-04-30'));
+
+      expect(csv).toContain('""');
+    });
+
+    it('returns only header when logs array is empty', async () => {
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce([]);
+
+      const csv = await AuditService.exportLogs('org-1', new Date('2026-04-01'), new Date('2026-04-30'));
+
+      const lines = csv.split('\n');
+      expect(lines.length).toBe(1); // only header
+      expect(lines[0]).toContain('Timestamp');
+    });
+
+    it('escapes double-quotes in cell values', async () => {
+      const logs: AuditLogEntry[] = [
+        makeEntry({ errorMessage: 'He said "hello"' }),
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(logs);
+
+      const csv = await AuditService.exportLogs('org-1', new Date(), new Date());
+      expect(csv).toContain('He said ""hello""');
+    });
+  });
+
+  // ── cleanupOldLogs ─────────────────────────────────────────────────────────
+
+  describe('cleanupOldLogs', () => {
+    it('returns 0 when status is 204 (no content)', async () => {
+      deleteMock.mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          lt: vi.fn().mockResolvedValue({ error: null, status: 204 }),
+        }),
+      });
+
+      const result = await AuditService.cleanupOldLogs('org-1', 30);
+      expect(result).toBe(0);
+    });
+
+    it('returns 1 when status is 200 (rows affected)', async () => {
+      deleteMock.mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          lt: vi.fn().mockResolvedValue({ error: null, status: 200 }),
+        }),
+      });
+
+      const result = await AuditService.cleanupOldLogs('org-1', 90);
+      expect(result).toBe(1);
+    });
+
+    it('throws when delete returns an error', async () => {
+      deleteMock.mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          lt: vi.fn().mockResolvedValue({ error: new Error('Delete failed'), status: 500 }),
+        }),
+      });
+
+      await expect(AuditService.cleanupOldLogs('org-1', 90)).rejects.toThrow('Delete failed');
+    });
+
+    it('uses default retention of 90 days', async () => {
+      const ltMock = vi.fn().mockResolvedValue({ error: null, status: 204 });
+      deleteMock.mockReturnValue({
+        eq: vi.fn().mockReturnValue({ lt: ltMock }),
+      });
+
+      await AuditService.cleanupOldLogs('org-1'); // no retentionDays arg
+      const cutoffArg = ltMock.mock.calls[0][1] as string;
+      const cutoff = new Date(cutoffArg);
+      const expectedApprox = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      // Allow 5s difference for test execution time
+      expect(Math.abs(cutoff.getTime() - expectedApprox.getTime())).toBeLessThan(5000);
     });
   });
 });
