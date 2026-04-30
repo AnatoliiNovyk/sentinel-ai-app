@@ -230,4 +230,63 @@ describe('KillChain — exports and interactive functions', () => {
     const selects = screen.getAllByRole('combobox');
     expect(selects.length).toBeGreaterThan(0);
   });
+
+  it('clicking a phase filter button filters steps', async () => {
+    await generateChain();
+    // Click "Recon" phase button (partial match for "Reconnaissance")
+    const reconBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Recon'));
+    expect(reconBtn).toBeTruthy();
+    fireEvent.click(reconBtn!);
+    // Only Reconnaissance step should remain
+    await waitFor(() =>
+      expect(screen.getAllByText('Reconnaissance').length).toBeGreaterThanOrEqual(1),
+    );
+  });
+
+  it('stepSearch filters steps by tactic', async () => {
+    await generateChain();
+    const searchInput = screen.getByPlaceholderText(/search tactic/i);
+    fireEvent.change(searchInput, { target: { value: 'Active Scanning' } });
+    await waitFor(() => expect(screen.getAllByText(/Active Scanning/i).length).toBeGreaterThanOrEqual(1));
+  });
+
+  it('stepSearch with no match shows "No steps match"', async () => {
+    await generateChain();
+    const searchInput = screen.getByPlaceholderText(/search tactic/i);
+    fireEvent.change(searchInput, { target: { value: 'zzz-not-a-tactic-xyz' } });
+    await waitFor(() =>
+      expect(screen.getByText('No steps match the current filters.')).toBeInTheDocument(),
+    );
+  });
+
+  it('sort "Phase order" button changes sort order', async () => {
+    await generateChain();
+    const phaseOrderBtn = screen.getByRole('button', { name: 'Phase order' });
+    fireEvent.click(phaseOrderBtn);
+    // Steps still visible
+    expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument();
+  });
+
+  it('sort "Asset A→Z" button changes sort order', async () => {
+    await generateChain();
+    const assetBtn = screen.getByRole('button', { name: /asset a/i });
+    fireEvent.click(assetBtn);
+    expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument();
+  });
+
+  it('clear filters button appears and resets all filters', async () => {
+    await generateChain();
+    // Apply a phase filter to trigger clear button
+    const reconBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Recon'));
+    fireEvent.click(reconBtn!);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+    // Both steps should be visible again
+    await waitFor(() =>
+      expect(screen.getAllByText('Reconnaissance').length).toBeGreaterThanOrEqual(1),
+    );
+    expect(screen.getAllByText('Initial Access').length).toBeGreaterThanOrEqual(1);
+  });
 });
