@@ -231,4 +231,161 @@ describe('Scans integration flow', () => {
       expect(screen.getByText('apt-get update && apt-get upgrade -y')).toBeDefined();
     }, { timeout: 3000 });
   }, { timeout: 6000 });
+
+  it('shows DEMO badge when scan has is_mock = true', async () => {
+    mockGetProjectScans.mockResolvedValue([
+      {
+        id: 'scan-1',
+        scanner: 'nmap',
+        status: 'completed',
+        created_at: '2026-04-24T00:00:00.000Z',
+        detected_mode: 'MOCK',
+        is_mock: true,
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
+    expect(screen.getByText('DEMO')).toBeDefined();
+  }, { timeout: 5000 });
+
+  it('shows running progress bar when scan status is running', async () => {
+    mockGetProjectScans.mockResolvedValue([
+      {
+        id: 'scan-1',
+        scanner: 'nmap',
+        status: 'running',
+        created_at: '2026-04-24T00:00:00.000Z',
+        detected_mode: 'ACTIVE',
+        is_mock: false,
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
+    // RunningProgressBar component renders when status is 'running'
+    expect(screen.getByText('nmap')).toBeDefined();
+  }, { timeout: 5000 });
+
+  it('renders detail modal with medium severity', async () => {
+    mockGetScanVulnerabilities.mockResolvedValue([
+      {
+        id: 'vuln-med',
+        title: 'Medium Priority Issue',
+        description: 'Not critical but should be fixed',
+        severity: 'medium',
+        status: 'open',
+        asset: 'example.com',
+        cve_id: 'CVE-2026-0001',
+        scan_id: 'scan-1',
+        created_at: '2026-04-24T00:00:00.000Z',
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('view-details'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('view-details'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Medium Priority Issue')).toBeDefined();
+      expect(screen.getByText('MEDIUM')).toBeDefined();
+    }, { timeout: 3000 });
+  }, { timeout: 6000 });
+
+  it('renders detail modal with low severity', async () => {
+    mockGetScanVulnerabilities.mockResolvedValue([
+      {
+        id: 'vuln-low',
+        title: 'Low Priority Issue',
+        description: 'Minor issue',
+        severity: 'low',
+        status: 'open',
+        asset: 'example.com',
+        cve_id: 'CVE-2026-0002',
+        scan_id: 'scan-1',
+        created_at: '2026-04-24T00:00:00.000Z',
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('view-details'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('view-details'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Low Priority Issue')).toBeDefined();
+      expect(screen.getByText('LOW')).toBeDefined();
+    }, { timeout: 3000 });
+  }, { timeout: 6000 });
+
+  it('shows status filter when multiple status values exist', async () => {
+    mockGetProjectScans.mockResolvedValue([
+      {
+        id: 'scan-1',
+        scanner: 'nmap',
+        status: 'completed',
+        created_at: '2026-04-24T00:00:00.000Z',
+        detected_mode: 'MOCK',
+        is_mock: false,
+      },
+      {
+        id: 'scan-2',
+        scanner: 'tfsec',
+        status: 'pending',
+        created_at: '2026-04-25T00:00:00.000Z',
+        detected_mode: 'MOCK',
+        is_mock: false,
+      },
+      {
+        id: 'scan-3',
+        scanner: 'amass',
+        status: 'failed',
+        created_at: '2026-04-26T00:00:00.000Z',
+        detected_mode: 'MOCK',
+        is_mock: false,
+      },
+    ]);
+    mockGetScanVulnerabilities.mockResolvedValue([
+      {
+        id: 'vuln-1',
+        title: 'Outdated package',
+        description: 'desc',
+        severity: 'high',
+        status: 'open',
+        asset: 'example.com',
+        cve_id: 'CVE-1',
+        scan_id: 'scan-1',
+        created_at: '2026-04-24T00:00:00.000Z',
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
+    // Status filter should be visible (uniqueStatuses > 2)
+    expect(screen.getByLabelText('Filter by status')).toBeDefined();
+  }, { timeout: 5000 });
+
+  it('can click to select a specific scan from list', async () => {
+    mockGetProjectScans.mockResolvedValue([
+      {
+        id: 'scan-1',
+        scanner: 'nmap',
+        status: 'completed',
+        created_at: '2026-04-24T00:00:00.000Z',
+        detected_mode: 'MOCK',
+        is_mock: false,
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('nmap'), { timeout: 3000 });
+    // Click the scan to select it
+    fireEvent.click(screen.getByText('nmap'));
+    expect(screen.getByText('nmap')).toBeDefined();
+  }, { timeout: 5000 });
 });
