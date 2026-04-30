@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import Notifications from '../Notifications';
@@ -171,3 +171,127 @@ describe('Notifications — filters', () => {
       }
     });
   });
+
+// ─── Type filter ─────────────────────────────────────────────────────────────
+
+describe('Notifications — type filter', () => {
+  beforeEach(() => { setupMocks(); });
+
+  it('renders all type filter buttons (Scan, Report, Finding, SLA, Project)', async () => {
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByRole('button', { name: 'Finding' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Report' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'SLA' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Project' })).toBeInTheDocument();
+  });
+
+  it('type "Finding" filter shows only critical_finding notifications', async () => {
+    render(<Notifications />);
+    await screen.findByText('Scan completed successfully');
+    fireEvent.click(screen.getByRole('button', { name: 'Finding' }));
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+    expect(screen.queryByText('Scan completed successfully')).not.toBeInTheDocument();
+  });
+
+  it('type "Scan" filter shows only scan_completed notifications', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }));
+    expect(screen.getByText('Scan completed successfully')).toBeInTheDocument();
+    expect(screen.queryByText('Critical vulnerability detected')).not.toBeInTheDocument();
+  });
+});
+
+// ─── Severity filter ─────────────────────────────────────────────────────────
+
+describe('Notifications — severity filter', () => {
+  beforeEach(() => { setupMocks(); });
+
+  it('"critical" severity filter hides non-critical notifications', async () => {
+    render(<Notifications />);
+    await screen.findByText('Scan completed successfully');
+    fireEvent.click(screen.getByRole('button', { name: 'critical' }));
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+    expect(screen.queryByText('Scan completed successfully')).not.toBeInTheDocument();
+  });
+
+  it('"success" severity filter hides non-success notifications', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    fireEvent.click(screen.getByRole('button', { name: 'success' }));
+    expect(screen.getByText('Scan completed successfully')).toBeInTheDocument();
+    expect(screen.queryByText('Critical vulnerability detected')).not.toBeInTheDocument();
+  });
+});
+
+// ─── Search ──────────────────────────────────────────────────────────────────
+
+describe('Notifications — search', () => {
+  beforeEach(() => { setupMocks(); });
+
+  it('filters by title text via search input', async () => {
+    render(<Notifications />);
+    await screen.findByText('Scan completed successfully');
+    fireEvent.change(screen.getByPlaceholderText('Search notifications\u2026'), { target: { value: 'critical' } });
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+    expect(screen.queryByText('Scan completed successfully')).not.toBeInTheDocument();
+  });
+
+  it('shows "No notifications match the filters" when search has no match', async () => {
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    fireEvent.change(screen.getByPlaceholderText('Search notifications\u2026'), { target: { value: 'xyznonexistent99' } });
+    expect(screen.getByText('No notifications match the filters')).toBeInTheDocument();
+  });
+
+  it('shows "Clear filters" button in empty state and filter panel "Clear" resets all', async () => {
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    fireEvent.change(screen.getByPlaceholderText('Search notifications\u2026'), { target: { value: 'xyznonexistent99' } });
+    expect(screen.getByText('No notifications match the filters')).toBeInTheDocument();
+    // The Filters panel also shows a "Clear" link — it resets all filters including search
+    const filterPanelClear = screen.getByRole('button', { name: /^clear$/i });
+    fireEvent.click(filterPanelClear);
+    await screen.findByText('Critical vulnerability detected');
+    expect(screen.getByText('Scan completed successfully')).toBeInTheDocument();
+  });
+});
+
+// ─── Notification actions ─────────────────────────────────────────────────────
+
+describe('Notifications — notification actions', () => {
+  beforeEach(() => { setupMocks(); });
+
+  it('clicking "Mark as read" removes the unread dot', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    // n-1 is unread → aria-label="unread" dot is present
+    expect(screen.getByLabelText('unread')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Mark as read'));
+    await waitFor(() => expect(screen.queryByLabelText('unread')).not.toBeInTheDocument());
+  });
+
+  it('clicking "Delete notification" removes the notification', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    const deleteBtns = screen.getAllByTitle('Delete notification');
+    fireEvent.click(deleteBtns[0]);
+    await waitFor(() => expect(screen.queryByText('Critical vulnerability detected')).not.toBeInTheDocument());
+  });
+
+  it('clicking "Clear read" removes all read notifications', async () => {
+    render(<Notifications />);
+    await screen.findByText('Scan completed successfully');
+    fireEvent.click(screen.getByText('Clear read'));
+    await waitFor(() => expect(screen.queryByText('Scan completed successfully')).not.toBeInTheDocument());
+  });
+
+  it('clicking "Go to related page" calls navigate with the notification link', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    fireEvent.click(screen.getAllByTitle('Go to related page')[0]);
+    expect(mockNavigate).toHaveBeenCalledWith('/vulns');
+  });
+});
