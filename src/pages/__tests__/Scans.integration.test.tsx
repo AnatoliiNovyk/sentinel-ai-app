@@ -62,14 +62,19 @@ vi.mock('../../components/scans/VulnerabilityList', () => ({
   VulnerabilityList: ({
     vulnerabilities,
     onGenerateAiFix,
+    onViewDetails,
   }: {
-    vulnerabilities: Array<Record<string, string>>;
-    onGenerateAiFix: (v: Record<string, string>) => void;
+    vulnerabilities: Array<Record<string, unknown>>;
+    onGenerateAiFix: (v: Record<string, unknown>) => void;
+    onViewDetails: (v: Record<string, unknown>) => void;
   }) => (
     <div>
       <div data-testid="vuln-count">{vulnerabilities.length}</div>
       {vulnerabilities[0] && (
         <button onClick={() => onGenerateAiFix(vulnerabilities[0])}>generate-ai-fix</button>
+      )}
+      {vulnerabilities[0] && (
+        <button onClick={() => onViewDetails(vulnerabilities[0])}>view-details</button>
       )}
     </div>
   ),
@@ -104,9 +109,11 @@ describe('Scans integration flow', () => {
         title: 'Outdated package',
         description: 'desc',
         severity: 'high',
+        status: 'open',
         asset: 'example.com',
         cve_id: 'CVE-1',
         scan_id: 'scan-1',
+        created_at: '2026-04-24T00:00:00.000Z',
       },
     ]);
 
@@ -173,5 +180,25 @@ describe('Scans integration flow', () => {
       },
       { timeout: 3000 },
     );
+  }, { timeout: 6000 });
+
+  it('opens and closes vulnerability detail modal', async () => {
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('view-details'), { timeout: 3000 });
+
+    fireEvent.click(screen.getByText('view-details'));
+
+    // Detail modal should be visible with vuln title
+    await waitFor(() => {
+      expect(screen.getByText('Outdated package')).toBeDefined();
+    }, { timeout: 3000 });
+
+    // Close the modal
+    fireEvent.click(screen.getByRole('button', { name: 'Close vulnerability details' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Close vulnerability details' })).toBeNull();
+    }, { timeout: 3000 });
   }, { timeout: 6000 });
 });

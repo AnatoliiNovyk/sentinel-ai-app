@@ -254,6 +254,53 @@ describe('OTelCollectorClient', () => {
       expect(result.failed).toBe(1);
     });
 
+    it('throws and fails when collector returns non-ok HTTP status', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      const metric: OTelMetric = {
+        name: 'metric',
+        value: 1,
+        timestamp: Date.now(),
+        type: 'gauge',
+      };
+
+      client.recordMetric(metric);
+      const result = await client.flush();
+
+      // Non-ok response causes exportToCollector to throw, which is retried then counted as failed
+      expect(result.success).toBe(false);
+      expect(result.failed).toBe(1);
+    });
+
+    it('silently ignores flush errors triggered by background flush timer', async () => {
+      fetchMock.mockRejectedValue(new Error('Timer flush failure'));
+
+      const timerClient = new OTelCollectorClient({
+        collectorEndpoint: 'http://localhost:4318/v1/traces',
+        batchSize: 100,
+        flushInterval: 50,
+        maxRetries: 1,
+      });
+
+      const metric: OTelMetric = {
+        name: 'bg-metric',
+        value: 1,
+        timestamp: Date.now(),
+        type: 'gauge',
+      };
+      timerClient.recordMetric(metric);
+
+      // Allow the interval to fire and the .catch(() => {}) callback to run silently
+      await new Promise((r) => setTimeout(r, 120));
+
+      // No error should have escaped — the catch block suppresses it
+      await timerClient.shutdown();
+    });
+
     it('implements exponential backoff on retries', async () => {
       const times: number[] = [];
       fetchMock.mockImplementation(async () => {
