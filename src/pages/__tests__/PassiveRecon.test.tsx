@@ -1,11 +1,16 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ActiveRecon from '../PassiveRecon';
 
-vi.mock('../../context/useAuth', () => {
+const { mockUseAuth } = vi.hoisted(() => {
   const _user = { id: 'user-1' };
-  return { useAuth: () => ({ user: _user }) };
+  const mockUseAuth = vi.fn().mockReturnValue({ user: _user });
+  return { mockUseAuth };
 });
+
+vi.mock('../../context/useAuth', () => ({
+  useAuth: () => mockUseAuth(),
+}));
 
 const { mockDownloadFile } = vi.hoisted(() => ({ mockDownloadFile: vi.fn() }));
 
@@ -238,4 +243,71 @@ describe('ActiveRecon — scan history', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove entry' }));
     await waitFor(() => expect(screen.queryByText('Scan History')).toBeNull());
   }, 10000);
+
+  it('shows "Clear all history" button and clears all when clicked (2+ entries)', async () => {
+    // Do first scan
+    await renderAfterScan();
+    await waitFor(() => screen.getByText('Scan History'));
+
+    // Do second scan on same rendered component
+    const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+    fireEvent.change(input, { target: { value: 'second.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+    await waitFor(
+      () => expect(screen.getByText(/Scan complete/i)).toBeInTheDocument(),
+      { timeout: 8000 },
+    );
+
+    // Now history has 2 entries — show history
+    fireEvent.click(screen.getByText('Scan History'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /clear all history/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /clear all history/i }));
+    await waitFor(() => expect(screen.queryByText('Scan History')).toBeNull());
+  }, 25000);
+});
+
+// ── Running state content ─────────────────────────────────────────────────────
+
+describe('ActiveRecon — running state display', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows "Scanning ports..." during running state', async () => {
+    render(<ActiveRecon />);
+    const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+    fireEvent.change(input, { target: { value: 'running-test.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+    // After first 2s timeout, status becomes 'running'
+    await waitFor(
+      () => expect(screen.getByText(/Scanning ports\.\.\./i)).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+    expect(screen.getByText(/Nmap scan report for running-test\.com/i)).toBeInTheDocument();
+  }, 10000);
+});
+
+// ── No-user guard ─────────────────────────────────────────────────────────────
+
+describe('ActiveRecon — no user (unauthenticated)', () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({ user: null });
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1' } });
+  });
+
+  it('does not start scan when user is null (button stays not disabled but handleScan exits early)', async () => {
+    render(<ActiveRecon />);
+    const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+    fireEvent.change(input, { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+    // Should not show "Executing..." because handleScan returns early
+    await new Promise(r => setTimeout(r, 300));
+    expect(screen.queryByText(/Executing\.\.\./i)).toBeNull();
+  });
 });
