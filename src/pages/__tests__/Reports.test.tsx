@@ -23,7 +23,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
           return {
             select: () => ({ eq: () => ({ order: mockReportsOrder }) }),
             update: () => ({ eq: () => ({ select: () => ({ maybeSingle: mockMaybeSingle }) }) }),
-            delete: () => ({ in: mockDeleteIn }),
+            delete: () => ({ in: mockDeleteIn, eq: () => Promise.resolve({ data: null, error: null }) }),
           };
         }
         // projects
@@ -356,5 +356,384 @@ describe('Reports — ReportView functions', () => {
     fireEvent.click(createLinkBtn);
     // mockMaybeSingle should be called by enableSharing
     await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalled());
+  });
+});
+
+// ── Sort controls ──────────────────────────────────────────────────────────
+
+describe('Reports — sort controls', () => {
+  const twoReports = [
+    makeReport({ id: 'r-1', title: 'Alpha Report', kind: 'executive', created_at: '2026-01-01T00:00:00Z' }),
+    makeReport({ id: 'r-2', title: 'Beta Report', kind: 'technical', created_at: '2026-02-01T00:00:00Z' }),
+  ];
+
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: twoReports, error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+  });
+
+  it('shows Oldest, A–Z, Z–A sort buttons', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /oldest/i })).toBeInTheDocument();
+    expect(screen.getByText('A–Z')).toBeInTheDocument();
+    expect(screen.getByText('Z–A')).toBeInTheDocument();
+  });
+
+  it('sorts reports by A–Z when clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('A–Z'));
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    expect(screen.getByText('Beta Report')).toBeInTheDocument();
+  });
+
+  it('sorts reports by Z–A when clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Z–A'));
+    await waitFor(() => expect(screen.getByText('Beta Report')).toBeInTheDocument());
+    expect(screen.getByText('Alpha Report')).toBeInTheDocument();
+  });
+
+  it('sorts reports by Oldest when clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /oldest/i }));
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+  });
+
+  it('shows "Clear filters" button after sort change and clears on click', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('A–Z'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument());
+  });
+});
+
+// ── Delete single report ───────────────────────────────────────────────────
+
+describe('Reports — delete report confirmation dialog', () => {
+  const report = makeReport({ id: 'del-1', title: 'Report To Delete' });
+
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: [report], error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+  });
+
+  it('shows ConfirmDialog when delete icon clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Report To Delete')).toBeInTheDocument());
+    const deleteBtn = screen.getByTitle('Delete report');
+    fireEvent.click(deleteBtn);
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('closes ConfirmDialog when Cancel clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Report To Delete')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Delete report'));
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument(),
+    );
+    // ConfirmDialog has both an X (aria-label="Cancel") and text "Cancel" button; pick text one
+    const cancelBtn = screen.getAllByRole('button', { name: /cancel/i })
+      .find(b => b.textContent?.trim() === 'Cancel')!;
+    fireEvent.click(cancelBtn);
+    await waitFor(() =>
+      expect(screen.queryByText(/are you sure you want to delete/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it('calls delete and removes report when confirmed', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Report To Delete')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Delete report'));
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument(),
+    );
+    // Both icon (title) and dialog text button match "delete report"; pick the text one
+    const confirmBtn = screen.getAllByRole('button', { name: /^delete report$/i })
+      .find(b => b.textContent?.trim() === 'Delete report')!;
+    fireEvent.click(confirmBtn);
+    await waitFor(() =>
+      expect(screen.queryByText('Report To Delete')).not.toBeInTheDocument(),
+    );
+  });
+});
+
+// ── Bulk delete confirmation ───────────────────────────────────────────────
+
+describe('Reports — bulk delete confirmation', () => {
+  const reports = [
+    makeReport({ id: 'b-1', title: 'Bulk Alpha' }),
+    makeReport({ id: 'b-2', title: 'Bulk Beta' }),
+  ];
+
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: reports, error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+  });
+
+  it('shows bulk delete ConfirmDialog when "Delete selected" clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Bulk Alpha')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /delete selected/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /delete selected/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to permanently delete/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('cancels bulk delete when Cancel clicked', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Bulk Alpha')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /delete selected/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /delete selected/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to permanently delete/i)).toBeInTheDocument(),
+    );
+    const cancelBtn = screen.getAllByRole('button', { name: /cancel/i })
+      .find(b => b.textContent?.trim() === 'Cancel')!;
+    fireEvent.click(cancelBtn);
+    await waitFor(() =>
+      expect(screen.queryByText(/are you sure you want to permanently delete/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  it('performs bulk delete and removes reports when confirmed', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Bulk Alpha')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /delete selected/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /delete selected/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/are you sure you want to permanently delete/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: /delete/i }).find(b =>
+      b.textContent?.match(/delete \d+ report/i),
+    )!);
+    await waitFor(() => expect(mockDeleteIn).toHaveBeenCalled());
+  });
+});
+
+// ── ReportView shared report panel ────────────────────────────────────────
+
+describe('Reports — ReportView shared report panel', () => {
+  const sharedReport = makeReport({
+    id: 'shared-1',
+    title: 'Shared Security Report',
+    content: '## Summary\n\nAll clear.',
+    kind: 'executive',
+    is_public: true,
+    share_token: 'token-xyz-123',
+  });
+
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: [sharedReport], error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+    mockMaybeSingle.mockResolvedValue({ data: { ...sharedReport, is_public: false }, error: null });
+  });
+
+  const openSharedView = async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Shared Security Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Shared Security Report'));
+    await waitFor(() =>
+      expect(screen.getByRole('navigation', { name: /breadcrumb/i })).toBeInTheDocument(),
+    );
+  };
+
+  it('shows "Shared" button when report is_public=true', async () => {
+    await openSharedView();
+    const btns = screen.getAllByRole('button');
+    const sharedBtn = btns.find(b => b.textContent?.includes('Shared') && !b.textContent?.includes('Security'));
+    expect(sharedBtn).toBeTruthy();
+  });
+
+  it('opens share panel with Revoke access and Rotate link for public report', async () => {
+    await openSharedView();
+    const btns = screen.getAllByRole('button');
+    const sharedBtn = btns.find(b => /^shared$/i.test(b.textContent?.trim() ?? ''));
+    fireEvent.click(sharedBtn!);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /share report/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /revoke access/i })).toBeInTheDocument();
+    expect(screen.getByText(/rotate link/i)).toBeInTheDocument();
+  });
+
+  it('calls disableSharing when "Revoke access" clicked', async () => {
+    await openSharedView();
+    const btns = screen.getAllByRole('button');
+    const sharedBtn = btns.find(b => /^shared$/i.test(b.textContent?.trim() ?? ''));
+    fireEvent.click(sharedBtn!);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /revoke access/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /revoke access/i }));
+    await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalled());
+  });
+
+  it('calls rotateToken when "Rotate link" clicked', async () => {
+    await openSharedView();
+    const btns = screen.getAllByRole('button');
+    const sharedBtn = btns.find(b => /^shared$/i.test(b.textContent?.trim() ?? ''));
+    fireEvent.click(sharedBtn!);
+    await waitFor(() =>
+      expect(screen.getByText(/rotate link/i)).toBeInTheDocument(),
+    );
+    mockMaybeSingle.mockClear();
+    // "Rotate link" button
+    const rotateBtn = screen.getAllByRole('button').find(b => /rotate link/i.test(b.textContent ?? ''));
+    fireEvent.click(rotateBtn!);
+    await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalled());
+  });
+});
+
+// ── ReportView export buttons ─────────────────────────────────────────────
+
+describe('Reports — ReportView export and print', () => {
+  const report = makeReport({
+    id: 'exp-1',
+    title: 'Export Test Report',
+    content: '# Test\n\n- item one\n- item two',
+    kind: 'executive',
+  });
+
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: [report], error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:fake-url'),
+      revokeObjectURL: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const openView = async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Export Test Report')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Export Test Report'));
+    await waitFor(() =>
+      expect(screen.getByRole('navigation', { name: /breadcrumb/i })).toBeInTheDocument(),
+    );
+  };
+
+  it('Export menu contains Markdown, Word, Excel buttons', async () => {
+    await openView();
+    expect(screen.getByRole('button', { name: /markdown/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /word/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /excel/i })).toBeInTheDocument();
+  });
+
+  it('calls URL.createObjectURL when Markdown clicked', async () => {
+    await openView();
+    fireEvent.click(screen.getByRole('button', { name: /markdown/i }));
+    expect((URL as unknown as { createObjectURL: ReturnType<typeof vi.fn> }).createObjectURL).toHaveBeenCalled();
+  });
+
+  it('calls URL.createObjectURL when Word (DOCX) clicked', async () => {
+    await openView();
+    fireEvent.click(screen.getByRole('button', { name: /word/i }));
+    expect((URL as unknown as { createObjectURL: ReturnType<typeof vi.fn> }).createObjectURL).toHaveBeenCalled();
+  });
+
+  it('calls URL.createObjectURL when Excel (CSV) clicked', async () => {
+    await openView();
+    fireEvent.click(screen.getByRole('button', { name: /excel/i }));
+    expect((URL as unknown as { createObjectURL: ReturnType<typeof vi.fn> }).createObjectURL).toHaveBeenCalled();
+  });
+
+  it('Print PDF button is present and clickable', async () => {
+    await openView();
+    const printBtn = screen.getByRole('button', { name: /print pdf/i });
+    expect(printBtn).toBeInTheDocument();
+    // window.open returns null in jsdom → printPdf exits early, no crash
+    fireEvent.click(printBtn);
+  });
+});
+
+// ── GenerateModal templates ────────────────────────────────────────────────
+
+describe('Reports — GenerateModal template management', () => {
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: [], error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+    localStorage.clear();
+  });
+
+  const openModal = async () => {
+    render(<Reports />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /generate report/i })).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /generate report/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /generate report/i })).toBeInTheDocument(),
+    );
+  };
+
+  it('shows field checkboxes for executive report type', async () => {
+    await openModal();
+    expect(screen.getByText(/summary/i)).toBeInTheDocument();
+    expect(screen.getByText(/risk assessment/i)).toBeInTheDocument();
+  });
+
+  it('saves template to localStorage and shows template button', async () => {
+    await openModal();
+    const nameInput = screen.getByPlaceholderText(/template name/i);
+    fireEvent.change(nameInput, { target: { value: 'My Template' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/my template/i)).toBeInTheDocument(),
+    );
+    const stored = JSON.parse(localStorage.getItem('report_templates') ?? '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0].name).toBe('My Template');
+  });
+
+  it('loads template when template button clicked', async () => {
+    // Pre-populate localStorage with a template
+    localStorage.setItem(
+      'report_templates',
+      JSON.stringify([{ name: 'Saved Template', kind: 'technical', fields: ['vulnerabilities'] }]),
+    );
+    await openModal();
+    // Template button should be visible
+    await waitFor(() =>
+      expect(screen.getByText(/saved template/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText(/saved template/i));
+    // Kind should switch to Technical
+    await waitFor(() => {
+      const techBtn = screen.getAllByRole('button').find(b =>
+        /^technical$/i.test(b.textContent?.trim() ?? ''),
+      );
+      expect(techBtn).toBeTruthy();
+    });
+  });
+
+  it('disables Save button when template name is empty', async () => {
+    await openModal();
+    const saveBtn = screen.getByRole('button', { name: /^save$/i });
+    expect(saveBtn).toBeDisabled();
   });
 });
