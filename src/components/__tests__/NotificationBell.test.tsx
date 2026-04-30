@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NotificationBell from '../NotificationBell';
@@ -145,6 +145,193 @@ describe('NotificationBell — open popover', () => {
     fireEvent.click(screen.getByLabelText('Notifications'));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Mark all read/i })).toBeDisabled(),
+    );
+  });
+});
+
+describe('NotificationBell — markAllRead', () => {
+  beforeEach(() => {
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+  });
+
+  it('clicking Mark all read calls supabase update', async () => {
+    mockFetchReturns([makeNotif(), makeNotif()]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByRole('button', { name: /Mark all read/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Mark all read/i }));
+    });
+    expect(mockUpdate).toHaveBeenCalled();
+  });
+
+  it('after markAllRead unread badge disappears', async () => {
+    mockFetchReturns([makeNotif()]);
+    render(<NotificationBell />);
+    await waitFor(() => screen.getByText('1'));
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByRole('button', { name: /Mark all read/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Mark all read/i }));
+    // After mark-all-read, setItems runs synchronously → unread=0 → button becomes disabled
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Mark all read/i })).toBeDisabled(),
+    );
+  });
+});
+
+describe('NotificationBell — onItemClick', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockUpdate.mockClear();
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+  });
+
+  it('clicking unread notification marks it read and navigates', async () => {
+    const notif = makeNotif({ title: 'Click me', link: 'scans', read_at: null });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('Click me'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Click me'));
+    });
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/scans');
+  });
+
+  it('clicking notification with link=dashboard navigates to /', async () => {
+    const notif = makeNotif({ title: 'Dashboard notif', link: 'dashboard', read_at: null });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('Dashboard notif'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Dashboard notif'));
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('clicking notification with invalid link does not navigate', async () => {
+    const notif = makeNotif({ title: 'Invalid link', link: 'unknown-page', read_at: null });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('Invalid link'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Invalid link'));
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('clicking already-read notification does not call update', async () => {
+    const notif = makeNotif({ title: 'Already read', link: 'reports', read_at: '2026-01-01T00:00:00Z' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('Already read'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Already read'));
+    });
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/reports');
+  });
+});
+
+describe('NotificationBell — dismiss', () => {
+  beforeEach(() => {
+    mockDelete.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+    // In case parent button's onItemClick fires (stopPropagation may be async)
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+  });
+
+  it('clicking dismiss (X) removes notification from list', async () => {
+    const notif = makeNotif({ title: 'Dismiss me' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('Dismiss me'));
+    fireEvent.click(screen.getByLabelText('Dismiss'));
+    await waitFor(() => expect(screen.queryByText('Dismiss me')).not.toBeInTheDocument());
+  });
+
+  it('dismiss calls supabase delete', async () => {
+    const notif = makeNotif({ title: 'To delete' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText('To delete'));
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Dismiss'));
+    });
+    expect(mockDelete).toHaveBeenCalled();
+  });
+});
+
+describe('NotificationBell — iconFor and severity badges', () => {
+  beforeEach(() => {
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+  });
+
+  it('shows critical severity badge in header', async () => {
+    mockFetchReturns([makeNotif({ severity: 'critical' })]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText(/1 critical/i)).toBeInTheDocument());
+  });
+
+  it('shows warning severity badge in header', async () => {
+    mockFetchReturns([makeNotif({ severity: 'warning' })]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText(/1 warning/i)).toBeInTheDocument());
+  });
+
+  it('renders report_ready type notification (FileText icon path)', async () => {
+    const notif = makeNotif({ type: 'report_ready', title: 'Report ready' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText('Report ready')).toBeInTheDocument());
+  });
+
+  it('renders critical_finding type notification (AlertTriangle icon path)', async () => {
+    const notif = makeNotif({ type: 'critical_finding', title: 'Critical finding!' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText('Critical finding!')).toBeInTheDocument());
+  });
+});
+
+describe('NotificationBell — popover close on outside click', () => {
+  it('closes popover when clicking outside', async () => {
+    mockFetchReturns([]);
+    render(
+      <div>
+        <NotificationBell />
+        <div data-testid="outside">Outside</div>
+      </div>,
+    );
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => screen.getByText("You're all caught up"));
+    // Click outside
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    await waitFor(() =>
+      expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument(),
     );
   });
 });
