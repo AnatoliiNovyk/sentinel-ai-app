@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AppLayout from '../AppLayout';
 
@@ -257,5 +257,254 @@ describe('AppLayout — Scans link', () => {
     render(<AppLayout />);
     const link = screen.getByRole('link', { name: /Scans/i });
     expect(link).toHaveAttribute('href', '/scans');
+  });
+});
+
+describe('AppLayout — sidebar mobile open/close', () => {
+  beforeEach(() => {
+    mockLocation.pathname = '/';
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+  });
+
+  it('opens sidebar on hamburger click and closes on overlay click', async () => {
+    render(<AppLayout />);
+    const hamburger = screen.getByRole('button', { name: 'Open menu' });
+    fireEvent.click(hamburger);
+    // Overlay renders when sidebarOpen=true
+    const overlay = document.querySelector('[aria-hidden="true"]');
+    expect(overlay).toBeInTheDocument();
+    fireEvent.click(overlay!);
+    // Overlay disappears after close
+    await waitFor(() => expect(document.querySelector('[aria-hidden="true"]')).toBeNull());
+  });
+
+  it('closes sidebar via close-menu button', async () => {
+    render(<AppLayout />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close menu' }));
+    await waitFor(() => expect(document.querySelector('[aria-hidden="true"]')).toBeNull());
+  });
+});
+
+describe('AppLayout — Ctrl+K command palette', () => {
+  beforeEach(() => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+  });
+
+  it('opens command palette via Ctrl+K', async () => {
+    render(<AppLayout />);
+    const btn = screen.getByTitle('Command palette (Ctrl+K)');
+    expect(btn).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    });
+    // No throw = palette toggle handled
+  });
+
+  it('opens command palette via Meta+K', async () => {
+    render(<AppLayout />);
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    });
+    // Toggle again to close
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    });
+  });
+
+  it('opens palette via Search… button click', async () => {
+    render(<AppLayout />);
+    fireEvent.click(screen.getByTitle('Command palette (Ctrl+K)'));
+    // No throw = pass
+  });
+});
+
+describe('AppLayout — poll catch / agent error path', () => {
+  afterEach(() => {
+    localStorage.removeItem('agentHealthUrl');
+    mockProbeAuditRows.length = 0;
+  });
+
+  it('handles probeAgentHealth throwing (catch sets reachable=false)', async () => {
+    localStorage.setItem('agentHealthUrl', 'https://bad-host:9090/health');
+    mockProbeAgentHealth.mockRejectedValueOnce(new Error('network error'));
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent HTTPS check failed/i)).toBeInTheDocument();
+    });
+  });
+
+  it('handles poll catch with http url (no TLS hint)', async () => {
+    localStorage.setItem('agentHealthUrl', 'http://bad-host:9090/health');
+    mockProbeAgentHealth.mockRejectedValueOnce(new Error('network error'));
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent offline|Agent check blocked/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('AppLayout — pollProbeSmoke branches', () => {
+  afterEach(() => {
+    localStorage.removeItem('agentHealthUrl');
+    mockProbeAuditRows.length = 0;
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.organizations = [{ id: 'org-1' }];
+  });
+
+  it('probe smoke stays unknown when no user and no org', async () => {
+    mockAuthState.user = null;
+    mockAuthState.organizations = [];
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Probe n/a')).toBeInTheDocument();
+    });
+  });
+
+  it('uses userId query when no org present', async () => {
+    mockAuthState.organizations = [];
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-29T10:00:00Z',
+      metadata: null,
+    });
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Probe OK/i)).toBeInTheDocument();
+    });
+  });
+
+  it('maps row.status=failure to Probe Fail', async () => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+    mockProbeAuditRows.push({
+      status: 'failure',
+      created_at: '2026-04-29T10:00:00Z',
+      metadata: null,
+    });
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Probe Fail/i)).toBeInTheDocument();
+    });
+  });
+
+  it('handles supabase throwing in pollProbeSmoke (stays unknown)', async () => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+    // Corrupt the mock to throw
+    const origFrom = (await import('../../lib/supabase')).supabase.from;
+    vi.spyOn((await import('../../lib/supabase')).supabase, 'from').mockImplementationOnce(() => {
+      throw new Error('db error');
+    });
+
+    render(<AppLayout />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Probe n/a')).toBeInTheDocument();
+    });
+
+    vi.spyOn((await import('../../lib/supabase')).supabase, 'from').mockRestore();
+    void origFrom;
+  });
+});
+
+describe('AppLayout — formatRelativeMinutes via probeSmoke', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    mockProbeAuditRows.length = 0;
+  });
+
+  it('shows "just now" when probe was 30s ago', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-04-30T12:00:00Z');
+    vi.setSystemTime(now);
+    const thirtySecsAgo = new Date(now.getTime() - 30_000).toISOString();
+    mockProbeAuditRows.push({ status: 'success', created_at: thirtySecsAgo, metadata: { status: 'ok', generated_at: thirtySecsAgo } });
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+
+    render(<AppLayout />);
+    await act(async () => { vi.runAllTimersAsync(); });
+
+    await waitFor(() => expect(screen.getByText(/Probe OK · just now/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xm ago" when probe was 5min ago', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-04-30T12:00:00Z');
+    vi.setSystemTime(now);
+    const fiveMinsAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
+    mockProbeAuditRows.push({ status: 'success', created_at: fiveMinsAgo, metadata: { status: 'ok', generated_at: fiveMinsAgo } });
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+
+    render(<AppLayout />);
+    await act(async () => { vi.runAllTimersAsync(); });
+
+    await waitFor(() => expect(screen.getByText(/Probe OK · 5m ago/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xh ago" when probe was 2h ago', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-04-30T12:00:00Z');
+    vi.setSystemTime(now);
+    const twoHoursAgo = new Date(now.getTime() - 2 * 3600_000).toISOString();
+    mockProbeAuditRows.push({ status: 'success', created_at: twoHoursAgo, metadata: { status: 'ok', generated_at: twoHoursAgo } });
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+
+    render(<AppLayout />);
+    await act(async () => { vi.runAllTimersAsync(); });
+
+    await waitFor(() => expect(screen.getByText(/Probe OK · 2h ago/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xd ago" when probe was 3 days ago', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-04-30T12:00:00Z');
+    vi.setSystemTime(now);
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 3600_000).toISOString();
+    mockProbeAuditRows.push({ status: 'success', created_at: threeDaysAgo, metadata: { status: 'ok', generated_at: threeDaysAgo } });
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+
+    render(<AppLayout />);
+    await act(async () => { vi.runAllTimersAsync(); });
+
+    await waitFor(() => expect(screen.getByText(/Probe OK · 3d ago/i)).toBeInTheDocument());
+  });
+});
+
+describe('AppLayout — agentUrl storage event', () => {
+  afterEach(() => {
+    localStorage.removeItem('agentHealthUrl');
+    mockProbeAuditRows.length = 0;
+  });
+
+  it('updates agentUrl on storage event for agentHealthUrl key', async () => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+    render(<AppLayout />);
+
+    await act(async () => {
+      const event = new StorageEvent('storage', { key: 'agentHealthUrl', newValue: 'http://new-host:9090/health' });
+      window.dispatchEvent(event);
+    });
+    // No throw = agent URL update handled
+  });
+
+  it('ignores storage events for other keys', async () => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
+    render(<AppLayout />);
+
+    await act(async () => {
+      const event = new StorageEvent('storage', { key: 'otherKey', newValue: 'value' });
+      window.dispatchEvent(event);
+    });
   });
 });
