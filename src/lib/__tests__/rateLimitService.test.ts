@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getRateLimitConfig, getCurrentUsage, recordUsage } from '../rateLimitService';
+import { getRateLimitConfig, getCurrentUsage, recordUsage, checkRateLimit } from '../rateLimitService';
 
 // ── Supabase chain mocks (vi.hoisted to avoid TDZ) ───────────────────────────
 
@@ -161,5 +161,74 @@ describe('recordUsage', () => {
 
     const result = await recordUsage('user-1', 'reports_per_day');
     expect(result).toBe(false);
+  });
+
+  it('uses api_calls_per_second reset window', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockInsertFn.mockResolvedValue({ error: null });
+    mockInsertFn.mockClear();
+
+    const result = await recordUsage('user-1', 'api_calls_per_second');
+    expect(result).toBe(true);
+    const insertArgs = mockInsertFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(insertArgs.metric).toBe('api_calls_per_second');
+    expect(insertArgs.count).toBe(1);
+  });
+});
+
+// ── checkRateLimit ────────────────────────────────────────────────────────────
+
+describe('checkRateLimit', () => {
+  beforeEach(() => setupChain());
+
+  it('returns allowed:true and correct remaining when usage is below limit', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 2 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'scans_per_month');
+    expect(result.allowed).toBe(true);
+    expect(result.remaining).toBe(8); // limit=10, current=2
+    expect(result.limit).toBe(10);
+    expect(typeof result.resetAt).toBe('string');
+    expect(new Date(result.resetAt).getTime()).not.toBeNaN();
+  });
+
+  it('returns allowed:false when usage meets the limit', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 10 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'scans_per_month');
+    expect(result.allowed).toBe(false);
+    expect(result.remaining).toBe(0);
+  });
+
+  it('clamps remaining to 0 when usage exceeds limit', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 100 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'scans_per_month');
+    expect(result.remaining).toBe(0);
+  });
+
+  it('calculates resetAt for reports_per_day metric', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 1 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'reports_per_day');
+    expect(result.allowed).toBe(true);
+    expect(new Date(result.resetAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('calculates resetAt for chat_messages_per_hour metric', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 0 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'chat_messages_per_hour');
+    expect(result.allowed).toBe(true);
+    expect(typeof result.resetAt).toBe('string');
+  });
+
+  it('calculates resetAt for api_calls_per_second metric', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 0 }, error: null });
+    const result = await checkRateLimit('user-1', 'free', 'api_calls_per_second');
+    expect(result.allowed).toBe(true);
+    expect(typeof result.resetAt).toBe('string');
+  });
+
+  it('uses correct plan limits for pro plan', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: { count: 5 }, error: null });
+    const result = await checkRateLimit('user-1', 'pro', 'scans_per_month');
+    expect(result.limit).toBeGreaterThan(10); // pro has more than free (10)
+    expect(result.remaining).toBe(result.limit - 5);
   });
 });
