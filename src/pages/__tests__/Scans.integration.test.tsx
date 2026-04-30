@@ -201,4 +201,34 @@ describe('Scans integration flow', () => {
       expect(screen.queryByRole('button', { name: 'Close vulnerability details' })).toBeNull();
     }, { timeout: 3000 });
   }, { timeout: 6000 });
+
+  it('renders detail modal with critical severity and remediation code', async () => {
+    mockGetScanVulnerabilities.mockResolvedValue([
+      {
+        id: 'vuln-crit',
+        title: 'Critical RCE',
+        description: 'Remote code execution',
+        severity: 'critical',
+        status: 'open',
+        asset: '10.0.0.1',
+        cve_id: 'CVE-2026-9999',
+        remediation: 'Patch immediately',
+        remediation_code: 'apt-get update && apt-get upgrade -y',
+        scan_id: 'scan-1',
+        created_at: '2026-04-24T00:00:00.000Z',
+      },
+    ]);
+
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('view-details'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('view-details'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Critical RCE')).toBeDefined();
+      expect(screen.getByText('CRITICAL')).toBeDefined();
+      // remediation_code block should be rendered
+      expect(screen.getByText('apt-get update && apt-get upgrade -y')).toBeDefined();
+    }, { timeout: 3000 });
+  }, { timeout: 6000 });
 });

@@ -205,6 +205,36 @@ describe('OTelCollectorClient', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('auto-flushes when recordMetrics batch size reached', async () => {
+      const metrics: OTelMetric[] = Array.from({ length: 10 }, (_, i) => ({
+        name: `bulk${i}`,
+        value: i,
+        timestamp: Date.now(),
+        type: 'counter' as const,
+      }));
+
+      client.recordMetrics(metrics);
+
+      await new Promise((r) => setTimeout(r, 100));
+      expect(client.getPendingMetricsCount()).toBe(0);
+    });
+
+    it('auto-flushes when recordSpans batch size reached', async () => {
+      const spans: OTelSpan[] = Array.from({ length: 10 }, (_, i) => ({
+        traceId: `trace-bulk-${i}`,
+        spanId: `span-bulk-${i}`,
+        name: `bulk-span-${i}`,
+        startTime: Date.now(),
+        endTime: Date.now() + 10,
+        status: 'ok' as const,
+      }));
+
+      client.recordSpans(spans);
+
+      await new Promise((r) => setTimeout(r, 100));
+      expect(client.getPendingSpansCount()).toBe(0);
+    });
+
     it('clears state after successful flush', async () => {
       const metric: OTelMetric = {
         name: 'metric',
