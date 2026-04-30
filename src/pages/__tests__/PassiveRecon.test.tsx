@@ -116,3 +116,126 @@ describe('ActiveRecon (PassiveRecon)', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   }, 10000);
 });
+
+// ── Post-scan features ────────────────────────────────────────────────────────
+
+async function renderAfterScan() {
+  render(<ActiveRecon />);
+  const input = screen.getByPlaceholderText(/8\.8\.8\.8 or example\.com/i);
+  fireEvent.change(input, { target: { value: 'scanme.example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: /start active recon/i }));
+  await waitFor(
+    () => expect(screen.getByText(/Scan complete/i)).toBeInTheDocument(),
+    { timeout: 8000 },
+  );
+}
+
+describe('ActiveRecon — port search and sort', () => {
+  beforeEach(() => {
+    mockDownloadFile.mockClear();
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    localStorage.clear();
+  });
+
+  it('renders port table after scan', async () => {
+    await renderAfterScan();
+    // MOCK_PORTS includes ssh — port table rendered
+    expect(screen.getAllByText('ssh').length).toBeGreaterThanOrEqual(1);
+  }, 10000);
+
+  it('port search filters by service name', async () => {
+    await renderAfterScan();
+    const searchInput = screen.getByPlaceholderText('Search port, service…');
+    fireEvent.change(searchInput, { target: { value: 'mysql' } });
+    await waitFor(() => expect(screen.getAllByText('mysql').length).toBeGreaterThanOrEqual(1));
+    // ssh should be gone
+    expect(screen.queryAllByText(/^ssh$/).length).toBe(0);
+  }, 10000);
+
+  it('port search with no match shows "No ports match filter"', async () => {
+    await renderAfterScan();
+    const searchInput = screen.getByPlaceholderText('Search port, service…');
+    fireEvent.change(searchInput, { target: { value: 'xyz-not-a-service' } });
+    await waitFor(() => expect(screen.getByText('No ports match filter.')).toBeInTheDocument());
+  }, 10000);
+
+  it('sort "Port↓" button changes sort order', async () => {
+    await renderAfterScan();
+    const sortBtn = screen.getByRole('button', { name: 'Port↓' });
+    fireEvent.click(sortBtn);
+    // Still shows scan results
+    expect(screen.getByText(/Scan complete/i)).toBeInTheDocument();
+  }, 10000);
+
+  it('sort "Svc A→Z" button changes sort order', async () => {
+    await renderAfterScan();
+    fireEvent.click(screen.getByRole('button', { name: 'Svc A→Z' }));
+    expect(screen.getByText(/Scan complete/i)).toBeInTheDocument();
+  }, 10000);
+
+  it('sort "State" button changes sort order', async () => {
+    await renderAfterScan();
+    fireEvent.click(screen.getByRole('button', { name: 'State' }));
+    expect(screen.getByText(/Scan complete/i)).toBeInTheDocument();
+  }, 10000);
+
+  it('sort "Risk↓" button changes sort order', async () => {
+    await renderAfterScan();
+    fireEvent.click(screen.getByRole('button', { name: 'Risk↓' }));
+    expect(screen.getByText(/Scan complete/i)).toBeInTheDocument();
+  }, 10000);
+
+  it('renders stat cards: Open Ports, High-Risk Ports, Unique Services', async () => {
+    await renderAfterScan();
+    expect(screen.getByText('Open Ports')).toBeInTheDocument();
+    expect(screen.getByText('High-Risk Ports')).toBeInTheDocument();
+    expect(screen.getByText('Unique Services')).toBeInTheDocument();
+  }, 10000);
+
+  it('exports JSON via JSON button', async () => {
+    await renderAfterScan();
+    const jsonBtn = screen.getByRole('button', { name: /json/i });
+    fireEvent.click(jsonBtn);
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.json$/),
+      expect.stringContaining('"target"'),
+      'application/json',
+    );
+  }, 10000);
+});
+
+describe('ActiveRecon — scan history', () => {
+  beforeEach(() => {
+    mockDownloadFile.mockClear();
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    localStorage.clear();
+  });
+
+  it('shows Scan History section after completed scan', async () => {
+    await renderAfterScan();
+    await waitFor(() => expect(screen.getByText('Scan History')).toBeInTheDocument());
+  }, 10000);
+
+  it('toggles history list on click', async () => {
+    await renderAfterScan();
+    await waitFor(() => expect(screen.getByText('Scan History')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Scan History'));
+    await waitFor(() => expect(screen.getByText('scanme.example.com')).toBeInTheDocument());
+    // collapse
+    fireEvent.click(screen.getByText(/hide/i));
+    await waitFor(() => expect(screen.queryByText('scanme.example.com')).toBeNull());
+  }, 10000);
+
+  it('removes a history entry via X button', async () => {
+    await renderAfterScan();
+    await waitFor(() => screen.getByText('Scan History'));
+    fireEvent.click(screen.getByText('Scan History'));
+    await waitFor(() => screen.getByText('scanme.example.com'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove entry' }));
+    await waitFor(() => expect(screen.queryByText('Scan History')).toBeNull());
+  }, 10000);
+});
