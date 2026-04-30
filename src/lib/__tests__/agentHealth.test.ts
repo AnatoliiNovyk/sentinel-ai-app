@@ -48,6 +48,12 @@ describe('isMixedContentAgentUrl', () => {
     setWindowLocation('https://app.example.com');
     expect(isMixedContentAgentUrl('not-a-valid-url')).toBe(false);
   });
+
+  it('returns false when URL constructor throws for malformed URL', () => {
+    setWindowLocation('https://app.example.com');
+    // 'http://[::1' has unclosed IPv6 bracket — WHATWG URL parser throws TypeError
+    expect(isMixedContentAgentUrl('http://[::1')).toBe(false);
+  });
 });
 
 // ── isHttpsAgentUrl ───────────────────────────────────────────────────────────
@@ -63,6 +69,11 @@ describe('isHttpsAgentUrl', () => {
 
   it('returns false for invalid URL', () => {
     expect(isHttpsAgentUrl('not-a-url')).toBe(false);
+  });
+
+  it('returns false when URL constructor throws for malformed URL', () => {
+    // 'http://[::1' has unclosed IPv6 bracket — WHATWG URL parser throws TypeError
+    expect(isHttpsAgentUrl('http://[::1')).toBe(false);
   });
 });
 
@@ -108,6 +119,22 @@ describe('probeAgentHealth — direct fetch (http page → http agent)', () => {
     expect(result.reachable).toBe(false);
     expect(result.statusCode).toBe(503);
     expect(result.error).toBe('HTTP 503');
+    expect(result.via).toBe('direct');
+  });
+
+  it('sets health to null when response json() throws', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockRejectedValue(new Error('Non-JSON response')),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.reachable).toBe(true);
+    expect(result.health).toBeNull();
+    expect(result.statusCode).toBe(200);
     expect(result.via).toBe('direct');
   });
 
@@ -178,6 +205,19 @@ describe('probeAgentHealth — forced gateway (mixed content: https page → htt
     expect(result.reachable).toBe(false);
     expect(result.via).toBe('gateway');
     expect(result.error).toBe('Function invocation failed');
+  });
+
+  it('uses fallback message when gateway error.message is empty', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: { message: '' },
+    });
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.reachable).toBe(false);
+    expect(result.via).toBe('gateway');
+    expect(result.error).toBe('Gateway probe request failed.');
   });
 
   it('handles gateway invoke throwing an exception', async () => {

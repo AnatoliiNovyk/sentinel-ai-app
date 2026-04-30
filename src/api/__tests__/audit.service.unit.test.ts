@@ -226,6 +226,51 @@ describe('AuditService', () => {
 
       expect(eqSpy).toHaveBeenCalledWith('org_id', 'org-123');
     });
+
+    it('applies endDate filter using lte', async () => {
+      const chain = buildQueryChain({ data: [], error: null });
+      const eqSpy = vi.fn(() => chain);
+      selectMock.mockReturnValueOnce({ eq: eqSpy });
+
+      const endDate = new Date('2026-04-30T23:59:59Z');
+      await AuditService.queryLogs('org-test', { endDate });
+
+      expect(chain.lte).toHaveBeenCalledWith('created_at', endDate.toISOString());
+    });
+
+    it('applies status filter using eq', async () => {
+      const chain = buildQueryChain({ data: [], error: null });
+      const eqSpy = vi.fn(() => chain);
+      selectMock.mockReturnValueOnce({ eq: eqSpy });
+
+      await AuditService.queryLogs('org-test', { status: 'failure' });
+
+      expect(chain.eq).toHaveBeenCalledWith('status', 'failure');
+    });
+
+    it('applies startDate filter using gte', async () => {
+      const chain = buildQueryChain({ data: [], error: null });
+      const eqSpy = vi.fn(() => chain);
+      selectMock.mockReturnValueOnce({ eq: eqSpy });
+
+      const startDate = new Date('2026-01-01T00:00:00Z');
+      await AuditService.queryLogs('org-test', { startDate });
+
+      expect(chain.gte).toHaveBeenCalledWith('created_at', startDate.toISOString());
+    });
+
+    it('throws when db query returns an error', async () => {
+      const dbError = new Error('DB connection refused');
+      const limit = vi.fn().mockResolvedValueOnce({ data: null, error: dbError });
+      const order = vi.fn(() => ({ limit }));
+      const lte = vi.fn(() => ({ order }));
+      const gte = vi.fn(() => ({ order, lte }));
+      const eq = vi.fn();
+      eq.mockReturnValue({ eq, order, gte, lte });
+      selectMock.mockReturnValueOnce({ eq });
+
+      await expect(AuditService.queryLogs('org-x')).rejects.toThrow('DB connection refused');
+    });
   });
 
   // ── getSummary() ──────────────────────────────────────────────────────────

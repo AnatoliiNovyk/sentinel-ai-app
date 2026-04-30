@@ -215,10 +215,8 @@ describe('ScansService.dispatchScan', () => {
 
   it('returns generic error message when insert error has no readable fields', async () => {
     mockInsert.mockReturnValue({
-      select: () => ({ single: mockSingle }),
+      select: () => ({ single: vi.fn() }),
     });
-    mockSingle.mockResolvedValue({ data: null, error: null });
-    // Make scan null so scanErr check triggers via missing data
     mockInsert.mockReturnValue({
       select: () => ({ single: () => Promise.resolve({ data: null, error: {} }) }),
     });
@@ -226,5 +224,70 @@ describe('ScansService.dispatchScan', () => {
     await expect(
       ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
     ).rejects.toThrow();
+  });
+
+  it('extracts error field from context.json when scanErr has context', async () => {
+    const err = Object.assign(new Error('context-json'), {
+      context: { json: async () => ({ error: 'payload error from context.json' }) },
+    });
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('payload error from context.json');
+  });
+
+  it('extracts message field from context.json when error field absent', async () => {
+    const err = Object.assign(new Error('context-json-msg'), {
+      context: { json: async () => ({ message: 'message from context.json' }) },
+    });
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('message from context.json');
+  });
+
+  it('falls back to context.text when context.json is not available', async () => {
+    const err = Object.assign(new Error('context-text'), {
+      context: { text: async () => 'text body from context' },
+    });
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('text body from context');
+  });
+
+  it('falls back to error.message when context.json() throws', async () => {
+    const err = Object.assign(new Error('fallback message'), {
+      context: { json: async () => { throw new Error('bad json'); } },
+    });
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('fallback message');
+  });
+
+  it('falls back to error.message when context.text() throws', async () => {
+    const err = Object.assign(new Error('text fallback message'), {
+      context: { text: async () => { throw new Error('bad text'); } },
+    });
+    mockInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }),
+    });
+
+    await expect(
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+    ).rejects.toThrow('text fallback message');
   });
 });
