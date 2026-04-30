@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { getComments, addComment, updateComment, deleteComment } from '../commentService';
+import { getComments, addComment, updateComment, deleteComment, subscribeToComments } from '../commentService';
 
 // ── Per-operation mock builders ────────────────────────────────────────────────
 // Each operation has its own terminal mock so we can easily inject resolved values.
@@ -145,5 +145,39 @@ describe('commentService — deleteComment', () => {
     mockDeleteEq.mockResolvedValueOnce({ error: { message: 'Delete failed' } });
     const result = await deleteComment('c-1');
     expect(result).toBe(false);
+  });
+});
+
+// ─── subscribeToComments ──────────────────────────────────────────────────────
+
+describe('commentService — subscribeToComments', () => {
+  it('returns an unsubscribe function', async () => {
+    const unsubscribeMock = vi.fn();
+    // Patch the supabase mock to handle .on().subscribe() for subscribe calls
+    const supabaseMod = vi.mocked(
+      (await import('../supabase')).supabase
+    );
+    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnValue({ unsubscribe: unsubscribeMock }),
+    });
+
+    const unsubscribe = subscribeToComments('vuln-1', vi.fn());
+    expect(typeof unsubscribe).toBe('function');
+  });
+
+  it('calls unsubscribe when the returned function is invoked', async () => {
+    const unsubscribeMock = vi.fn();
+    const supabaseMod = vi.mocked(
+      (await import('../supabase')).supabase
+    );
+    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnValue({ unsubscribe: unsubscribeMock }),
+    });
+
+    const unsubscribe = subscribeToComments('vuln-1', vi.fn());
+    unsubscribe();
+    expect(unsubscribeMock).toHaveBeenCalledTimes(1);
   });
 });

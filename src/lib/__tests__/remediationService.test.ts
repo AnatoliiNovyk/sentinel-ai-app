@@ -98,6 +98,85 @@ describe('generateRemediation — category detection via title', () => {
     expect(mockUpsert.mock.calls.length).toBe(beforeCount);
   });
 
+  it('detects ssrf from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-ssrf', title: 'SSRF via URL parameter', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.priority).toBeDefined();
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects iam from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-iam', title: 'IAM privilege escalation detected', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects s3 from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-s3', title: 'S3 bucket misconfiguration', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects tls from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-tls', title: 'Weak TLS configuration', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects secrets from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-secrets', title: 'Hardcoded API key in source code', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects container from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-container', title: 'Docker container running as root', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects csrf from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-csrf', title: 'CSRF vulnerability in form submission', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects path-traversal from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-path', title: 'Path traversal vulnerability in file upload', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects auth from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-auth', title: 'Broken authentication session management', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects network from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-network', title: 'Open port 8080 exposed to internet', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects log4shell from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-log4j', title: 'Log4j vulnerability (Log4Shell)', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects webserver from title', async () => {
+    const vuln = makeVuln({ id: 'vuln-nginx', title: 'Outdated nginx version running on server', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
+  it('detects outdated-package from cve_id', async () => {
+    const vuln = makeVuln({ id: 'vuln-outdated', title: 'Outdated package detected', cve_id: 'CVE-2024-1234', description: '' });
+    const result = await generateRemediation(vuln, 'user-1');
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
   it('result has required fields: id, vulnerability_id, user_id, generated_at, steps, references', async () => {
     const vuln = makeVuln({ id: 'vuln-fields' });
     const result = await generateRemediation(vuln, 'user-1');

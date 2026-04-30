@@ -2,15 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AVAILABLE_SCANNERS, runMockScan } from '../scanMock';
 
 // Mock supabase
+const mockFrom = vi.fn();
 vi.mock('../supabase', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    })),
+    from: (...args: unknown[]) => mockFrom(...args),
   },
 }));
 
@@ -63,11 +58,59 @@ describe('AVAILABLE_SCANNERS data', () => {
 describe('runMockScan', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: project and scan return null → returns null
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
   });
 
   it('returns null when supabase scan insert returns no data', async () => {
-    // supabase is already mocked via vi.mock at the top — both project and scan maybeSingle return null
     const result = await runMockScan('user-1', 'proj-1', 'nmap');
     expect(result).toBeNull();
+  });
+
+  it('completes scan and returns scan id when project and scan data exist', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0); // duration = 1000ms, subsetCount = 1
+
+    const mockScan = { id: 'scan-test-1' };
+    const mockProject = { id: 'proj-1', name: 'Test', environment: 'internal', target: '10.0.0.1' };
+
+    let callCount = 0;
+    mockFrom.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(),
+      };
+
+      if (table === 'projects') {
+        chain.maybeSingle.mockResolvedValue({ data: mockProject, error: null });
+      } else if (table === 'scans') {
+        callCount++;
+        if (callCount === 1) {
+          chain.maybeSingle.mockResolvedValue({ data: mockScan, error: null });
+        } else {
+          chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+        }
+      } else {
+        chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+      }
+      return chain;
+    });
+
+    const promise = runMockScan('user-1', 'proj-1', 'nmap');
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe('scan-test-1');
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 });

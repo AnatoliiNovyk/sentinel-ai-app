@@ -2,7 +2,7 @@
 // but this file tests the real context internals
 vi.unmock('../toastContext');
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { ToastProvider, useToast, useToasts } from '../toastContext';
@@ -67,5 +67,39 @@ describe('toastContext — error boundaries', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => renderHook(() => useToasts())).toThrow(/useToasts must be used inside/i);
     consoleSpy.mockRestore();
+  });
+});
+
+describe('toastContext — useToast helpers', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('success() adds a success toast', () => {
+    const { result } = renderHook(() => ({ toast: useToast(), toasts: useToasts() }), { wrapper });
+    act(() => { result.current.toast.success('Done!'); });
+    expect(result.current.toasts.toasts[0]).toMatchObject({ type: 'success', message: 'Done!' });
+  });
+
+  it('error() adds an error toast', () => {
+    const { result } = renderHook(() => ({ toast: useToast(), toasts: useToasts() }), { wrapper });
+    act(() => { result.current.toast.error('Oops!'); });
+    expect(result.current.toasts.toasts[0]).toMatchObject({ type: 'error', message: 'Oops!' });
+  });
+
+  it('info() adds an info toast', () => {
+    const { result } = renderHook(() => ({ toast: useToast(), toasts: useToasts() }), { wrapper });
+    act(() => { result.current.toast.info('FYI'); });
+    expect(result.current.toasts.toasts[0]).toMatchObject({ type: 'info', message: 'FYI' });
+  });
+
+  it('warning() adds a warning toast', () => {
+    const { result } = renderHook(() => ({ toast: useToast(), toasts: useToasts() }), { wrapper });
+    act(() => { result.current.toast.warning('Watch out'); });
+    expect(result.current.toasts.toasts[0]).toMatchObject({ type: 'warning', message: 'Watch out' });
   });
 });
