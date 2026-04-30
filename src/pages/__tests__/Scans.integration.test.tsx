@@ -388,4 +388,99 @@ describe('Scans integration flow', () => {
     fireEvent.click(screen.getByText('nmap'));
     expect(screen.getByText('nmap')).toBeDefined();
   }, { timeout: 5000 });
+
+  it('shows "No scans match filters" when search returns no results', async () => {
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('nmap'), { timeout: 3000 });
+    fireEvent.change(screen.getByPlaceholderText('Search scans…'), {
+      target: { value: 'xyz-not-found-zzz' },
+    });
+    await waitFor(
+      () => expect(screen.getByText('No scans match filters')).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  }, { timeout: 5000 });
+
+  it('shows scanner filter when multiple scanners exist', async () => {
+    mockGetProjectScans.mockResolvedValue([
+      { id: 'scan-1', scanner: 'nmap',  status: 'completed', created_at: '2026-04-24T00:00:00Z', detected_mode: 'MOCK', is_mock: false },
+      { id: 'scan-2', scanner: 'tfsec', status: 'completed', created_at: '2026-04-25T00:00:00Z', detected_mode: 'MOCK', is_mock: false },
+      { id: 'scan-3', scanner: 'amass', status: 'completed', created_at: '2026-04-26T00:00:00Z', detected_mode: 'MOCK', is_mock: false },
+    ]);
+    mockGetScanVulnerabilities.mockResolvedValue([]);
+
+    render(<Scans />);
+
+    await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
+    expect(screen.getByLabelText('Filter by scanner')).toBeInTheDocument();
+  }, { timeout: 5000 });
+
+  it('shows clear-filters button when search is active and clears on click', async () => {
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('nmap'), { timeout: 3000 });
+    fireEvent.change(screen.getByPlaceholderText('Search scans…'), {
+      target: { value: 'nmap' },
+    });
+    await waitFor(() => expect(screen.getByTitle('Clear all filters')).toBeInTheDocument(), { timeout: 3000 });
+    fireEvent.click(screen.getByTitle('Clear all filters'));
+    await waitFor(() => expect(screen.queryByTitle('Clear all filters')).toBeNull(), { timeout: 3000 });
+  }, { timeout: 5000 });
+
+  it('triggers refresh when Refresh button is clicked', async () => {
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('nmap'), { timeout: 3000 });
+    const callsBefore = mockGetProjectScans.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh scans' }));
+    await waitFor(
+      () => expect(mockGetProjectScans.mock.calls.length).toBeGreaterThan(callsBefore),
+      { timeout: 3000 },
+    );
+  }, { timeout: 5000 });
+
+  it('renders CSV button and calls URL.createObjectURL on click', async () => {
+    const createObjectURL = vi.fn().mockReturnValue('blob:url');
+    const revokeObjectURL = vi.fn();
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+
+    render(<Scans />);
+
+    await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalled(), { timeout: 3000 });
+    const csvBtn = await screen.findByTitle('Export vulnerabilities CSV', {}, { timeout: 3000 });
+    fireEvent.click(csvBtn);
+    expect(createObjectURL).toHaveBeenCalled();
+  }, { timeout: 5000 });
+
+  it('shows dispatch error from toReadableErrorMessage when scan fails', async () => {
+    mockDispatchScan.mockRejectedValue(new Error('Network timeout'));
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('open-new-scan'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('open-new-scan'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch scan' }));
+
+    await waitFor(
+      () => expect(screen.getByText(/Network timeout/i)).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  }, { timeout: 5000 });
+
+  it('dismisses AI generation error on close click', async () => {
+    mockDispatchScan.mockRejectedValue(new Error('Dispatch failed'));
+    render(<Scans />);
+
+    await waitFor(() => screen.getByText('open-new-scan'), { timeout: 3000 });
+    fireEvent.click(screen.getByText('open-new-scan'));
+    fireEvent.click(screen.getByRole('button', { name: 'Launch scan' }));
+
+    await waitFor(() => screen.getByText(/Dispatch failed/i), { timeout: 3000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss error' }));
+    await waitFor(
+      () => expect(screen.queryByText(/Dispatch failed/i)).toBeNull(),
+      { timeout: 3000 },
+    );
+  }, { timeout: 5000 });
 });
