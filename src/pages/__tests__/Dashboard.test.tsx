@@ -5,7 +5,7 @@ import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows, mockVulnRows, mockProjectRows } = vi.hoisted(() => {
+const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows, mockVulnRows, mockProjectRows, mockScanRows } = vi.hoisted(() => {
   const makeChannel = () => ({
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
@@ -33,6 +33,7 @@ const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockPro
     mockProbeAuditRows: [] as unknown[],
     mockVulnRows: [] as unknown[],
     mockProjectRows: [] as unknown[],
+    mockScanRows: [] as unknown[],
   };
 });
 
@@ -65,7 +66,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
     ...actual,
     supabase: {
       from: (table: string) => {
-        if (table === 'scans') return { select: () => makeQueryChain([]) };
+        if (table === 'scans') return { select: () => makeQueryChain(mockScanRows) };
         if (table === 'projects') return { select: () => makeChainNoLimit(mockProjectRows) };
         if (table === 'vulnerabilities') return { select: () => makeQueryChain(mockVulnRows) };
         if (table === 'scan_jobs') return { select: () => makeQueryChain([]) };
@@ -108,6 +109,7 @@ afterEach(() => {
   mockProbeAuditRows.length = 0;
   mockVulnRows.length = 0;
   mockProjectRows.length = 0;
+  mockScanRows.length = 0;
 });
 
 describe('Dashboard — layout', () => {
@@ -337,5 +339,139 @@ describe('Dashboard — top risky projects', () => {
       },
       { timeout: 5000 },
     );
+  });
+});
+
+describe('Dashboard — SlaGroup (overdue/at-risk)', () => {
+  it('renders SlaGroup "Overdue" when a vuln exceeds SLA budget', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    // critical SLA = 3 days → create vuln 10 days ago → overdue
+    const oldDate = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    mockVulnRows.push({
+      id: 'v-overdue',
+      title: 'Overdue Critical',
+      severity: 'critical',
+      status: 'open',
+      project_id: 'p1',
+      created_at: oldDate,
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getAllByText('Overdue').length).toBeGreaterThanOrEqual(1),
+      { timeout: 5000 },
+    );
+    expect(screen.getAllByText('Overdue Critical').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders SlaGroup "At risk" when vuln is ≥75% through budget', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    // high SLA = 7 days → create vuln 6 days ago → at risk (6/7 = 86%)
+    const atRiskDate = new Date(Date.now() - 6 * 86_400_000).toISOString();
+    mockVulnRows.push({
+      id: 'v-at-risk',
+      title: 'At Risk High',
+      severity: 'high',
+      status: 'open',
+      project_id: 'p1',
+      created_at: atRiskDate,
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getAllByText('At risk').length).toBeGreaterThanOrEqual(1),
+      { timeout: 5000 },
+    );
+    expect(screen.getAllByText('At Risk High').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('covers buildTrend resolved branch when vuln has status_updated_at', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const createdAt    = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const resolvedAt   = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    mockVulnRows.push({
+      id: 'v-resolved',
+      title: 'Resolved Vuln',
+      severity: 'high',
+      status: 'resolved',
+      project_id: 'p1',
+      created_at: createdAt,
+      status_updated_at: resolvedAt,
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('Security posture')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+});
+
+describe('Dashboard — StatusBadge via Recent scans', () => {
+  it('renders StatusBadge for a completed scan', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockScanRows.push({
+      id: 'scan-1',
+      scanner: 'nmap',
+      status: 'completed',
+      created_at: new Date(Date.now() - 86_400_000).toISOString(),
+      project_id: 'proj-001',
+      user_id: 'user-1',
+      severity_summary: { critical: 1, high: 2, medium: 0 },
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('completed')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+
+  it('renders StatusBadge for a failed scan', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockScanRows.push({
+      id: 'scan-2',
+      scanner: 'tfsec',
+      status: 'failed',
+      created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      project_id: 'proj-002',
+      user_id: 'user-1',
+      severity_summary: {},
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('failed')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+  });
+
+  it('navigates to /scans from "View all" in Recent scans', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockScanRows.push({
+      id: 'scan-3',
+      scanner: 'amass',
+      status: 'running',
+      created_at: new Date().toISOString(),
+      project_id: 'proj-003',
+      user_id: 'user-1',
+      severity_summary: {},
+    });
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('View all')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+    fireEvent.click(screen.getByText('View all'));
+    expect(mockNavigate).toHaveBeenCalledWith('/scans');
+  });
+
+  it('navigates to /projects from "Manage projects" button', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    renderDashboard();
+    await waitFor(
+      () => expect(screen.getByText('Manage projects')).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+    fireEvent.click(screen.getByText('Manage projects'));
+    expect(mockNavigate).toHaveBeenCalledWith('/projects');
   });
 });
