@@ -207,3 +207,238 @@ describe('OsintAnalyzer — Phishing Drill Plan', () => {
     );
   });
 });
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const HIGH_RISK_DATA = {
+  ok: true,
+  data: {
+    breachCount: 2,
+    breaches: [
+      { source: 'LinkedIn', severity: 'high', dataClasses: ['email', 'password'], breachDate: '2021-01-01' },
+    ],
+    scannedAt: '2026-04-29T00:00:00Z',
+    riskScore: 80,
+    riskLevel: 'high',
+    recommendedActions: ['Change passwords'],
+  },
+};
+
+async function renderWithResult(scanResult: typeof HIGH_RISK_DATA, queryStr = 'victim@example.com') {
+  mockScan.mockResolvedValue(scanResult);
+  render(<OsintAnalyzer />);
+  fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: queryStr } });
+  fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+  await waitFor(() => expect(screen.getByText('Analysis Results')).toBeInTheDocument());
+}
+
+// ─── Input validation ──────────────────────────────────────────────────────────
+
+describe('OsintAnalyzer — input validation', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('shows validation error for input with script tag', async () => {
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: '<script>alert(1)</script>' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText(/Query contains invalid characters/i)).toBeInTheDocument());
+  });
+
+  it('shows validation error for SQL injection attempt', async () => {
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: "' OR 1=1; DROP TABLE users;--" } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText(/Query contains invalid characters/i)).toBeInTheDocument());
+  });
+
+  it('shows validation error for query too long (>253 chars)', async () => {
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: 'a'.repeat(254) } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText(/Query is too long/i)).toBeInTheDocument());
+  });
+
+  it('submits on Enter key press', async () => {
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: { breachCount: 0, breaches: [], scannedAt: '2026-04-24T00:00:00Z', riskScore: 0, riskLevel: 'low', recommendedActions: [] },
+    });
+    render(<OsintAnalyzer />);
+    const input = screen.getByPlaceholderText(/Enter email, domain or username/i);
+    fireEvent.change(input, { target: { value: 'enter@example.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(mockScan).toHaveBeenCalledWith('enter@example.com'));
+  });
+});
+
+// ─── Summary stats ─────────────────────────────────────────────────────────────
+
+describe('OsintAnalyzer — summary stats', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('shows "Total scanned" stat after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Total scanned')).toBeInTheDocument();
+  });
+
+  it('shows "Total breaches" stat after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Total breaches')).toBeInTheDocument();
+  });
+
+  it('shows "Clean" stat after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Clean')).toBeInTheDocument();
+  });
+
+  it('shows "Errors" stat after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Errors')).toBeInTheDocument();
+  });
+});
+
+// ─── Risk Distribution chart ───────────────────────────────────────────────────
+
+describe('OsintAnalyzer — Risk Distribution chart', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('shows "Risk Distribution" toggle button after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Risk Distribution')).toBeInTheDocument();
+  });
+
+  it('expands Risk Distribution chart when toggled', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    fireEvent.click(screen.getByText('Risk Distribution'));
+    await waitFor(() => expect(screen.getByText('High risk')).toBeInTheDocument());
+  });
+
+  it('collapses Risk Distribution chart on second click', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    fireEvent.click(screen.getByText('Risk Distribution'));
+    await waitFor(() => expect(screen.getByText('High risk')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Risk Distribution'));
+    // After collapse, the "▲ collapse" label disappears (chart is hidden)
+    await waitFor(() => expect(screen.queryByText('▲ collapse')).not.toBeInTheDocument());
+  });
+});
+
+// ─── Filter & Sort ─────────────────────────────────────────────────────────────
+
+describe('OsintAnalyzer — filter and sort', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('shows severity filter buttons after scan', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    const allBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'All');
+    expect(allBtn).toBeDefined();
+  });
+
+  it('clicking "high" severity filter shows no match message when no high results visible under filter', async () => {
+    // low result only
+    mockScan.mockResolvedValue({
+      ok: true,
+      data: { breachCount: 0, breaches: [], scannedAt: '2026-01-01T00:00:00Z', riskScore: 5, riskLevel: 'low', recommendedActions: [] },
+    });
+    render(<OsintAnalyzer />);
+    fireEvent.change(screen.getByPlaceholderText(/Enter email, domain or username/i), { target: { value: 'low@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Analysis Results')).toBeInTheDocument());
+    const highBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'high');
+    fireEvent.click(highBtn!);
+    await waitFor(() => expect(screen.getByText(/No results match the selected filter/i)).toBeInTheDocument());
+  });
+
+  it('shows "Clear filters" button when filter or sort is non-default', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    const highBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'high');
+    fireEvent.click(highBtn!);
+    await waitFor(() => expect(screen.getByText(/Clear filters/i)).toBeInTheDocument());
+  });
+
+  it('"Clear filters" button resets filter', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    const highBtn = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'high');
+    fireEvent.click(highBtn!);
+    await waitFor(() => screen.getByText(/Clear filters/i));
+    fireEvent.click(screen.getByText(/Clear filters/i));
+    await waitFor(() => expect(screen.queryByText(/Clear filters/i)).not.toBeInTheDocument());
+  });
+
+  it('shows sort buttons: Newest, Risk ↓, Risk ↑, A→Z', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Newest')).toBeInTheDocument();
+    expect(screen.getByText('Risk ↓')).toBeInTheDocument();
+    expect(screen.getByText('Risk ↑')).toBeInTheDocument();
+    expect(screen.getByText('A→Z')).toBeInTheDocument();
+  });
+});
+
+// ─── Export ────────────────────────────────────────────────────────────────────
+
+describe('OsintAnalyzer — export', () => {
+  let mockDownloadFile: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+    const exportersMod = await import('../../lib/exporters');
+    mockDownloadFile = vi.mocked(exportersMod.downloadFile);
+    mockDownloadFile.mockClear();
+  });
+
+  it('clicking CSV export calls downloadFile with .csv filename', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.csv$/),
+      expect.any(String),
+      'text/csv',
+    );
+  });
+
+  it('clicking JSON export calls downloadFile with .json filename', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    fireEvent.click(screen.getByRole('button', { name: /json/i }));
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.json$/),
+      expect.any(String),
+      'application/json',
+    );
+  });
+});
+
+// ─── Clear history & remove result ─────────────────────────────────────────────
+
+describe('OsintAnalyzer — clear history and remove result', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('"Clear" button removes all results', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    expect(screen.getByText('Analysis Results')).toBeInTheDocument();
+    // The clear history button has aria-label="Clear history"
+    fireEvent.click(screen.getByRole('button', { name: /Clear history/i }));
+    await waitFor(() => expect(screen.queryByText('Analysis Results')).not.toBeInTheDocument());
+  });
+});
