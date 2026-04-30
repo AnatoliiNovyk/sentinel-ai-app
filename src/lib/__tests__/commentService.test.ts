@@ -180,4 +180,31 @@ describe('commentService — subscribeToComments', () => {
     unsubscribe();
     expect(unsubscribeMock).toHaveBeenCalledTimes(1);
   });
+
+  it('invokes callback when real-time event fires', async () => {
+    const callbackMock = vi.fn();
+    const supabaseMod = vi.mocked(
+      (await import('../supabase')).supabase
+    );
+
+    let capturedHandler: (() => void) | null = null;
+    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      on: vi.fn().mockImplementation((_event: string, handler: () => void) => {
+        capturedHandler = handler;
+        return { subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) };
+      }),
+    });
+
+    subscribeToComments('vuln-1', callbackMock);
+
+    expect(capturedHandler).not.toBeNull();
+    // Trigger the real-time event handler
+    capturedHandler!();
+    // Wait for async getComments().then(callback)
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(callbackMock).toHaveBeenCalled();
+  });
 });

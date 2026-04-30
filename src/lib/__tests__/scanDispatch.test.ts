@@ -218,3 +218,91 @@ describe('dispatchScansParallel', () => {
     expect(maxConcurrent).toBeLessThanOrEqual(2);
   });
 });
+
+describe('dispatchScan — edge fn failure paths', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to MOCK when edge fn returns non-ok status', async () => {
+    const mock = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-1' }, error: null },
+      token: 'token-123',
+    });
+    const runMockScan = vi.fn().mockResolvedValue('scan-mock-err');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'Service Unavailable',
+    });
+
+    vi.doMock('../supabase', () => ({ supabase: mock.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    const { dispatchScan } = await import('../scanDispatch');
+    const result = await dispatchScan('u1', 'p1', 'nmap', 'example.com');
+
+    // Should fall through to MOCK since DEV=true in test environment
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.mode).toBe('MOCK');
+    }
+  });
+
+  it('returns SCAN_EDGE_FN_ERROR when ALLOW_MOCK_FALLBACK is disabled', async () => {
+    const mock = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-1' }, error: null },
+      token: 'token-123',
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'Service Unavailable',
+    });
+
+    vi.doMock('../supabase', () => ({ supabase: mock.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan: vi.fn() }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_ALLOW_MOCK_SCAN_FALLBACK', 'false');
+
+    const { dispatchScan } = await import('../scanDispatch');
+    const result = await dispatchScan('u1', 'p1', 'nmap', 'example.com');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(ErrorCode.SCAN_EDGE_FN_ERROR);
+    }
+  });
+
+  it('falls back to MOCK when fetch throws network error', async () => {
+    const mock = makeSupabaseMock({
+      insertResult: { data: { id: 'scan-net' }, error: null },
+      token: 'token-123',
+    });
+    const runMockScan = vi.fn().mockResolvedValue('scan-mock-net');
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Network error'));
+
+    vi.doMock('../supabase', () => ({ supabase: mock.supabase }));
+    vi.doMock('../scanMock', () => ({ runMockScan }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    const { dispatchScan } = await import('../scanDispatch');
+    const result = await dispatchScan('u1', 'p1', 'nmap', 'example.com');
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.mode).toBe('MOCK');
+    }
+  });
+});

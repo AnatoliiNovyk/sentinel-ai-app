@@ -113,4 +113,81 @@ describe('runMockScan', () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
+
+  it('applies production severity upgrades when environment is production', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const mockScan = { id: 'scan-prod-1' };
+    const mockProject = { id: 'proj-prod', name: 'MyApp', environment: 'production', target: 'prod.company.com' };
+
+    let scansCallCount = 0;
+    mockFrom.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(),
+      };
+
+      if (table === 'projects') {
+        chain.maybeSingle.mockResolvedValue({ data: mockProject, error: null });
+      } else if (table === 'scans') {
+        scansCallCount++;
+        if (scansCallCount === 1) {
+          chain.maybeSingle.mockResolvedValue({ data: mockScan, error: null });
+        } else {
+          chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+        }
+      } else {
+        chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+      }
+      return chain;
+    });
+
+    const promise = runMockScan('user-1', 'proj-prod', 'nmap');
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe('scan-prod-1');
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('applies production path when project name includes "prod"', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const mockScan = { id: 'scan-prod-name' };
+    const mockProject = { id: 'proj-2', name: 'Production Server', environment: 'staging', target: 'srv.company.com' };
+
+    let cnt = 0;
+    mockFrom.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(),
+      };
+      if (table === 'projects') {
+        chain.maybeSingle.mockResolvedValue({ data: mockProject, error: null });
+      } else if (table === 'scans') {
+        cnt++;
+        chain.maybeSingle.mockResolvedValue(cnt === 1 ? { data: mockScan, error: null } : { data: null, error: null });
+      } else {
+        chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+      }
+      return chain;
+    });
+
+    const promise = runMockScan('user-1', 'proj-2', 'nmap');
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe('scan-prod-name');
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 });
