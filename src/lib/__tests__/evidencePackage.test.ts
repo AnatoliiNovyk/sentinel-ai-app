@@ -2,8 +2,8 @@
  * Unit tests for src/lib/evidencePackage.ts
  * Tests buildEvidencePackage() and buildEvidenceMarkdown() — pure functions.
  */
-import { describe, it, expect } from 'vitest';
-import { buildEvidencePackage, buildEvidenceMarkdown } from '../evidencePackage';
+import { describe, it, expect, vi } from 'vitest';
+import { buildEvidencePackage, buildEvidenceMarkdown, printReportAsPDF } from '../evidencePackage';
 import type { Vulnerability } from '../supabase';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -221,5 +221,43 @@ describe('buildEvidenceMarkdown', () => {
 
   it('does not throw for empty vuln list', () => {
     expect(() => buildEvidenceMarkdown(buildEvidencePackage([], 'Org'))).not.toThrow();
+  });
+
+  it('uses fallback icon ⚪ for unknown severity', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkg = buildEvidencePackage([makeVuln({ severity: 'unknown' as any })], 'Org');
+    const md = buildEvidenceMarkdown(pkg);
+    expect(md).toContain('⚪');
+  });
+
+  it('omits CVE/MITRE/CIS lines when those fields are null or empty', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkg = buildEvidencePackage([makeVuln({ cve_id: null as any, mitre_tactic: null as any, cis_control: null as any })], 'Org');
+    const md = buildEvidenceMarkdown(pkg);
+    expect(md).not.toContain('**CVE:**');
+    expect(md).not.toContain('**MITRE:**');
+    expect(md).not.toContain('**CIS:**');
+  });
+});
+
+// ─── printReportAsPDF ─────────────────────────────────────────────────────────
+
+describe('printReportAsPDF', () => {
+  it('opens a new window and writes HTML content', () => {
+    const mockWrite = vi.fn();
+    const mockClose = vi.fn();
+    const mockWin = { document: { write: mockWrite, close: mockClose } };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(mockWin as unknown as Window);
+    printReportAsPDF('Test Report', '# Hello World\n- item');
+    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(mockWrite).toHaveBeenCalled();
+    expect(mockClose).toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it('does not throw when window.open returns null (popup blocked)', () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    expect(() => printReportAsPDF('Title', '# Content')).not.toThrow();
+    openSpy.mockRestore();
   });
 });
