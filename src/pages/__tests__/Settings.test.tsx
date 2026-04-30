@@ -404,3 +404,144 @@ describe('Settings — Agent mixed content', () => {
     });
   });
 });
+
+describe('Settings — Security & Preferences toggles', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('darkMode');
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('toggles Two-Factor Authentication on/off', () => {
+    const btn = screen.getByTitle(/two-factor/i);
+    fireEvent.click(btn);
+    // Toggle clicked — no throw expected
+    fireEvent.click(btn);
+  });
+
+  it('toggles Dark Mode on/off', () => {
+    const btn = screen.getByTitle(/dark mode/i);
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+  });
+});
+
+describe('Settings — Notification Preferences', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('sentinelNotifPrefs');
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('toggles email notification channel', () => {
+    fireEvent.click(screen.getByTitle(/disable email notifications|enable email notifications/i));
+  });
+
+  it('toggles in-app notification channel', () => {
+    fireEvent.click(screen.getByTitle(/disable in-app notifications|enable in-app notifications/i));
+  });
+
+  it('toggles webhook delivery channel', () => {
+    fireEvent.click(screen.getByTitle(/disable webhook delivery|enable webhook delivery/i));
+  });
+
+  it('sets minimum severity to Medium+', () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Medium+' }));
+  });
+
+  it('sets minimum severity to High+', () => {
+    fireEvent.click(screen.getByRole('button', { name: 'High+' }));
+  });
+
+  it('sets minimum severity to Critical only', () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Critical only' }));
+  });
+
+  it('sets digest to Daily digest', () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Daily digest' }));
+  });
+
+  it('sets digest to Weekly digest', () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly digest' }));
+  });
+});
+
+describe('Settings — Data Retention presets', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('sentinelRetention');
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('clicks 30d preset for Scan Results', () => {
+    const presets = screen.getAllByRole('button', { name: '30d' });
+    fireEvent.click(presets[0]);
+  });
+
+  it('changes retention input value', () => {
+    const inputs = screen.getAllByRole('spinbutton', { name: /retention/i });
+    fireEvent.change(inputs[0], { target: { value: '60' } });
+  });
+});
+
+describe('Settings — Team Members management', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('shows invite error for invalid email', () => {
+    const emailInput = screen.getByPlaceholderText('colleague@company.com') as HTMLInputElement;
+    fireEvent.change(emailInput, { target: { value: 'not-an-email' } });
+    fireEvent.click(screen.getByRole('button', { name: /invite/i }));
+    expect(screen.getByText('Please enter a valid email address.')).toBeInTheDocument();
+  });
+
+  it('shows duplicate email error', () => {
+    const emailInput = screen.getByPlaceholderText('colleague@company.com') as HTMLInputElement;
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /invite/i }));
+    expect(screen.getByText('This email is already in the team.')).toBeInTheDocument();
+  });
+
+  it('removes a team member', async () => {
+    const emailInput = screen.getByPlaceholderText('colleague@company.com') as HTMLInputElement;
+    fireEvent.change(emailInput, { target: { value: 'new@acme.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /invite/i }));
+    await waitFor(() => screen.getByText('new@acme.com'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove member' }));
+    await waitFor(() => expect(screen.queryByText('new@acme.com')).toBeNull());
+  });
+});
+
+describe('Settings — Webhook section', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('types webhook URL and shows show/hide button', () => {
+    const webhookInput = screen.getByPlaceholderText(/hooks\.slack\.com/i) as HTMLInputElement;
+    fireEvent.change(webhookInput, { target: { value: 'https://hooks.slack.com/services/abc' } });
+    expect(screen.getByRole('button', { name: 'Show URL' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show URL' }));
+    expect(screen.getByRole('button', { name: 'Hide URL' })).toBeInTheDocument();
+  });
+});
+
+describe('Settings — handleUpgrade paths', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('clicking Enterprise plan opens contact email', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const enterpriseBtn = screen.getByRole('button', { name: /contact sales/i });
+    await act(async () => { fireEvent.click(enterpriseBtn); });
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    openSpy.mockRestore();
+  });
+
+  it('clicking Basic Upgrade opens mailto fallback (no Stripe)', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const basicBtn = screen.getAllByRole('button', { name: /upgrade/i })[0];
+    await act(async () => { fireEvent.click(basicBtn); });
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    openSpy.mockRestore();
+  });
+});
