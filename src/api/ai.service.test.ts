@@ -225,4 +225,87 @@ describe('AiService', () => {
       }),
     );
   });
+
+  it('returns AI_RPC_FAILED when dispatchChatTask rpc fails', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: null, error: { message: 'rpc error' } } as never);
+    const res = await AiService.dispatchChatTask('proj-1', 'conv-1', 'user-1', 'hello');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe(ErrorCode.AI_RPC_FAILED);
+  });
+
+  it('returns AI_RPC_FAILED when dispatchChatTask returns null data with no error', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: null, error: null } as never);
+    const res = await AiService.dispatchChatTask('proj-1', 'conv-1', 'user-1', 'hello');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe(ErrorCode.AI_RPC_FAILED);
+  });
+
+  it('returns success when dispatchChatTask rpc succeeds', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: 'chat-job-1', error: null } as never);
+    const res = await AiService.dispatchChatTask('proj-1', 'conv-1', 'user-1', 'hello');
+    expect(res).toEqual({ ok: true, data: 'chat-job-1' });
+  });
+
+  it('pollForResult fails immediately when thrown exception has non-retryable code', async () => {
+    const nonRetryableErr = Object.assign(new Error('permission denied'), { code: '42501' });
+    const query = makeQuery(null);
+    query.maybeSingle.mockRejectedValueOnce(nonRetryableErr);
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const res = await AiService.pollForResult('scan-nonretryable-throw', Date.now() - 1000);
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe(ErrorCode.AI_POLLING_FAILED);
+      expect(res.error.message).toMatch(/non-retryable runtime error/);
+    }
+  });
+
+  it('pollForResult recovers from thrown exception with error code (catch-retry path)', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.stubEnv('VITE_AI_POLL_MAX_ATTEMPTS', '2');
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_JITTER_RATIO', '0');
+
+    const errWithCode = Object.assign(new Error('network timeout'), { code: 'ETIMEDOUT' });
+    const query = makeQuery(null);
+    query.maybeSingle
+      .mockRejectedValueOnce(errWithCode)
+      .mockResolvedValueOnce({ data: { id: 'found-after-throw' }, error: null });
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const onProgress = vi.fn();
+    const res = await AiService.pollForResult('scan-catch-retry', Date.now() - 1000, onProgress);
+
+    expect(res).toEqual({ ok: true, data: { id: 'found-after-throw' } });
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ status: 'retrying', errorCode: 'ETIMEDOUT' }));
+  });
+
+  it('pollForResult reports undefined errorCode when thrown exception has no code', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.stubEnv('VITE_AI_POLL_MAX_ATTEMPTS', '2');
+    vi.stubEnv('VITE_AI_POLL_BASE_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_MAX_DELAY_MS', '1');
+    vi.stubEnv('VITE_AI_POLL_JITTER_RATIO', '0');
+
+    const errNoCode = new Error('socket hang up');
+    const query = makeQuery(null);
+    query.maybeSingle
+      .mockRejectedValueOnce(errNoCode)
+      .mockResolvedValueOnce({ data: { id: 'found-no-code' }, error: null });
+    vi.mocked(supabase.from).mockImplementation(() => query as never);
+
+    const onProgress = vi.fn();
+    const res = await AiService.pollForResult('scan-catch-nocode', Date.now() - 1000, onProgress);
+
+    expect(res).toEqual({ ok: true, data: { id: 'found-no-code' } });
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'retrying' }),
+    );
+    // errorCode should be absent (undefined spread)
+    const calls = onProgress.mock.calls.map((c) => c[0]);
+    const retryCall = calls.find((c) => c.status === 'retrying');
+    expect(retryCall?.errorCode).toBeUndefined();
+  });
 });

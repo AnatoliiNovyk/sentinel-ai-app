@@ -311,6 +311,86 @@ describe('fromSarif', () => {
     const parsed = fromSarif(JSON.stringify(externalSarif));
     expect(parsed.findings[0].title).toBe('CWE-89');
   });
+
+  it('scoreToSeverity returns high for score 7.0–8.9', () => {
+    const sarif = {
+      runs: [{
+        tool: { driver: { name: 'T', rules: [{ id: 'R1', properties: { 'security-severity': '7.5' } }] } },
+        results: [{ ruleId: 'R1', message: { text: 'high sev' }, locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].severity).toBe('high');
+  });
+
+  it('scoreToSeverity returns medium for score 4.0–6.9', () => {
+    const sarif = {
+      runs: [{
+        tool: { driver: { name: 'T', rules: [{ id: 'R1', properties: { 'security-severity': '5.0' } }] } },
+        results: [{ ruleId: 'R1', message: { text: 'medium sev' }, locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].severity).toBe('medium');
+  });
+
+  it('scoreToSeverity returns low for score 1.0–3.9', () => {
+    const sarif = {
+      runs: [{
+        tool: { driver: { name: 'T', rules: [{ id: 'R1', properties: { 'security-severity': '2.5' } }] } },
+        results: [{ ruleId: 'R1', message: { text: 'low sev' }, locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].severity).toBe('low');
+  });
+
+  it('scoreToSeverity returns info for score < 1', () => {
+    const sarif = {
+      runs: [{
+        tool: { driver: { name: 'T', rules: [{ id: 'R1', properties: { 'security-severity': '0.3' } }] } },
+        results: [{ ruleId: 'R1', message: { text: 'info sev' }, locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].severity).toBe('info');
+  });
+
+  it('uses rule.fullDescription.text when result has no message.text', () => {
+    const sarif = {
+      runs: [{
+        tool: {
+          driver: {
+            name: 'T',
+            rules: [{
+              id: 'R1',
+              fullDescription: { text: 'Full description text' },
+              shortDescription: { text: 'Short desc' },
+            }],
+          },
+        },
+        results: [{ ruleId: 'R1', locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].description).toBe('Full description text');
+  });
+
+  it('uses rule.shortDescription.text when no message.text and no fullDescription', () => {
+    const sarif = {
+      runs: [{
+        tool: {
+          driver: {
+            name: 'T',
+            rules: [{ id: 'R1', shortDescription: { text: 'Short only desc' } }],
+          },
+        },
+        results: [{ ruleId: 'R1', locations: [], properties: {} }],
+      }],
+    };
+    const parsed = fromSarif(JSON.stringify(sarif));
+    expect(parsed.findings[0].description).toBe('Short only desc');
+  });
 });
 
 // ─── toSarif — mock watermark ─────────────────────────────────────────────────

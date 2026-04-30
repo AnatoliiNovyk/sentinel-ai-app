@@ -109,4 +109,21 @@ describe('generateKillChain', () => {
     expect(result).toEqual(killChainData);
     vi.useRealTimers();
   }, 30000);
+
+  it('returns empty array when vuln description is invalid JSON', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockInsertJob.mockResolvedValue({ data: { id: 'job-1' }, error: null });
+    mockPollJob.mockResolvedValue({ data: { status: 'completed' }, error: null });
+    mockGetVuln.mockResolvedValue({ data: { description: '{not valid json!!!' }, error: null });
+
+    vi.useFakeTimers();
+    const promise = generateKillChain('TestProject', [
+      { title: 'RCE', severity: 'critical', asset: 'server.example.com' },
+    ]);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    // JSON.parse throws → catch block → returns [] fallback
+    expect(result).toEqual([]);
+    vi.useRealTimers();
+  }, 30000);
 });

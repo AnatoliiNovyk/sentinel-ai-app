@@ -278,6 +278,21 @@ describe('ScaAnalyzer', () => {
     }
   });
 
+  it('returns failure when parseSbom throws (malicious getter)', async () => {
+    // parseSbom calls detectSbomFormat which accesses properties.
+    // A getter that throws causes parseSbom to throw, which is caught by scan().
+    const malicious = {};
+    Object.defineProperty(malicious, 'bomFormat', {
+      get() { throw new Error('getter boom'); },
+      enumerable: true,
+    });
+    const result = await analyzer.scan(malicious);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toMatch(/failed to parse/i);
+    }
+  });
+
   it('fails for empty manifest', async () => {
     const result = await analyzer.scan({});
     expect(result.ok).toBe(false);
