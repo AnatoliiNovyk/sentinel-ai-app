@@ -72,6 +72,16 @@ vi.mock('../../api/client', () => {
             },
           }),
         }),
+        delete: () => ({
+          eq: (_f: string, id: string) => {
+            conversations = conversations.filter((c) => c.id !== id);
+            return Promise.resolve({ data: null, error: null });
+          },
+          in: (_f: string, ids: string[]) => {
+            conversations = conversations.filter((c) => !ids.includes(c.id));
+            return Promise.resolve({ data: null, error: null });
+          },
+        }),
       };
     }
 
@@ -228,3 +238,147 @@ describe('Chat integration flow', () => {
       fireEvent.click(screen.getByText('Second Chat'));
     });
   });
+
+describe('Chat — form and keyboard interactions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversations = [];
+    messages = [];
+    convoIdCounter = 1;
+    msgIdCounter = 1;
+    try { Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() }); } catch { /* already defined */ }
+    mockRunAgent.mockResolvedValue({ content: 'Response', toolCalls: [] });
+    mockCallAiGateway.mockResolvedValue({ content: 'GW response', provider: 'mock', isMock: true } satisfies GatewayResponse);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  it('handleSubmit — form submit sends message', async () => {
+    render(<Chat />);
+    const ta = screen.getByPlaceholderText(/ask anything/i);
+    fireEvent.change(ta, { target: { value: 'form submit test' } });
+    fireEvent.submit(ta.closest('form')!);
+    await waitFor(() => expect(mockRunAgent).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  it('handleKeyDown — Enter key sends message', async () => {
+    render(<Chat />);
+    const ta = screen.getByPlaceholderText(/ask anything/i);
+    fireEvent.change(ta, { target: { value: 'enter key test' } });
+    fireEvent.keyDown(ta, { key: 'Enter', shiftKey: false });
+    await waitFor(() => expect(mockRunAgent).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  it('handleKeyDown — Shift+Enter does not submit', () => {
+    render(<Chat />);
+    const ta = screen.getByPlaceholderText(/ask anything/i);
+    fireEvent.change(ta, { target: { value: 'shift enter test' } });
+    fireEvent.keyDown(ta, { key: 'Enter', shiftKey: true });
+    expect(mockRunAgent).not.toHaveBeenCalled();
+  });
+
+  it('shows char counter when input has text', () => {
+    render(<Chat />);
+    const ta = screen.getByPlaceholderText(/ask anything/i);
+    fireEvent.change(ta, { target: { value: 'hello' } });
+    expect(screen.getByText('5/2000')).toBeInTheDocument();
+  });
+
+  it('char counter turns red when input exceeds 1800 chars', () => {
+    render(<Chat />);
+    const ta = screen.getByPlaceholderText(/ask anything/i);
+    fireEvent.change(ta, { target: { value: 'a'.repeat(1801) } });
+    const counter = screen.getByText('1801/2000');
+    expect(counter.className).toContain('text-red-400');
+  });
+});
+
+describe('Chat — conversation management', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversations = [
+      { id: 'c-1', title: 'Conv One', created_at: new Date().toISOString(), user_id: 'user-1' },
+      { id: 'c-2', title: 'Conv Two', created_at: new Date(Date.now() - 3600000).toISOString(), user_id: 'user-1' },
+    ];
+    messages = [];
+    convoIdCounter = 3;
+    msgIdCounter = 1;
+    try { Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() }); } catch { /* already defined */ }
+    mockRunAgent.mockResolvedValue({ content: 'ok', toolCalls: [] });
+    mockCallAiGateway.mockResolvedValue({ content: 'ok', provider: 'mock', isMock: true } satisfies GatewayResponse);
+  });
+
+  it('newConversation — "New chat" button adds a conversation', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    fireEvent.click(screen.getByRole('button', { name: /new chat/i }));
+    await waitFor(() => expect(screen.getByText('New conversation')).toBeInTheDocument(), { timeout: 3000 });
+  });
+
+  it('deleteConversation — removes a conversation from sidebar', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv Two'));
+    const deleteBtns = screen.getAllByRole('button', { name: 'Delete conversation' });
+    fireEvent.click(deleteBtns[1]);
+    await waitFor(() => expect(screen.queryByText('Conv Two')).toBeNull(), { timeout: 3000 });
+  });
+
+  it('deleteConversation when active — clears messages pane', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    const deleteBtns = screen.getAllByRole('button', { name: 'Delete conversation' });
+    fireEvent.click(deleteBtns[0]);
+    await waitFor(() => expect(screen.queryByText('Conv One')).toBeNull(), { timeout: 3000 });
+  });
+
+  it('clearAllConversations — removes all conversations', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all conversations' }));
+    await waitFor(() => expect(screen.queryByText('Conv One')).toBeNull(), { timeout: 3000 });
+    expect(screen.queryByText('Conv Two')).toBeNull();
+  });
+
+  it('searchQuery — filters conversations by title', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    fireEvent.change(screen.getByPlaceholderText('Search chats...'), { target: { value: 'Two' } });
+    await waitFor(() => expect(screen.queryByText('Conv One')).toBeNull());
+    expect(screen.getByText('Conv Two')).toBeInTheDocument();
+  });
+
+  it('dateFilter — select changes to today', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by date' }), { target: { value: 'today' } });
+    expect(screen.getByText('Conv One')).toBeInTheDocument();
+  });
+
+  it('relativeConvTime — shows relative time for conversations', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Conv One'));
+    expect(screen.getAllByText(/ago|just now/i).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('Chat — copyMessage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversations = [{ id: 'c-1', title: 'Chat with msg', created_at: new Date().toISOString(), user_id: 'user-1' }];
+    messages = [
+      { id: 'msg-1', conversation_id: 'c-1', user_id: 'user-1', role: 'assistant', content: 'Hello from AI', created_at: new Date().toISOString() },
+    ];
+    convoIdCounter = 2;
+    msgIdCounter = 2;
+    try { Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() }); } catch { /* already defined */ }
+    mockRunAgent.mockResolvedValue({ content: 'ok', toolCalls: [] });
+    mockCallAiGateway.mockResolvedValue({ content: 'ok', provider: 'mock', isMock: true } satisfies GatewayResponse);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  it('copyMessage — clipboard called with assistant message content', async () => {
+    render(<Chat />);
+    await waitFor(() => screen.getByText('Hello from AI'));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello from AI'));
+  });
+});
