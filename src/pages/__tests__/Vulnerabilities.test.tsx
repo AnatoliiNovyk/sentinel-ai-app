@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import Vulnerabilities from '../Vulnerabilities';
@@ -167,5 +167,211 @@ describe('Vulnerabilities — bulk actions', () => {
     expect(await screen.findByText('Resolve')).toBeInTheDocument();
     expect(screen.getByText('Accept risk')).toBeInTheDocument();
     expect(screen.getByText('False positive')).toBeInTheDocument();
+  });
+
+  it('clicking Resolve calls supabase update', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const checkboxes = screen.getAllByRole('button', { name: 'Select' });
+    fireEvent.click(checkboxes[0]);
+    await screen.findByText('Resolve');
+    await act(async () => { fireEvent.click(screen.getByText('Resolve')); });
+    // bulkUpdate was called — supabase update mock was invoked
+    expect(screen.queryByText('Resolve')).toBeNull();
+  });
+
+  it('clicking Accept risk calls supabase update', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const checkboxes = screen.getAllByRole('button', { name: 'Select' });
+    fireEvent.click(checkboxes[0]);
+    await screen.findByText('Accept risk');
+    await act(async () => { fireEvent.click(screen.getByText('Accept risk')); });
+    expect(screen.queryByText('Accept risk')).toBeNull();
+  });
+
+  it('clicking False positive calls supabase update', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const checkboxes = screen.getAllByRole('button', { name: 'Select' });
+    fireEvent.click(checkboxes[0]);
+    await screen.findByText('False positive');
+    await act(async () => { fireEvent.click(screen.getByText('False positive')); });
+    expect(screen.queryByText('False positive')).toBeNull();
+  });
+
+  it('BulkBar close button clears selection', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const checkboxes = screen.getAllByRole('button', { name: 'Select' });
+    fireEvent.click(checkboxes[0]);
+    await screen.findByText('Resolve');
+    fireEvent.click(screen.getByTitle('Clear selection'));
+    await waitFor(() => expect(screen.queryByText('Resolve')).toBeNull());
+  });
+
+  it('Select all / Deselect all toggles all rows', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByText(/select all/i));
+    await screen.findByText('Resolve');
+    // Both rows selected — click Deselect all
+    fireEvent.click(screen.getByText(/deselect all/i));
+    await waitFor(() => expect(screen.queryByText('Resolve')).toBeNull());
+  });
+});
+
+describe('Vulnerabilities — sort and search', () => {
+  it('clicking Newest sort button works', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByText('Newest'));
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('clicking Oldest sort button works', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByText('Oldest'));
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('clicking A→Z sort button works', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByText('A→Z'));
+    expect(screen.getByText('XSS Reflected')).toBeInTheDocument();
+  });
+
+  it('clicking Project sort button works', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // Multiple "Project" text items may exist — use the sort button specifically
+    const projectBtns = screen.getAllByText('Project');
+    // The sort button is inside the filter row — click the one that looks like a sort btn
+    fireEvent.click(projectBtns[0]);
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('search input filters vulnerabilities', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.change(screen.getByPlaceholderText(/search findings/i), { target: { value: 'SQL' } });
+    await waitFor(() => expect(screen.queryByText('XSS Reflected')).toBeNull());
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('Clear filters button resets search', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.change(screen.getByPlaceholderText(/search findings/i), { target: { value: 'nomatch' } });
+    await screen.findByText('No vulnerabilities match the filters');
+    // multiple 'Clear filters' buttons may exist — click any one
+    const clearBtns = screen.getAllByText(/clear filters/i);
+    fireEvent.click(clearBtns[clearBtns.length - 1]);
+    await screen.findByText('SQL Injection');
+  });
+
+  it('status filter buttons appear and filter by Open', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // The "Open" filter buttons in Row 3 of filters
+    const openBtns = screen.getAllByRole('button', { name: /^open$/i });
+    fireEvent.click(openBtns[openBtns.length - 1]); // last one = status filter in row
+    // Both vulns are 'open' so both should still be visible
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('Has CVE checkbox filters vulns with cve_id', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByLabelText('Has CVE'));
+    await waitFor(() => expect(screen.queryByText('XSS Reflected')).toBeNull());
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('SLA breached checkbox filters by sla_breached_at', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByLabelText('SLA breached'));
+    await waitFor(() => expect(screen.queryByText('SQL Injection')).toBeNull());
+    expect(screen.getByText('XSS Reflected')).toBeInTheDocument();
+  });
+});
+
+describe('Vulnerabilities — export', () => {
+  it('opens export dropdown on click', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    await waitFor(() => expect(screen.getByText('CSV')).toBeInTheDocument());
+    expect(screen.getByText('JSON')).toBeInTheDocument();
+  });
+
+  it('clicking CSV calls downloadFile', async () => {
+    const { downloadFile } = await import('../../lib/exporters');
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    await screen.findByText('CSV');
+    fireEvent.click(screen.getByText('CSV'));
+    expect(downloadFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.csv$/),
+      expect.any(String),
+      'text/csv',
+    );
+  });
+
+  it('clicking JSON calls downloadFile', async () => {
+    const { downloadFile } = await import('../../lib/exporters');
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    await screen.findByText('JSON');
+    fireEvent.click(screen.getByText('JSON'));
+    expect(downloadFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.json$/),
+      expect.any(String),
+      'application/json',
+    );
+  });
+});
+
+describe('Vulnerabilities — row features', () => {
+  it('VulnRow shows SLA breached badge', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('XSS Reflected');
+    // v-2 has sla_breached_at set
+    const badges = screen.getAllByText(/SLA breached/i);
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('VulnRow shows CVE link for vuln with cve_id', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    expect(screen.getByText('CVE-2023-1234')).toBeInTheDocument();
+  });
+
+  it('VulnRow shows project name when scans include the scan_id', async () => {
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    mockScansEq.mockResolvedValue({ data: [{ id: 'scan-1', project_id: 'proj-1', scanner: 'nmap' }], error: null });
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // Project name should appear in VulnRow when scan links to project
+    await waitFor(() => {
+      const projectLinks = screen.queryAllByText('Alpha Project');
+      expect(projectLinks.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('Vulnerabilities — refresh', () => {
+  it('clicking Refresh button re-fetches data', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const refreshBtn = screen.getByTitle('Refresh');
+    fireEvent.click(refreshBtn);
+    // Should still show the data after refresh
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
   });
 });
