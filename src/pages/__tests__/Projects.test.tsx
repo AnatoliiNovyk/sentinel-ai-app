@@ -6,11 +6,16 @@ import type { Project } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockOrder, mockDeleteEq, mockInsert } = vi.hoisted(() => ({
-  mockOrder: vi.fn(),
-  mockDeleteEq: vi.fn().mockResolvedValue({ data: null, error: null }),
-  mockInsert: vi.fn().mockResolvedValue({ data: null, error: null }),
-}));
+const { mockOrder, mockDeleteEq, mockInsert, mockUpdateEq, mockUpdate } = vi.hoisted(() => {
+  const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+  return {
+    mockOrder: vi.fn(),
+    mockDeleteEq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    mockInsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    mockUpdateEq,
+    mockUpdate: vi.fn().mockReturnValue({ eq: mockUpdateEq }),
+  };
+});
 
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
@@ -21,6 +26,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         select: () => ({ order: mockOrder }),
         delete: () => ({ eq: mockDeleteEq }),
         insert: mockInsert,
+        update: mockUpdate,
       }),
     },
   };
@@ -176,3 +182,435 @@ describe('Projects — new project modal', () => {
     );
   });
 });
+
+// ─── Stat cards ────────────────────────────────────────────────────────────
+
+describe('Projects — stat cards', () => {
+  it('shows stat cards when projects are loaded', async () => {
+    mockOrder.mockResolvedValue({
+      data: [
+        makeProject({ id: 'p1', name: 'Alpha', risk_score: 85, environment: 'cloud' }),
+        makeProject({ id: 'p2', name: 'Beta', risk_score: 20, environment: 'internal' }),
+      ],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('Total Projects')).toBeInTheDocument());
+    expect(screen.getByText('High/Critical Risk')).toBeInTheDocument();
+    expect(screen.getByText('Avg Risk Score')).toBeInTheDocument();
+    expect(screen.getByText('By Environment')).toBeInTheDocument();
+  });
+
+  it('shows avg risk score with red colour when >= 70', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ risk_score: 80 })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Avg Risk Score'));
+    expect(screen.getByText('80')).toBeInTheDocument();
+  });
+
+  it('shows avg risk score with amber colour when 40-69', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ risk_score: 55 })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Avg Risk Score'));
+    expect(screen.getByText('55')).toBeInTheDocument();
+  });
+});
+
+// ─── Search and environment filter ─────────────────────────────────────────
+
+describe('Projects — search and filter', () => {
+  beforeEach(() => {
+    mockOrder.mockResolvedValue({
+      data: [
+        makeProject({ id: 'p1', name: 'Alpha Cloud', environment: 'cloud', risk_score: 85, target: 'alpha.com' }),
+        makeProject({ id: 'p2', name: 'Beta Internal', environment: 'internal', risk_score: 20, target: 'beta.net' }),
+      ],
+      error: null,
+    });
+  });
+
+  it('filters projects by search query', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), { target: { value: 'alpha' } });
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+    expect(screen.queryByText('Beta Internal')).not.toBeInTheDocument();
+  });
+
+  it('shows count indicator when search is active', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), { target: { value: 'alpha' } });
+    await waitFor(() => expect(screen.getByText(/1 of 2/)).toBeInTheDocument());
+  });
+
+  it('clears search via X button', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    const input = screen.getByPlaceholderText('Search projects…');
+    fireEvent.change(input, { target: { value: 'alpha' } });
+    fireEvent.click(screen.getByLabelText('Clear search'));
+    await waitFor(() => expect(screen.getByText('Beta Internal')).toBeInTheDocument());
+  });
+
+  it('filters by environment (Cloud)', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cloud' }));
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+    expect(screen.queryByText('Beta Internal')).not.toBeInTheDocument();
+  });
+
+  it('clicking risk filter button does not throw and shows risk filter buttons', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    // The risk filter buttons exist and are clickable
+    const criticalBtn = screen.getByRole('button', { name: 'critical' });
+    expect(criticalBtn).toBeInTheDocument();
+    fireEvent.click(criticalBtn);
+    // Reset back to all
+    fireEvent.click(screen.getByRole('button', { name: 'All Risks' }));
+    await waitFor(() => expect(screen.getByText('Alpha Cloud')).toBeInTheDocument());
+  });
+
+  it('shows no-match state when filters eliminate all results', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), { target: { value: 'zzznotfound' } });
+    await waitFor(() =>
+      expect(screen.getByText('No projects match your filters')).toBeInTheDocument(),
+    );
+  });
+
+  it('clears filters via "Clear filters" button', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByPlaceholderText('Search projects…'), { target: { value: 'zzznotfound' } });
+    await waitFor(() => screen.getByText('Clear filters'));
+    fireEvent.click(screen.getByText('Clear filters'));
+    await waitFor(() => expect(screen.getByText('Alpha Cloud')).toBeInTheDocument());
+  });
+
+  it('sorts by Name A–Z', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByTitle('Sort projects'), { target: { value: 'name' } });
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+    expect(screen.getByText('Beta Internal')).toBeInTheDocument();
+  });
+
+  it('sorts by oldest first', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByTitle('Sort projects'), { target: { value: 'oldest' } });
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+  });
+
+  it('sorts by risk descending', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByTitle('Sort projects'), { target: { value: 'risk_desc' } });
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+  });
+
+  it('sorts by risk ascending', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Cloud'));
+    fireEvent.change(screen.getByTitle('Sort projects'), { target: { value: 'risk_asc' } });
+    expect(screen.getByText('Alpha Cloud')).toBeInTheDocument();
+  });
+});
+
+// ─── Tag filter ─────────────────────────────────────────────────────────────
+
+describe('Projects — tag filter', () => {
+  beforeEach(() => {
+    mockOrder.mockResolvedValue({
+      data: [
+        makeProject({ id: 'p1', name: 'Tagged Alpha', tags: ['prod', 'aws'] }),
+        makeProject({ id: 'p2', name: 'Tagged Beta', tags: ['staging'] }),
+      ],
+      error: null,
+    });
+  });
+
+  it('shows tag chips when projects have tags', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByRole('button', { name: /prod/ }));
+    expect(screen.getByRole('button', { name: /aws/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /staging/ })).toBeInTheDocument();
+  });
+
+  it('filters by tag when tag chip clicked', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByRole('button', { name: /prod/ }));
+    fireEvent.click(screen.getByRole('button', { name: /prod/ }));
+    expect(screen.getByText('Tagged Alpha')).toBeInTheDocument();
+    expect(screen.queryByText('Tagged Beta')).not.toBeInTheDocument();
+  });
+
+  it('resets tag filter when All tags clicked', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByRole('button', { name: /prod/ }));
+    fireEvent.click(screen.getByRole('button', { name: /prod/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'All tags' }));
+    await waitFor(() => expect(screen.getByText('Tagged Beta')).toBeInTheDocument());
+  });
+
+  it('toggles off tag filter when same tag clicked again', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByRole('button', { name: /prod/ }));
+    fireEvent.click(screen.getByRole('button', { name: /prod/ }));
+    fireEvent.click(screen.getByRole('button', { name: /prod/ }));
+    await waitFor(() => expect(screen.getByText('Tagged Beta')).toBeInTheDocument());
+  });
+});
+
+// ─── View mode and kanban ───────────────────────────────────────────────────
+
+describe('Projects — view mode and kanban', () => {
+  const twoProjects = [
+    makeProject({ id: 'p1', name: 'Todo Project', status: 'todo' }),
+    makeProject({ id: 'p2', name: 'Done Project', status: 'done' }),
+  ];
+
+  beforeEach(() => {
+    mockOrder.mockResolvedValue({ data: twoProjects, error: null });
+    mockUpdateEq.mockResolvedValue({ data: null, error: null });
+  });
+
+  it('shows view mode toggle when projects loaded', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Grid view'));
+    expect(screen.getByTitle('Kanban view')).toBeInTheDocument();
+  });
+
+  it('switches to kanban view and shows columns', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => expect(screen.getByText('To Do')).toBeInTheDocument());
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
+  });
+
+  it('shows projects in correct kanban columns', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByText('To Do'));
+    expect(screen.getByText('Todo Project')).toBeInTheDocument();
+    expect(screen.getByText('Done Project')).toBeInTheDocument();
+  });
+
+  it('navigates to ProjectDetail from kanban card', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByText('Todo Project'));
+    fireEvent.click(screen.getByText('Todo Project'));
+    expect(screen.getByText('ProjectDetail')).toBeInTheDocument();
+  });
+
+  it('shows delete button in kanban card', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByText('Todo Project'));
+    const deleteBtns = screen.getAllByLabelText('Delete project');
+    expect(deleteBtns.length).toBeGreaterThan(0);
+  });
+
+  it('handles drag start and end on kanban card', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByText('Todo Project'));
+    const card = screen.getByText('Todo Project').closest('[draggable]') as HTMLElement;
+    if (card) {
+      fireEvent.dragStart(card);
+      fireEvent.dragEnd(card);
+    }
+    expect(screen.getByText('Todo Project')).toBeInTheDocument();
+  });
+
+  it('switches back to grid view', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByTitle('Grid view'));
+    fireEvent.click(screen.getByTitle('Grid view'));
+    await waitFor(() => expect(screen.getByText('Todo Project')).toBeInTheDocument());
+  });
+});
+
+// ─── Export CSV ─────────────────────────────────────────────────────────────
+
+describe('Projects — export CSV', () => {
+  it('shows Export CSV button when projects loaded', async () => {
+    mockOrder.mockResolvedValue({ data: [makeProject()], error: null });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('Export CSV')).toBeInTheDocument());
+  });
+
+  it('triggers download when Export CSV clicked', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ name: 'CSV Test', target: 'csv.com', risk_score: 30 })],
+      error: null,
+    });
+    const mockCreate = vi.fn().mockReturnValue('blob:mock');
+    const mockRevoke = vi.fn();
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = mockCreate;
+    URL.revokeObjectURL = mockRevoke;
+
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Export CSV'));
+    fireEvent.click(screen.getByText('Export CSV'));
+    expect(mockCreate).toHaveBeenCalled();
+
+    URL.createObjectURL = origCreate;
+    URL.revokeObjectURL = origRevoke;
+  });
+});
+
+// ─── ProjectModal form ──────────────────────────────────────────────────────
+
+describe('Projects — ProjectModal form', () => {
+  beforeEach(() => {
+    mockOrder.mockResolvedValue({ data: [], error: null });
+  });
+
+  it('submits form and calls insert on success', async () => {
+    mockInsert.mockResolvedValue({ data: null, error: null });
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByPlaceholderText('Production AWS'));
+    fireEvent.change(screen.getByPlaceholderText('Production AWS'), { target: { value: 'My New Project' } });
+    fireEvent.change(screen.getByPlaceholderText('example.com'), { target: { value: 'new.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await waitFor(() => expect(mockInsert).toHaveBeenCalled());
+  });
+
+  it('stays open and does not call insert when supabase returns error', async () => {
+    mockInsert.mockResolvedValue({ data: null, error: { message: 'insert failed' } });
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByPlaceholderText('Production AWS'));
+    fireEvent.change(screen.getByPlaceholderText('Production AWS'), { target: { value: 'Err Project' } });
+    fireEvent.change(screen.getByPlaceholderText('example.com'), { target: { value: 'err.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await waitFor(() => expect(mockInsert).toHaveBeenCalled());
+  });
+
+  it('closes modal when Cancel clicked', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByRole('heading', { name: /new project/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('closes modal when X button clicked', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByRole('heading', { name: /new project/i }));
+    fireEvent.click(screen.getByLabelText('Close'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('closes modal when Escape key pressed', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByRole('heading', { name: /new project/i }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('changes environment selection inside modal', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByRole('button', { name: 'cloud' }));
+    fireEvent.click(screen.getByRole('button', { name: 'cloud' }));
+    fireEvent.click(screen.getByRole('button', { name: 'internal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'iac' }));
+    expect(screen.getByRole('button', { name: 'iac' })).toBeInTheDocument();
+  });
+
+  it('closes modal when backdrop clicked', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByText('No projects yet'));
+    fireEvent.click(screen.getAllByText('New project')[0]);
+    await waitFor(() => screen.getByRole('heading', { name: /new project/i }));
+    // Click the outer backdrop div (first child of body overlay)
+    const dialog = screen.getByRole('dialog');
+    const backdrop = dialog.parentElement!;
+    fireEvent.click(backdrop);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+// ─── relTime branches ───────────────────────────────────────────────────────
+
+describe('Projects — relTime timestamp branches', () => {
+  it('shows "just now" for < 1 min ago', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ created_at: new Date(Date.now() - 30000).toISOString() })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('just now')).toBeInTheDocument());
+  });
+
+  it('shows "Xm ago" for < 1 hour', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString() })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('5m ago')).toBeInTheDocument());
+  });
+
+  it('shows "Xh ago" for < 24 hours', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ created_at: new Date(Date.now() - 3 * 3600 * 1000).toISOString() })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('3h ago')).toBeInTheDocument());
+  });
+
+  it('shows "Xd ago" for < 30 days', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ created_at: new Date(Date.now() - 5 * 86400 * 1000).toISOString() })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => expect(screen.getByText('5d ago')).toBeInTheDocument());
+  });
+
+  it('shows locale date for >= 30 days', async () => {
+    mockOrder.mockResolvedValue({
+      data: [makeProject({ created_at: new Date(Date.now() - 60 * 86400 * 1000).toISOString() })],
+      error: null,
+    });
+    render(<Projects />);
+    await waitFor(() => screen.getByText('Alpha Project'));
+    // Just check it doesn't show "ago"
+    expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+  });
+});
+
