@@ -2,13 +2,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import OsintAnalyzer from '../DarkWebMonitor';
 
-const { mockScan, mockCheck, mockGetRateLimiter, mockGetGlobalDarkWebMonitor } = vi.hoisted(() => {
+const { mockScan, mockCheck, mockGetRateLimiter, mockGetGlobalDarkWebMonitor, mockUseAuth } = vi.hoisted(() => {
   const mockScan = vi.fn();
   const mockCheck = vi.fn().mockReturnValue({ allowed: true, retryAfterMs: 0 });
   const mockLimiter = { check: mockCheck };
   const mockGetRateLimiter = vi.fn().mockReturnValue(mockLimiter);
   const mockGetGlobalDarkWebMonitor = vi.fn().mockReturnValue({ scan: mockScan });
-  return { mockScan, mockCheck, mockGetRateLimiter, mockGetGlobalDarkWebMonitor };
+  const mockUseAuth = vi.fn().mockReturnValue({ user: null });
+  return { mockScan, mockCheck, mockGetRateLimiter, mockGetGlobalDarkWebMonitor, mockUseAuth };
 });
 
 vi.mock('../../lib/darkWebMonitor', () => ({
@@ -20,7 +21,7 @@ vi.mock('../../lib/rateLimiter', () => ({
 }));
 
 vi.mock('../../context/useAuth', () => ({
-  useAuth: () => ({ user: null }),
+  useAuth: mockUseAuth,
 }));
 
 vi.mock('../../lib/toastContext', () => ({
@@ -28,8 +29,8 @@ vi.mock('../../lib/toastContext', () => ({
 }));
 
 vi.mock('../../api/audit.service', () => ({
-  AuditService: { logAction: vi.fn().mockResolvedValue(undefined) },
-  AuditAction: {},
+  AuditService: { logAction: vi.fn().mockResolvedValue(undefined), logSecurityEvent: vi.fn().mockResolvedValue(undefined) },
+  AuditAction: { DARK_WEB_SCAN: 'dark_web_scan' },
 }));
 
 vi.mock('../../lib/exporters', () => ({
@@ -513,5 +514,44 @@ describe('OsintAnalyzer — breach severity medium and low', () => {
     };
     await renderWithResult(lowData as typeof HIGH_RISK_DATA);
     expect(screen.getByText(/low Severity/i)).toBeInTheDocument();
+  });
+});
+
+// ─── AuditService.logSecurityEvent coverage (user logged in) ──────────────────
+
+describe('OsintAnalyzer — logSecurityEvent when user is logged in', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+    mockUseAuth.mockReturnValue({ user: { id: 'user-1', app_metadata: { org_id: 'org-1' } } });
+  });
+
+  afterEach(() => {
+    mockUseAuth.mockReturnValue({ user: null });
+  });
+
+  it('calls AuditService.logSecurityEvent when user is present and scan succeeds', async () => {
+    const { AuditService } = await import('../../api/audit.service');
+    (AuditService.logSecurityEvent as ReturnType<typeof vi.fn>).mockClear();
+    await renderWithResult({
+      ok: true,
+      data: {
+        breachCount: 1,
+        breaches: [{ source: 'TestDB', severity: 'high', dataClasses: ['email'], breachDate: '2024-01-01' }],
+        scannedAt: '2026-04-29T00:00:00Z',
+        riskScore: 75,
+        riskLevel: 'high',
+        recommendedActions: ['Change passwords'],
+      },
+    } as typeof HIGH_RISK_DATA);
+    await waitFor(() => expect(AuditService.logSecurityEvent).toHaveBeenCalledWith(
+      'org-1',
+      'user-1',
+      expect.anything(),
+      'dark_web_query',
+      expect.any(String),
+      expect.any(Object),
+    ));
   });
 });
