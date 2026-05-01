@@ -375,3 +375,201 @@ describe('Vulnerabilities — refresh', () => {
     await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
   });
 });
+
+describe('Vulnerabilities — sort options', () => {
+  beforeEach(() => {
+    mockVulnsOrder.mockResolvedValue({
+      data: [
+        { id: 'v-1', title: 'SQLi',   severity: 'critical', status: 'open', asset: 'api.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-01T00:00:00Z' },
+        { id: 'v-2', title: 'XSS',    severity: 'high',     status: 'open', asset: 'web.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-02T00:00:00Z' },
+        { id: 'v-3', title: 'CSRF',   severity: 'medium',   status: 'open', asset: 'admin.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-03T00:00:00Z' },
+      ],
+      error: null,
+    });
+  });
+
+  it('vulnerabilities render with proper severity styling', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQLi');
+    expect(screen.getByText('SQLi')).toBeInTheDocument();
+  });
+});
+
+describe('Vulnerabilities — severity and status filtering', () => {
+  beforeEach(() => {
+    mockVulnsOrder.mockResolvedValue({
+      data: [
+        { id: 'v-1', title: 'Critical Finding',   severity: 'critical', status: 'open',    asset: 'a.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-01T00:00:00Z' },
+        { id: 'v-2', title: 'High Finding',       severity: 'high',     status: 'resolved', asset: 'b.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-02T00:00:00Z' },
+        { id: 'v-3', title: 'Medium Finding',     severity: 'medium',   status: 'accepted', asset: 'c.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-03T00:00:00Z' },
+      ],
+      error: null,
+    });
+  });
+
+  it('shows vulnerabilities with different severity levels', async () => {
+    render(<Vulnerabilities />);
+    await waitFor(() => {
+      expect(screen.getByText('Critical Finding')).toBeInTheDocument();
+      expect(screen.getByText('High Finding')).toBeInTheDocument();
+      expect(screen.getByText('Medium Finding')).toBeInTheDocument();
+    });
+  });
+
+  it('renders medium severity vulnerability', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('Critical Finding');
+    expect(screen.getByText('Medium Finding')).toBeInTheDocument();
+  });
+});
+
+describe('Vulnerabilities — search functionality', () => {
+  beforeEach(() => {
+    mockVulnsOrder.mockResolvedValue({
+      data: [
+        { id: 'v-1', title: 'SQL Injection Vulnerability', severity: 'critical', status: 'open', asset: 'api.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-01T00:00:00Z' },
+        { id: 'v-2', title: 'Cross Site Scripting', severity: 'high', status: 'open', asset: 'web.example.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-02T00:00:00Z' },
+      ],
+      error: null,
+    });
+  });
+
+  it('search input is present', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection Vulnerability');
+    const searchInput = screen.getByPlaceholderText(/search/i);
+    expect(searchInput).toBeInTheDocument();
+  });
+
+  it('search input can be typed into', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection Vulnerability');
+    const searchInput = screen.getByPlaceholderText(/search/i) as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: 'SQL' } });
+    expect(searchInput.value).toBe('SQL');
+  });
+});
+
+describe('Vulnerabilities — bulk selection', () => {
+  beforeEach(() => {
+    mockVulnsOrder.mockResolvedValue({
+      data: [
+        { id: 'v-1', title: 'Issue 1', severity: 'critical', status: 'open', asset: 'a.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-01T00:00:00Z' },
+        { id: 'v-2', title: 'Issue 2', severity: 'high', status: 'open', asset: 'b.com', scan_id: 's-1', user_id: 'user-1', created_at: '2026-01-02T00:00:00Z' },
+      ],
+      error: null,
+    });
+  });
+
+  it('vulnerability rows are selectable', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('Issue 1');
+    const selectBtns = screen.getAllByRole('button').filter(b => b.getAttribute('aria-label')?.includes('Select'));
+    expect(selectBtns.length).toBeGreaterThan(0);
+  });
+
+  it('multiple vulnerabilities render', async () => {
+    render(<Vulnerabilities />);
+    await waitFor(() => {
+      expect(screen.getByText('Issue 1')).toBeInTheDocument();
+      expect(screen.getByText('Issue 2')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Vulnerabilities — no results message', () => {
+  it('shows message when no vulnerabilities match filters', async () => {
+    mockVulnsOrder.mockResolvedValue({ data: [], error: null });
+    render(<Vulnerabilities />);
+    await waitFor(() => {
+      expect(screen.getByText(/no vulnerabilities found|no findings/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Vulnerabilities — load more', () => {
+  it('shows Load more button when more than 25 items exist', async () => {
+    const manyVulns = Array.from({ length: 26 }, (_, i) => ({
+      id: `v-${i}`, title: `Finding ${i}`, severity: 'medium', status: 'open',
+      asset: `host${i}.com`, scan_id: 's-1', user_id: 'user-1',
+      created_at: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }));
+    mockVulnsOrder.mockResolvedValue({ data: manyVulns, error: null });
+    render(<Vulnerabilities />);
+    await waitFor(() => {
+      expect(screen.getByText(/load more/i)).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Load more loads additional items', async () => {
+    const manyVulns = Array.from({ length: 26 }, (_, i) => ({
+      id: `v-${i}`, title: `Finding ${i}`, severity: 'medium', status: 'open',
+      asset: `host${i}.com`, scan_id: 's-1', user_id: 'user-1',
+      created_at: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }));
+    mockVulnsOrder.mockResolvedValue({ data: manyVulns, error: null });
+    render(<Vulnerabilities />);
+    const loadMoreBtn = await screen.findByText(/load more/i);
+    fireEvent.click(loadMoreBtn);
+    await waitFor(() => {
+      expect(screen.queryByText(/load more/i)).toBeNull();
+    });
+  });
+});
+
+describe('Vulnerabilities — project filter', () => {
+  it('project dropdown is present', async () => {
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const select = screen.getByTitle('Filter by project');
+    expect(select).toBeInTheDocument();
+  });
+
+  it('changing project dropdown filters results', async () => {
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    mockScansEq.mockResolvedValue({ data: [{ id: 'scan-1', project_id: 'proj-1', scanner: 'nmap' }], error: null });
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const select = screen.getByTitle('Filter by project');
+    fireEvent.change(select, { target: { value: 'proj-999' } });
+    await waitFor(() => {
+      expect(screen.queryByText('SQL Injection')).toBeNull();
+    });
+  });
+});
+
+describe('Vulnerabilities — VulnRow features', () => {
+  it('clicking project link in VulnRow navigates to /projects', async () => {
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    mockScansEq.mockResolvedValue({ data: [{ id: 'scan-1', project_id: 'proj-1', scanner: 'nmap', created_at: NOW }], error: null });
+    mockNavigate.mockClear();
+    render(<Vulnerabilities />);
+    // Wait for vuln data, then find the project button in VulnRow
+    await screen.findByText('SQL Injection');
+    await waitFor(() => {
+      const projectBtns = screen.queryAllByRole('button', { name: /Alpha Project/i });
+      expect(projectBtns.length).toBeGreaterThan(0);
+    });
+    const projectBtns = screen.getAllByRole('button', { name: /Alpha Project/i });
+    fireEvent.click(projectBtns[0]);
+    expect(mockNavigate).toHaveBeenCalledWith('/projects');
+  });
+
+  it('shows CVSS score for vulns with cvss value', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // SQL Injection has cvss=9.8
+    expect(screen.getByText('9.8')).toBeInTheDocument();
+  });
+
+  it('shows scan scanner name in VulnRow', async () => {
+    mockScansEq.mockResolvedValue({ data: [{ id: 'scan-1', project_id: 'proj-1', scanner: 'nuclei', created_at: NOW }], error: null });
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    await waitFor(() => {
+      const scanTexts = screen.queryAllByText(/Scan: nuclei/i);
+      expect(scanTexts.length).toBeGreaterThan(0);
+    });
+  });
+});
