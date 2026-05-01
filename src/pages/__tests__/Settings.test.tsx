@@ -7,9 +7,20 @@ const originalLocation = window.location;
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockUpdateEq, mockProbeAuditRows } = vi.hoisted(() => ({
+const { mockUpdateEq, mockProbeAuditRows, mockAuthProfile } = vi.hoisted(() => ({
   mockUpdateEq: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockProbeAuditRows: [] as unknown[],
+  mockAuthProfile: {
+    id: 'user-1',
+    email: 'test@example.com',
+    full_name: 'Jane Doe',
+    company: 'Acme Corp',
+    plan: 'free' as string,
+    sla_config: null,
+    avatar_url: null,
+    created_at: '2026-01-01T00:00:00Z',
+    sla_warned_at: null,
+  },
 }));
 
 const { mockProbeAgentHealth } = vi.hoisted(() => ({
@@ -65,19 +76,8 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
 
 vi.mock('../../context/useAuth', () => {
   const _user = { id: 'user-1' };
-  const _profile = {
-    id: 'user-1',
-    email: 'test@example.com',
-    full_name: 'Jane Doe',
-    company: 'Acme Corp',
-    plan: 'free',
-    sla_config: null,
-    avatar_url: null,
-    created_at: '2026-01-01T00:00:00Z',
-    sla_warned_at: null,
-  };
   return {
-    useAuth: () => ({ user: _user, profile: _profile }),
+    useAuth: () => ({ user: _user, profile: mockAuthProfile }),
   };
 });
 
@@ -671,5 +671,87 @@ describe('Settings — additional coverage', () => {
     });
     await act(async () => { render(<Settings />); });
     await waitFor(() => expect(screen.getByText('Fail')).toBeInTheDocument());
+  });
+});
+
+describe('Settings — paid plan billing portal', () => {
+  afterEach(() => {
+    mockAuthProfile.plan = 'free';
+  });
+
+  it('renders Manage billing button when plan is pro', async () => {
+    mockAuthProfile.plan = 'pro';
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /manage billing/i })).toBeInTheDocument();
+    });
+  });
+
+  it('clicking Manage billing opens window.open with mailto fallback (no STRIPE_PORTAL_URL)', async () => {
+    mockAuthProfile.plan = 'pro';
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await act(async () => { render(<Settings />); });
+    const manageBillingBtn = await screen.findByRole('button', { name: /manage billing/i });
+    await act(async () => { fireEvent.click(manageBillingBtn); });
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    openSpy.mockRestore();
+  });
+
+  it('renders Manage billing button when plan is basic', async () => {
+    mockAuthProfile.plan = 'basic';
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /manage billing/i })).toBeInTheDocument();
+    });
+  });
+
+  it('does not render Manage billing button when plan is free', async () => {
+    mockAuthProfile.plan = 'free';
+    await act(async () => { render(<Settings />); });
+    expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
+  });
+});
+
+describe('Settings — Stripe checkout fallback', () => {
+  afterEach(() => {
+    mockAuthProfile.plan = 'free';
+    vi.restoreAllMocks();
+  });
+
+  it('opens mailto fallback after failed Stripe checkout fetch', async () => {
+    vi.stubEnv('VITE_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    // Mock fetch to fail (network error)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new Error('Network error')));
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    await act(async () => { render(<Settings />); });
+    // Click Basic Upgrade button
+    const upgradeBtn = screen.getAllByRole('button', { name: /upgrade/i })[0];
+    await act(async () => { fireEvent.click(upgradeBtn); });
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    });
+    openSpy.mockRestore();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('opens mailto fallback when Stripe checkout returns non-ok response', async () => {
+    vi.stubEnv('VITE_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    // Mock fetch to return 500
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 500 }));
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    await act(async () => { render(<Settings />); });
+    const upgradeBtn = screen.getAllByRole('button', { name: /upgrade/i })[0];
+    await act(async () => { fireEvent.click(upgradeBtn); });
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    });
+    openSpy.mockRestore();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 });
