@@ -30,7 +30,7 @@ const {
   mockChannel,
   mockRemoveChannel,
 } = vi.hoisted(() => ({
-  mockRange:       vi.fn().mockResolvedValue({ data: [], error: null }),
+  mockRange:       vi.fn().mockReturnValue({ data: [], error: null }),
   mockProjectsEq:  vi.fn().mockResolvedValue({ data: [], error: null }),
   mockChannel:     vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
   mockRemoveChannel: vi.fn(),
@@ -45,13 +45,25 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         if (table === 'projects') {
           return { select: () => ({ eq: mockProjectsEq }) };
         }
-        // agent_logs: select().order().range() → mockRange
-        // range() returns a vi.fn() with mockResolvedValue — a real Promise
-        // fetchLogs may also call .eq() on range result; handled by mockRange.eq chaining
+        // agent_logs: select().order().range().eq?().eq?() → chainable thenable
         return {
           select: () => ({
             order: () => ({
-              range: mockRange,
+              range: (...args: unknown[]) => {
+                const result = mockRange(...args); // sync, returns { data, error }
+                const chain: {
+                  eq: (..._: unknown[]) => typeof chain;
+                  then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => Promise<unknown>;
+                  catch: (fn: (e: unknown) => unknown) => Promise<unknown>;
+                  finally: (fn: () => void) => Promise<unknown>;
+                } = {
+                  eq: (..._: unknown[]) => chain,
+                  then: (resolve, reject?) => Promise.resolve(result).then(resolve, reject),
+                  catch: (fn) => Promise.resolve(result).catch(fn),
+                  finally: (fn) => Promise.resolve(result).finally(fn),
+                };
+                return chain;
+              },
             }),
           }),
         };
@@ -99,7 +111,7 @@ const MOCK_PROJECTS = [
 ];
 
 function setupMocks(logs = MOCK_LOGS) {
-  mockRange.mockResolvedValue({ data: logs, error: null });
+  mockRange.mockReturnValue({ data: logs, error: null });
   mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
 }
 
@@ -152,7 +164,7 @@ describe('Activity — log entries', () => {
   });
 
   it('shows empty state message when no logs match filters', async () => {
-    mockRange.mockResolvedValue({ data: [], error: null });
+    mockRange.mockReturnValue({ data: [], error: null });
     render(<ActivityPage />);
     expect(await screen.findByText('No log entries match your filters')).toBeInTheDocument();
   });
@@ -203,7 +215,7 @@ describe('Activity — exportCsv function', () => {
 
 describe('Activity — anomaly tab', () => {
   it('shows "No log data to analyze" when no logs exist', async () => {
-    mockRange.mockResolvedValue({ data: [], error: null });
+    mockRange.mockReturnValue({ data: [], error: null });
     render(<ActivityPage />);
     await screen.findByText('Activity Log');
     fireEvent.click(screen.getByText('Anomalies'));
@@ -252,7 +264,7 @@ describe('Activity — anomaly tab', () => {
         created_at: new Date().toISOString(),
       },
     ];
-    mockRange.mockResolvedValue({ data: logsWithProjError, error: null });
+    mockRange.mockReturnValue({ data: logsWithProjError, error: null });
     mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
     render(<ActivityPage />);
     await screen.findByText('Critical project error');
@@ -272,7 +284,7 @@ describe('Activity — anomaly tab', () => {
       message: 'Repeated edge function error',
       created_at: new Date().toISOString(),
     }));
-    mockRange.mockResolvedValue({ data: errorLogs, error: null });
+    mockRange.mockReturnValue({ data: errorLogs, error: null });
     render(<ActivityPage />);
     await waitFor(() =>
       expect(screen.getAllByText('Repeated edge function error').length).toBeGreaterThanOrEqual(1),
@@ -369,7 +381,7 @@ describe('Activity — load more and navigation', () => {
       message: `Bulk log entry ${i}`,
       created_at: new Date().toISOString(),
     }));
-    mockRange.mockResolvedValue({ data: manyLogs, error: null });
+    mockRange.mockReturnValue({ data: manyLogs, error: null });
     render(<ActivityPage />);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /load more/i })).toBeInTheDocument(),
@@ -386,7 +398,7 @@ describe('Activity — load more and navigation', () => {
       message: `Bulk log entry ${i}`,
       created_at: new Date().toISOString(),
     }));
-    mockRange.mockResolvedValue({ data: manyLogs, error: null });
+    mockRange.mockReturnValue({ data: manyLogs, error: null });
     render(<ActivityPage />);
     await waitFor(() => screen.getByRole('button', { name: /load more/i }));
     const callsBefore = mockRange.mock.calls.length;
