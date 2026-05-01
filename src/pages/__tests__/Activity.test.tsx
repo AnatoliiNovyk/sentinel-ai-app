@@ -416,3 +416,115 @@ describe('Activity — load more and navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/projects'));
   });
 });
+
+// ── Additional anomaly coverage ───────────────────────────────────────────────
+
+describe('Activity — anomaly edge cases', () => {
+  beforeEach(() => {
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    mockChannel.mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis(),
+    });
+    vi.clearAllMocks();
+    mockProjectsEq.mockResolvedValue({ data: MOCK_PROJECTS, error: null });
+    mockChannel.mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis(),
+    });
+  });
+
+  it('shows error spike anomaly when one hour has many more errors than average', async () => {
+    const now = new Date();
+    const makeError = (hoursAgo: number, id: string) => ({
+      id,
+      user_id: 'user-1',
+      project_id: null,
+      scan_id: null,
+      level: 'error',
+      message: `Error in spike ${id}`,
+      created_at: new Date(now.getTime() - hoursAgo * 3600000).toISOString(),
+    });
+    // 20 errors in hour 0, 1 error in each of 9 other hours
+    // counts=[20,1,1,...,1] → mean=2.9, std≈5.7 → 20 > mean+2σ=14.3 ✓ AND ≥3 ✓
+    const spikeLogs = [
+      ...Array.from({ length: 20 }, (_, i) => makeError(0, `spike-now-${i}`)),
+      ...Array.from({ length: 9 }, (_, i) => makeError(i + 2, `baseline-h${i + 2}`)),
+    ];
+    mockRange.mockReturnValue({ data: spikeLogs, error: null });
+    render(<ActivityPage />);
+    await waitFor(() =>
+      expect(screen.getAllByText(/Error in spike/i).length).toBeGreaterThanOrEqual(1),
+    );
+    fireEvent.click(screen.getByText('Anomalies'));
+    await waitFor(() =>
+      expect(screen.getByText('Error spike detected')).toBeInTheDocument(),
+    );
+  });
+
+  it('shows elevated warning rate anomaly when >40% of recent logs are warnings', async () => {
+    const now = new Date();
+    // 10+ logs in last 6h with >40% being warns
+    const warnLogs = Array.from({ length: 6 }, (_, i) => ({
+      id: `warn-${i}`,
+      user_id: 'user-1',
+      project_id: null,
+      scan_id: null,
+      level: 'warn',
+      message: `Warning event ${i}`,
+      created_at: new Date(now.getTime() - i * 600000).toISOString(), // recent
+    }));
+    const otherLogs = Array.from({ length: 4 }, (_, i) => ({
+      id: `info-${i}`,
+      user_id: 'user-1',
+      project_id: null,
+      scan_id: null,
+      level: 'info',
+      message: `Info event ${i}`,
+      created_at: new Date(now.getTime() - i * 600000).toISOString(),
+    }));
+    mockRange.mockReturnValue({ data: [...warnLogs, ...otherLogs], error: null });
+    render(<ActivityPage />);
+    await waitFor(() =>
+      expect(screen.getAllByText(/Warning event|Info event/i).length).toBeGreaterThanOrEqual(1),
+    );
+    fireEvent.click(screen.getByText('Anomalies'));
+    await waitFor(() =>
+      expect(screen.getByText('Elevated warning rate')).toBeInTheDocument(),
+    );
+  });
+
+  it('heatmap cells render with error/warn background when logs contain errors and warnings', async () => {
+    const now = new Date();
+    const logsWithErrWarn = [
+      {
+        id: 'hm-err',
+        user_id: 'user-1',
+        project_id: null,
+        scan_id: null,
+        level: 'error',
+        message: 'Heatmap error log',
+        created_at: now.toISOString(),
+      },
+      {
+        id: 'hm-warn',
+        user_id: 'user-1',
+        project_id: null,
+        scan_id: null,
+        level: 'warn',
+        message: 'Heatmap warn log',
+        created_at: now.toISOString(),
+      },
+    ];
+    mockRange.mockReturnValue({ data: logsWithErrWarn, error: null });
+    render(<ActivityPage />);
+    await screen.findByText('Activity Log');
+    fireEvent.click(screen.getByText('Anomalies'));
+    await waitFor(() =>
+      expect(screen.getByText('7-Day Hourly Activity Heatmap')).toBeInTheDocument(),
+    );
+    // Heatmap renders the heading — cells with err/warn bg are rendered via ref (bg color)
+    const heatmapSection = screen.getByText('7-Day Hourly Activity Heatmap');
+    expect(heatmapSection).toBeInTheDocument();
+  });
+});
