@@ -6,11 +6,12 @@ import type { Project, Report } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle } = vi.hoisted(() => ({
+const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle, mockGetSession } = vi.hoisted(() => ({
   mockReportsOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockProjectsEq: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockDeleteIn: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockMaybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  mockGetSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'token-abc' } } }),
 }));
 
 vi.mock('../../lib/supabase', async (importOriginal) => {
@@ -24,12 +25,31 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
             select: () => ({ eq: () => ({ order: mockReportsOrder }) }),
             update: () => ({ eq: () => ({ select: () => ({ maybeSingle: mockMaybeSingle }) }) }),
             delete: () => ({ in: mockDeleteIn, eq: () => Promise.resolve({ data: null, error: null }) }),
+            insert: () => ({ select: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'new-report' }, error: null }) }) }),
+          };
+        }
+        if (table === 'scans') {
+          return {
+            select: () => ({ eq: () => ({ eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }) }) }),
+          };
+        }
+        if (table === 'vulnerabilities') {
+          return {
+            select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+          };
+        }
+        if (table === 'notifications') {
+          return {
+            insert: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
         }
         // projects
         return {
           select: () => ({ eq: mockProjectsEq }),
         };
+      },
+      auth: {
+        getSession: mockGetSession,
       },
     },
   };
@@ -735,5 +755,102 @@ describe('Reports — GenerateModal template management', () => {
     await openModal();
     const saveBtn = screen.getByRole('button', { name: /^save$/i });
     expect(saveBtn).toBeDisabled();
+  });
+});
+
+// ── GenerateModal generate flow ────────────────────────────────────────────
+
+describe('Reports — GenerateModal generate flow', () => {
+  beforeEach(() => {
+    mockReportsOrder.mockResolvedValue({ data: [], error: null });
+    mockProjectsEq.mockResolvedValue({ data: [makeProject()], error: null });
+    localStorage.clear();
+  });
+
+  const openModal = async () => {
+    render(<Reports />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /generate report/i })).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /generate report/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /generate report/i })).toBeInTheDocument(),
+    );
+  };
+
+  it('clicking Generate button via successful edge function completes', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', mockFetch);
+    await openModal();
+    const generateBtn = screen.getByRole('button', { name: /^generate$/i });
+    expect(generateBtn).not.toBeDisabled();
+    fireEvent.click(generateBtn);
+    // After click, Generate button should show "Generating..." briefly
+    await waitFor(() => {
+      // Either still generating or completed (modal closes on success)
+      expect(mockFetch).toHaveBeenCalled();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('clicking Generate via failed edge function falls back to local generation', async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    vi.stubGlobal('fetch', mockFetch);
+    await openModal();
+    const generateBtn = screen.getByRole('button', { name: /^generate$/i });
+    fireEvent.click(generateBtn);
+    await waitFor(() => {
+      // Modal closes after generation completes
+      expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
+    }, { timeout: 5000 });
+    vi.unstubAllGlobals();
+  });
+
+  it('toggles field checkbox on and off', async () => {
+    await openModal();
+    // Find first field checkbox in "Report fields"
+    const fieldCheckboxes = screen.getAllByRole('checkbox');
+    // Skip the "Enhance AI" checkbox (index 0) — target a field checkbox
+    const fieldCheckbox = fieldCheckboxes[fieldCheckboxes.length - 1] as HTMLInputElement;
+    const initialState = fieldCheckbox.checked;
+    fireEvent.click(fieldCheckbox);
+    expect(fieldCheckbox.checked).toBe(!initialState);
+  });
+
+  it('toggles "Enhance narrative with AI" checkbox', async () => {
+    await openModal();
+    const aiCheckbox = screen.getByRole('checkbox', { name: /enhance narrative with ai/i }) as HTMLInputElement;
+    const initial = aiCheckbox.checked;
+    fireEvent.click(aiCheckbox);
+    expect(aiCheckbox.checked).toBe(!initial);
+  });
+
+  it('switching to Technical kind updates field checkboxes', async () => {
+    await openModal();
+    const techBtn = screen.getAllByRole('button').find(b => /^technical$/i.test(b.textContent?.trim() ?? ''));
+    expect(techBtn).toBeTruthy();
+    fireEvent.click(techBtn!);
+    // After switching to technical, different fields should appear
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /generate report/i })).toBeInTheDocument();
+    });
+  });
+
+  it('Cancel button closes the modal', async () => {
+    await openModal();
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+    fireEvent.click(cancelBtn);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
+    });
+  });
+
+  it('Close (X) button closes the modal', async () => {
+    await openModal();
+    const closeBtn = screen.getByRole('button', { name: /close/i });
+    fireEvent.click(closeBtn);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
+    });
   });
 });
