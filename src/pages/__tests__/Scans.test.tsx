@@ -178,7 +178,8 @@ describe('Scans — mock mode warning', () => {
     });
     render(<Scans />);
     await waitFor(() => {
-      expect(screen.getByText(/Demo Mode/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /dismiss mock warning/i })).toBeInTheDocument();
+      expect(screen.getByText(/selected scan is a simulated run/i)).toBeInTheDocument();
     });
   });
 
@@ -190,6 +191,20 @@ describe('Scans — mock mode warning', () => {
     render(<Scans />);
     await waitFor(() => {
       expect(screen.queryByText(/Demo Mode/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('dismisses mock warning toast', async () => {
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false });
+    setupScansMocks({
+      scans: [mockScans[2]],
+      probeHealth: { reachable: false },
+    });
+    render(<Scans />);
+    const dismissBtn = await screen.findByRole('button', { name: /dismiss mock warning/i });
+    await act(async () => { fireEvent.click(dismissBtn); });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /dismiss mock warning/i })).not.toBeInTheDocument();
     });
   });
 });
@@ -473,6 +488,42 @@ describe('Scans — new scan modal', () => {
       expect(screen.queryByText('Start New Scan')).not.toBeInTheDocument();
     });
   });
+
+  it('shows formatted dispatch error from structured object and can dismiss it', async () => {
+    mockDispatchScan.mockRejectedValueOnce({ error_description: 'Scanner agent offline' });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /select project/i })).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.change(screen.getByRole('combobox', { name: /select project/i }), { target: { value: 'proj-1' } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /start a new scan/i })); });
+    const targetInput = await screen.findByPlaceholderText(/e\.g\./i);
+    await act(async () => { fireEvent.change(targetInput, { target: { value: 'scanme.nmap.org' } }); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /launch scan/i })); });
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to start scan: Scanner agent offline/i)).toBeInTheDocument();
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /dismiss error/i })); });
+    await waitFor(() => {
+      expect(screen.queryByText(/Failed to start scan: Scanner agent offline/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('falls back to generic dispatch error when error has no readable fields', async () => {
+    mockDispatchScan.mockRejectedValueOnce({});
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /select project/i })).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.change(screen.getByRole('combobox', { name: /select project/i }), { target: { value: 'proj-1' } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /start a new scan/i })); });
+    const targetInput = await screen.findByPlaceholderText(/e\.g\./i);
+    await act(async () => { fireEvent.change(targetInput, { target: { value: 'scanme.nmap.org' } }); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /launch scan/i })); });
+    await waitFor(() => {
+      expect(screen.getByText(/Unexpected scan dispatch error/i)).toBeInTheDocument();
+    });
+  });
 });
 
 // ── Detail Modal Tests ───────────────────────────────────────────────────
@@ -528,4 +579,39 @@ describe('Scans — empty state', () => {
   });
 });
 
-// ── CSV Export ──────────────────────────────────────────────────────────
+// ── Refresh + relative time ─────────────────────────────────────────────
+
+describe('Scans — refresh and relative time', () => {
+  beforeEach(() => {
+    setupScansMocks({
+      scans: [
+        {
+          ...mockScans[0],
+          created_at: new Date(Date.now() - 20 * 1000).toISOString(),
+        },
+        {
+          ...mockScans[1],
+          created_at: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+        },
+      ],
+    });
+  });
+
+  it('refresh button reloads scans for the selected project', async () => {
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /refresh scans/i })).toBeInTheDocument());
+    const initialCalls = mockGetScans.mock.calls.length;
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /refresh scans/i })); });
+    await waitFor(() => {
+      expect(mockGetScans.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  it('renders relative times for just now and yesterday branches', async () => {
+    render(<Scans />);
+    await waitFor(() => {
+      expect(screen.getByText('Just now')).toBeInTheDocument();
+      expect(screen.getByText('Yesterday')).toBeInTheDocument();
+    });
+  });
+});
