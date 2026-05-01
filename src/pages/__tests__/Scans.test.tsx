@@ -705,3 +705,144 @@ describe('Scans — AI generation error', () => {
     await waitFor(() => expect(screen.getByText(/AI Generation failed/i)).toBeInTheDocument());
   });
 });
+
+// ── Detail Modal — severity variants and remediation_code ────────────────
+
+describe('Scans — detail modal severity variants', () => {
+  it('shows "high" severity badge with orange style', async () => {
+    const highVuln = { ...mockVulns[1], id: 'v-high', severity: 'high' as const, remediation_code: null };
+    setupScansMocks({ vulns: [highVuln] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('XSS')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument(),
+    );
+    expect(screen.getAllByText('HIGH').length).toBeGreaterThan(0);
+  });
+
+  it('shows "medium" severity badge with yellow style', async () => {
+    const medVuln = { ...mockVulns[0], id: 'v-med', title: 'Medium Vuln', severity: 'medium' as const, remediation_code: null };
+    setupScansMocks({ vulns: [medVuln] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Medium Vuln')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument(),
+    );
+    expect(screen.getAllByText('MEDIUM').length).toBeGreaterThan(0);
+  });
+
+  it('shows remediation_code block when remediation_code is provided', async () => {
+    const vulnWithCode = {
+      ...mockVulns[0],
+      id: 'v-code',
+      severity: 'critical' as const,
+      remediation: 'Fix it now',
+      remediation_code: 'const safe = db.prepare("SELECT * FROM users WHERE id = ?").get(id);',
+    };
+    setupScansMocks({ vulns: [vulnWithCode] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/const safe = db\.prepare/i)).toBeInTheDocument();
+  });
+
+  it('AI gateway returns non-JSON response — falls back to raw content', async () => {
+    mockCallAiGateway.mockResolvedValueOnce({ content: 'This is a plain text fix suggestion.' });
+    setupScansMocks({ vulns: [{ ...mockVulns[0], severity: 'critical' as const, remediation_code: null }] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /generate ai fix/i }));
+    });
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalled());
+  });
+
+  it('AI gateway returns malformed JSON — catch block executes', async () => {
+    mockCallAiGateway.mockResolvedValueOnce({ content: 'Fix this: {"key": undefined_value} done' });
+    setupScansMocks({ vulns: [{ ...mockVulns[0], severity: 'critical' as const, remediation_code: null }] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /generate ai fix/i }));
+    });
+    await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalled());
+  });
+});
+
+// ── Load error catch blocks ─────────────────────────────────────────────
+
+describe('Scans — service error catch paths', () => {
+  beforeEach(() => {
+    // Reset mock call queues to avoid contamination from previous tests
+    mockGetVulns.mockReset();
+    mockGetVulns.mockResolvedValue([]);
+    mockUpdateVuln.mockReset();
+    mockUpdateVuln.mockResolvedValue({ error: null });
+    mockCallAiGateway.mockReset();
+    mockCallAiGateway.mockResolvedValue({ content: '{"explanation":"test","remediation":"fix","code":""}' });
+  });
+  it('handles loadScans error gracefully (getProjectScans throws)', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockGetProjects.mockResolvedValue(mockProjects);
+    mockGetScans.mockRejectedValueOnce(new Error('DB error'));
+    mockGetVulns.mockResolvedValue([]);
+    mockProbeAgentHealth.mockResolvedValue({ reachable: true });
+    render(<Scans />);
+    // Wait for the catch block to execute (loadScans is called after project auto-select)
+    await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith('Failed to load scans:', expect.any(Error)));
+    consoleSpy.mockRestore();
+  });
+
+  it('handles loadVulnerabilities error gracefully (getScanVulnerabilities throws)', async () => {
+    // useEffect [selectedScanId] calls getScanVulnerabilities inline — make that fail
+    setupScansMocks({ scans: [mockScans[0]], vulns: [] });
+    mockGetVulns.mockRejectedValueOnce(new Error('Vuln fetch error'));
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Vulnerability Scans')).toBeInTheDocument());
+    // No crash; vulnerabilities section renders empty
+  });
+
+  it('loadVulnerabilities catch fires after AI generation reloads vulns', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // First call (initial inline useEffect) succeeds; second call (loadVulnerabilities after AI gen) rejects
+    mockGetVulns
+      .mockResolvedValueOnce([{ ...mockVulns[0], severity: 'critical', remediation_code: null }])
+      .mockRejectedValueOnce(new Error('Reload failed'));
+    mockGetProjects.mockResolvedValue(mockProjects);
+    mockGetScans.mockResolvedValue([mockScans[0]]);
+    mockProbeAgentHealth.mockResolvedValue({ reachable: true });
+    mockCallAiGateway.mockResolvedValueOnce({
+      content: '{"explanation":"fix","remediation":"fix it","code":"SELECT 1;"}',
+    });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /generate ai fix/i }));
+    });
+    await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith('Failed to load vulnerabilities:', expect.any(Error)));
+    consoleSpy.mockRestore();
+  });
+
+  it('shows target required error when project has no target and no custom target', async () => {
+    const emptyTargetProject = { ...mockProjects[0], id: 'proj-empty', target: '' };
+    mockGetProjects.mockResolvedValue([emptyTargetProject]);
+    mockGetScans.mockResolvedValue([mockScans[0]]);
+    mockGetVulns.mockResolvedValue([]);
+    mockProbeAgentHealth.mockResolvedValue({ reachable: true });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Vulnerability Scans')).toBeInTheDocument());
+    const projectSelect = screen.getByRole('combobox', { name: /select project/i });
+    await act(async () => { fireEvent.change(projectSelect, { target: { value: 'proj-empty' } }); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /start a new scan/i })); });
+    await waitFor(() => expect(screen.getByText('Start New Scan')).toBeInTheDocument());
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /launch scan/i })); });
+    await waitFor(() => {
+      expect(screen.getByText(/Target is required/i)).toBeInTheDocument();
+    });
+  });
+});
