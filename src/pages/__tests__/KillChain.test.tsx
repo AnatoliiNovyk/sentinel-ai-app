@@ -341,3 +341,71 @@ describe('KillChain — null data fallbacks', () => {
     });
   });
 });
+
+// ── Export and Clipboard ──────────────────────────────────────────────────
+
+describe('KillChain — export and clipboard', () => {
+  const setupChain = async () => {
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() => expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument());
+  };
+
+  it('calls downloadFile with markdown when Export MD button clicked', async () => {
+    await setupChain();
+    const mdBtn = screen.getByTitle('Download Markdown');
+    fireEvent.click(mdBtn);
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.md'),
+      expect.any(String),
+      'text/markdown',
+    );
+  });
+
+  it('calls downloadFile with csv when Export CSV button clicked', async () => {
+    await setupChain();
+    const csvBtn = screen.getByTitle('Download CSV');
+    fireEvent.click(csvBtn);
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.csv'),
+      expect.any(String),
+      'text/csv',
+    );
+  });
+
+  it('calls clipboard.writeText when Copy button clicked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+    await setupChain();
+    const copyBtn = screen.getByTitle('Copy as Markdown');
+    fireEvent.click(copyBtn);
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+  });
+});
+
+// ── Clear filters button ─────────────────────────────────────────────────
+
+describe('KillChain — clear filters via sort button', () => {
+  it('clear filters button resets phase, search and sort', async () => {
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() => expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument());
+
+    // Change sort to trigger clear filters button to appear
+    const phaseBtn = screen.getByRole('button', { name: /Phase order/i });
+    fireEvent.click(phaseBtn);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument());
+  });
+});
