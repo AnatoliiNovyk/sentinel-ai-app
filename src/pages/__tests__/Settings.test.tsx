@@ -617,3 +617,59 @@ describe('Settings — ApiKeyRow show/hide and copy', () => {
     expect(writeTextMock).toHaveBeenCalled();
   });
 });
+
+
+// ── Additional coverage tests ─────────────────────────────────────────────
+
+describe('Settings — additional coverage', () => {
+  it('clicking Upgrade on a paid plan does not throw', async () => {
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => expect(screen.getAllByText(/Upgrade/i).length).toBeGreaterThan(0));
+    const upgradeBtn = screen.getAllByText(/Upgrade/i)[0];
+    fireEvent.click(upgradeBtn);
+    // should not throw
+  });
+
+  it('agent input onKeyDown Enter triggers saveAgentUrl', async () => {
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: true,
+      statusCode: 200,
+      health: { status: 'ok', uptime: 60, jobsProcessed: 0, jobsFailed: 0, lastJobAt: null, lastError: null, timestamp: '' },
+      error: null,
+      via: 'direct',
+    });
+    await act(async () => { render(<Settings />); });
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'http://localhost:9090/health' } });
+    fireEvent.keyDown(agentInput, { key: 'Enter', code: 'Enter' });
+    await waitFor(() => expect(mockProbeAgentHealth).toHaveBeenCalled());
+  });
+
+  it('agent input onBlur commits URL without throwing', async () => {
+    await act(async () => { render(<Settings />); });
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'http://localhost:9090/health' } });
+    fireEvent.blur(agentInput);
+    await waitFor(() => expect(screen.getByText('Unknown')).toBeInTheDocument());
+  });
+
+  it('shows probe smoke status "OK" when probeSmoke audit row has status ok', async () => {
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-01T00:00:00Z',
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-123', generated_at: '2026-04-01T00:00:00Z' },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => expect(screen.getByText('OK')).toBeInTheDocument());
+  });
+
+  it('shows probe smoke status "Fail" when probeSmoke audit row has status error', async () => {
+    mockProbeAuditRows.push({
+      status: 'failure',
+      created_at: '2026-04-01T00:00:00Z',
+      metadata: { status: 'error', reachable: false, http_status: 500, request_id: null, generated_at: null },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => expect(screen.getByText('Fail')).toBeInTheDocument());
+  });
+});
