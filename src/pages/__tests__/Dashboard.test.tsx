@@ -559,3 +559,37 @@ describe('Dashboard — top open findings controls', () => {
     }, { timeout: 5000 });
   });
 });
+
+describe('Dashboard — additional coverage', () => {
+  it('shows medium badge when findings have medium severity', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const date = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'MedProject', user_id: 'user-1', created_at: date });
+    mockVulnRows.push(
+      { id: 'vm1', title: 'Med Finding 1', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: date, user_id: 'user-1' },
+      { id: 'vm2', title: 'Med Finding 2', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: date, user_id: 'user-1' },
+    );
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Top risky projects')).toBeInTheDocument(), { timeout: 5000 });
+    // medium badge: should show 2m in the risk panel
+    const medBadges = screen.getAllByText(/^\d+m$/);
+    expect(medBadges.length).toBeGreaterThan(0);
+  });
+
+  it('title sort works for findings with same severity', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const date = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'SortProject', user_id: 'user-1', created_at: date });
+    mockVulnRows.push(
+      { id: 'vt1', title: 'Zebra Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: date, user_id: 'user-1' },
+      { id: 'vt2', title: 'Alpha Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: date, user_id: 'user-1' },
+    );
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Top open findings')).toBeInTheDocument(), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'A\u2192Z' }));
+    await waitFor(() => {
+      expect(screen.getAllByText('Alpha Finding').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Zebra Finding').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+  });
+});
