@@ -442,3 +442,76 @@ describe('OsintAnalyzer — clear history and remove result', () => {
     await waitFor(() => expect(screen.queryByText('Analysis Results')).not.toBeInTheDocument());
   });
 });
+
+// ─── Phishing Drill — copy scenario ──────────────────────────────────────────
+
+describe('OsintAnalyzer — Phishing Drill copy', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  it('clicking Copy button in expanded phishing drill triggers copyDrill', async () => {
+    await renderWithResult(HIGH_RISK_DATA);
+    // Expand phishing drill panel
+    const expandBtn = screen.getByRole('button', { name: /Phishing Drill Plan/i });
+    fireEvent.click(expandBtn);
+    // Click the first Copy button inside the drill scenarios
+    const copyBtns = screen.getAllByRole('button', { name: /Copy/i });
+    expect(copyBtns.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(copyBtns[0]);
+    // After click, clipboard.writeText should have been called
+    expect(navigator.clipboard.writeText).toHaveBeenCalled();
+  });
+});
+
+// ─── Breach medium/low severity branches ──────────────────────────────────────
+
+describe('OsintAnalyzer — breach severity medium and low', () => {
+  beforeEach(() => {
+    mockScan.mockReset();
+    mockCheck.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+    localStorage.clear();
+  });
+
+  it('renders medium severity breach badge', async () => {
+    const mediumData = {
+      ok: true,
+      data: {
+        breachCount: 1,
+        breaches: [
+          { source: 'Twitter', severity: 'medium', dataClasses: ['email'], breachDate: '2022-03-15' },
+        ],
+        scannedAt: '2026-04-29T00:00:00Z',
+        riskScore: 45,
+        riskLevel: 'medium',
+        recommendedActions: ['Enable 2FA'],
+      },
+    };
+    await renderWithResult(mediumData as typeof HIGH_RISK_DATA);
+    expect(screen.getByText(/medium Severity/i)).toBeInTheDocument();
+  });
+
+  it('renders low severity breach badge', async () => {
+    const lowData = {
+      ok: true,
+      data: {
+        breachCount: 1,
+        breaches: [
+          { source: 'Forum', severity: 'low', dataClasses: ['username'], breachDate: '2023-06-01' },
+        ],
+        scannedAt: '2026-04-29T00:00:00Z',
+        riskScore: 15,
+        riskLevel: 'low',
+        recommendedActions: [],
+      },
+    };
+    await renderWithResult(lowData as typeof HIGH_RISK_DATA);
+    expect(screen.getByText(/low Severity/i)).toBeInTheDocument();
+  });
+});
