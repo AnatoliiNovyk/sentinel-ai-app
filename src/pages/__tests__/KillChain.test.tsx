@@ -5,9 +5,18 @@ import KillChain from '../KillChain';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockGenerateKillChain } = vi.hoisted(() => ({
+const { mockGenerateKillChain, mockScansEq, mockVulnsIn } = vi.hoisted(() => ({
   mockGenerateKillChain: vi.fn(),
+  mockScansEq: vi.fn().mockResolvedValue({ data: [{ id: 'scan-1' }], error: null }),
+  mockVulnsIn: vi.fn().mockResolvedValue({ data: [], error: null }),
 }));
+
+// Reset mocks before each test
+beforeEach(() => {
+  mockScansEq.mockResolvedValue({ data: [{ id: 'scan-1' }], error: null });
+  mockVulnsIn.mockResolvedValue({ data: [], error: null });
+  mockGenerateKillChain.mockReset();
+});
 
 vi.mock('../../lib/aiRedTeam', () => ({
   generateKillChain: mockGenerateKillChain,
@@ -41,7 +50,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         if (table === 'scans') {
           return {
             select: () => ({
-              eq: () => Promise.resolve({ data: [{ id: 'scan-1' }], error: null }),
+              eq: () => mockScansEq(),
             }),
           };
         }
@@ -49,7 +58,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         return {
           select: () => ({
             in: () => ({
-              eq: () => Promise.resolve({ data: [], error: null }),
+              eq: () => mockVulnsIn(),
             }),
           }),
         };
@@ -288,5 +297,47 @@ describe('KillChain — exports and interactive functions', () => {
       expect(screen.getAllByText('Reconnaissance').length).toBeGreaterThanOrEqual(1),
     );
     expect(screen.getAllByText('Initial Access').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('KillChain — null data fallbacks', () => {
+  const generateChainForNullTests = async () => {
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() => expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument());
+  };
+
+  it('handles null scans data (covers || [] fallback on scanIds)', async () => {
+    // Return null data for scans — triggers `scans?.map(s => s.id) || []`
+    mockScansEq.mockResolvedValue({ data: null, error: null });
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() => expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument());
+  });
+
+  it('handles null vulns data (covers || [] fallback on projVulns)', async () => {
+    // Return null data for vulns — triggers `projVulns || []`
+    mockVulnsIn.mockResolvedValue({ data: null, error: null });
+    mockGenerateKillChain.mockResolvedValue(KILL_CHAIN_STEPS);
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('option', { name: 'Alpha Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /generate kill chain/i }));
+    await waitFor(() => expect(screen.getByText('Attack Vector Generated')).toBeInTheDocument());
+  });
+
+  it('shows singular "result" text when search matches exactly 1 step', async () => {
+    await generateChainForNullTests();
+    // Search for a term unique to only one step (Active Scanning is only in Reconnaissance)
+    const searchInput = screen.getByPlaceholderText(/search tactic/i);
+    fireEvent.change(searchInput, { target: { value: 'Active Scanning' } });
+    await waitFor(() => {
+      // "1 result" (singular) text should appear (not "results")
+      const resultText = screen.queryByText(/1 result$/i);
+      expect(resultText).toBeInTheDocument();
+    });
   });
 });
