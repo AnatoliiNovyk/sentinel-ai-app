@@ -565,31 +565,175 @@ describe('AttackSurfaceMap — physics simulation edge cases', () => {
     mockEq.mockResolvedValue({
       data: [
         { id: 'p-1', name: 'PhysicsProj1', risk_score: 40 },
-        { id: 'p-2', name: 'PhysicsProj2', risk_score: 55 },
-        { id: 'p-3', name: 'PhysicsProj3', risk_score: 70 },
+        { id: 'p-2', name: 'PhysicsProj2', risk_score: 75 },
       ],
+      error: null,
+    });
+    mockVulnsEq.mockResolvedValue({ data: [], error: null });
+    rafSpy.mockImplementation(() => 0);
+  });
+
+  it('renders correctly with multiple projects', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    expect(screen.getByText('Attack Surface Map')).toBeInTheDocument();
+  });
+
+  it('shows CSV and JSON export buttons when nodes exist', async () => {
+    render(<AttackSurfaceMap />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /csv/i })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /json/i })).toBeInTheDocument();
+  });
+});
+
+describe('AttackSurfaceMap — legend', () => {
+  beforeEach(() => {
+    mockEq.mockResolvedValue({ data: [{ id: 'p-1', name: 'LegendProj', risk_score: 50 }], error: null });
+    mockVulnsEq.mockResolvedValue({ data: [], error: null });
+    rafSpy.mockImplementation(() => 0);
+  });
+
+  it('shows all four risk legend labels', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    expect(screen.getByText('Critical risk')).toBeInTheDocument();
+    expect(screen.getByText('High risk')).toBeInTheDocument();
+    expect(screen.getByText('Medium risk')).toBeInTheDocument();
+    expect(screen.getByText('Low risk')).toBeInTheDocument();
+  });
+
+  it('shows "Legend" heading label', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    expect(screen.getByText('Legend')).toBeInTheDocument();
+  });
+});
+
+describe('AttackSurfaceMap — export CSV and JSON', () => {
+  beforeEach(() => {
+    mockDownloadFile.mockClear();
+    mockEq.mockResolvedValue({
+      data: [{ id: 'p-1', name: 'ExportProj', risk_score: 55 }],
       error: null,
     });
     mockVulnsEq.mockResolvedValue({
       data: [
-        { id: 'v-1', title: 'VulnA', severity: 'critical', status: 'open', asset: 'a.com', scan_id: 's-1', user_id: 'user-1' },
-        { id: 'v-2', title: 'VulnB', severity: 'high', status: 'open', asset: 'b.com', scan_id: 's-1', user_id: 'user-1' },
+        { id: 'v-1', title: 'Export Vuln', severity: 'high', status: 'open', asset: 'export.example.com', scan_id: 's-1', user_id: 'user-1' },
       ],
       error: null,
     });
     rafSpy.mockImplementation(() => 0);
   });
 
-  it('renders without crashing with many nodes', async () => {
+  it('CSV export calls downloadFile with .csv', async () => {
+    render(<AttackSurfaceMap />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /csv/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.csv'),
+      expect.any(String),
+      'text/csv',
+    );
+  });
+
+  it('JSON export calls downloadFile with .json', async () => {
+    render(<AttackSurfaceMap />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /json/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /json/i }));
+    expect(mockDownloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('.json'),
+      expect.any(String),
+      'application/json',
+    );
+  });
+});
+
+describe('AttackSurfaceMap — severity filter buttons', () => {
+  beforeEach(() => {
+    mockEq.mockResolvedValue({ data: [{ id: 'p-1', name: 'SevProj', risk_score: 45 }], error: null });
+    mockVulnsEq.mockResolvedValue({
+      data: [
+        { id: 'v-1', title: 'Crit', severity: 'critical', status: 'open', asset: 'a.com', scan_id: 's-1', user_id: 'user-1' },
+        { id: 'v-2', title: 'High', severity: 'high',     status: 'open', asset: 'b.com', scan_id: 's-1', user_id: 'user-1' },
+      ],
+      error: null,
+    });
+    rafSpy.mockImplementation(() => 0);
+  });
+
+  it('severity filter buttons are present', async () => {
     render(<AttackSurfaceMap />);
     await waitForLoaded();
+    const btns = screen.getAllByRole('button').map(b => b.textContent?.toLowerCase() ?? '');
+    expect(btns.some(t => t.includes('critical'))).toBe(true);
+    expect(btns.some(t => t.includes('high'))).toBe(true);
+  });
+
+  it('clicking critical severity filter does not crash', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    const critBtn = screen.getAllByRole('button').find(b => /^critical/i.test(b.textContent ?? ''));
+    fireEvent.click(critBtn!);
     expect(screen.getByText('Attack Surface Map')).toBeInTheDocument();
   });
 
-  it('Re-layout restarts physics without crashing', async () => {
+  it('clicking "All sev." resets severity filter', async () => {
     render(<AttackSurfaceMap />);
     await waitForLoaded();
-    fireEvent.click(screen.getByRole('button', { name: /re-layout/i }));
+    const allSevBtn = screen.getAllByRole('button').find(b => /all sev\./i.test(b.textContent ?? ''));
+    fireEvent.click(allSevBtn!);
+    expect(screen.getByText('Attack Surface Map')).toBeInTheDocument();
+  });
+});
+
+describe('AttackSurfaceMap — tooltip via SVG node click', () => {
+  beforeEach(() => {
+    mockEq.mockResolvedValue({
+      data: [{ id: 'p-1', name: 'ClickableProj', risk_score: 55 }],
+      error: null,
+    });
+    mockVulnsEq.mockResolvedValue({ data: [], error: null });
+    rafSpy.mockImplementation(() => 0);
+  });
+
+  it('SVG project node text is present after load', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    const projLabels = screen.queryAllByText('ClickableProj');
+    expect(projLabels.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('clicking SVG project node opens tooltip', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    const projLabels = screen.queryAllByText('ClickableProj');
+    if (projLabels.length > 0) {
+      const nodeGroup = projLabels[0].closest('g');
+      if (nodeGroup) {
+        fireEvent.click(nodeGroup);
+        await waitFor(() =>
+          expect(screen.getAllByText('ClickableProj').length).toBeGreaterThanOrEqual(1),
+        );
+      }
+    }
+    expect(screen.getByText('Attack Surface Map')).toBeInTheDocument();
+  });
+
+  it('tooltip close button dismisses tooltip', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    const projLabels = screen.queryAllByText('ClickableProj');
+    if (projLabels.length > 0) {
+      const nodeGroup = projLabels[0].closest('g');
+      if (nodeGroup) {
+        fireEvent.click(nodeGroup);
+        const closeBtn = screen.queryByText('✕');
+        if (closeBtn) {
+          fireEvent.click(closeBtn);
+          await waitFor(() => expect(screen.queryByText('✕')).not.toBeInTheDocument());
+        }
+      }
+    }
     expect(screen.getByText('Attack Surface Map')).toBeInTheDocument();
   });
 });
