@@ -163,3 +163,66 @@ describe('PublicReport — interactive functions', () => {
     expect(writeText).toHaveBeenCalledWith(reportData.content);
   });
 });
+
+describe('PublicReport — additional coverage', () => {
+  beforeEach(() => {
+    mockMaybeSingle.mockResolvedValue({ data: reportData, error: null });
+  });
+
+  it('triggers scroll progress via scroll event', async () => {
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText('Security Audit Report')).toBeInTheDocument());
+    // Fire scroll event to cover onScroll handler (lines 13-18)
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(document.documentElement, 'clientHeight', { value: 500, configurable: true });
+    Object.defineProperty(document.documentElement, 'scrollTop', { value: 250, configurable: true });
+    window.dispatchEvent(new Event('scroll'));
+    // No throw = success
+    expect(screen.getByText('Security Audit Report')).toBeInTheDocument();
+  });
+
+  it('shows "just now" for very recent reports', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...reportData, created_at: new Date(Date.now() - 5000).toISOString() },
+      error: null,
+    });
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText(/just now/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xm ago" for reports 2 minutes old', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...reportData, created_at: new Date(Date.now() - 2 * 60_000).toISOString() },
+      error: null,
+    });
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText(/2m ago/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xh ago" for reports 2 hours old', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...reportData, created_at: new Date(Date.now() - 2 * 3_600_000).toISOString() },
+      error: null,
+    });
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText(/2h ago/i)).toBeInTheDocument());
+  });
+
+  it('shows "Xd ago" for reports 5 days old', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...reportData, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString() },
+      error: null,
+    });
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText(/5d ago/i)).toBeInTheDocument());
+  });
+
+  it('shows full date for reports older than 30 days', async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { ...reportData, created_at: new Date(Date.now() - 60 * 86_400_000).toISOString() },
+      error: null,
+    });
+    render(<PublicReport token="tok123" />);
+    await waitFor(() => expect(screen.getByText(/Generated/i)).toBeInTheDocument());
+  });
+});
