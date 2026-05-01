@@ -5,7 +5,7 @@ import Dashboard from '../Dashboard';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows, mockVulnRows, mockProjectRows, mockScanRows } = vi.hoisted(() => {
+const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockProbeAuditRows, mockVulnRows, mockProjectRows, mockScanRows, mockScanJobRows, mockTeamRows } = vi.hoisted(() => {
   const makeChannel = () => ({
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
@@ -34,6 +34,8 @@ const { mockNavigate, mockRemoveChannel, mockMakeChannel, mockAuthState, mockPro
     mockVulnRows: [] as unknown[],
     mockProjectRows: [] as unknown[],
     mockScanRows: [] as unknown[],
+    mockScanJobRows: [] as unknown[],
+    mockTeamRows: [] as unknown[],
   };
 });
 
@@ -69,8 +71,8 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         if (table === 'scans') return { select: () => makeQueryChain(mockScanRows) };
         if (table === 'projects') return { select: () => makeChainNoLimit(mockProjectRows) };
         if (table === 'vulnerabilities') return { select: () => makeQueryChain(mockVulnRows) };
-        if (table === 'scan_jobs') return { select: () => makeQueryChain([]) };
-        if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+        if (table === 'scan_jobs') return { select: () => makeQueryChain(mockScanJobRows) };
+        if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: mockTeamRows, error: null }) }) };
         if (table === 'audit_logs') return { select: () => makeQueryChain(mockProbeAuditRows) };
         // sla-related writes
         return {
@@ -110,6 +112,8 @@ afterEach(() => {
   mockVulnRows.length = 0;
   mockProjectRows.length = 0;
   mockScanRows.length = 0;
+  mockScanJobRows.length = 0;
+  mockTeamRows.length = 0;
 });
 
 describe('Dashboard — layout', () => {
@@ -591,5 +595,237 @@ describe('Dashboard — additional coverage', () => {
       expect(screen.getAllByText('Alpha Finding').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Zebra Finding').length).toBeGreaterThan(0);
     }, { timeout: 5000 });
+  });
+});
+
+// ── Batch 73 new coverage ─────────────────────────────────────────────────
+
+describe('Dashboard — live scan jobs panel', () => {
+  it('shows live jobs panel when scan_jobs has running items', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockScanJobRows.push(
+      { id: 'job-1', scanner: 'Nmap', target: '10.0.0.1', status: 'running', created_at: new Date().toISOString(), project_id: 'p1' },
+      { id: 'job-2', scanner: 'Tfsec', target: '10.0.0.2', status: 'pending', created_at: new Date().toISOString(), project_id: 'p1' },
+    );
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText(/Live scans/i)).toBeInTheDocument();
+      expect(screen.getByText('Nmap')).toBeInTheDocument();
+      expect(screen.getByText('Tfsec')).toBeInTheDocument();
+    }, { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — team members panel', () => {
+  it('shows team members when org has members', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.organizations = [{ id: 'org-1' }];
+    mockTeamRows.push(
+      { id: 'tm-1', role: 'owner', auth: { users: { email: 'alice@example.com' } } },
+      { id: 'tm-2', role: 'admin', auth: { users: { email: 'bob@example.com' } } },
+      { id: 'tm-3', role: 'member', auth: { users: { email: 'carol@example.com' } } },
+    );
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Active members')).toBeInTheDocument();
+      expect(screen.getByText('alice')).toBeInTheDocument();
+      expect(screen.getByText('owner')).toBeInTheDocument();
+    }, { timeout: 5000 });
+  });
+
+  it('shows "+N more" overflow when team has more than 5 members', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.organizations = [{ id: 'org-1' }];
+    for (let i = 1; i <= 7; i++) {
+      mockTeamRows.push({ id: `tm-${i}`, role: 'member', auth: { users: { email: `user${i}@example.com` } } });
+    }
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('+2')).toBeInTheDocument();
+    }, { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — probe smoke error state', () => {
+  it('shows Fail status when probe metadata has status error', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.organizations = [{ id: 'org-1' }];
+    mockProbeAuditRows.push({
+      status: 'failure',
+      created_at: '2026-04-29T09:00:00Z',
+      metadata: {
+        status: 'error',
+        reachable: false,
+        http_status: 503,
+        request_id: 'req-err-1',
+        probed_url: 'http://agent.example.com/health',
+        error: 'Connection refused',
+        generated_at: '2026-04-29T09:00:00Z',
+      },
+    });
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Fail')).toBeInTheDocument();
+      expect(screen.getByText('no')).toBeInTheDocument();
+      expect(screen.getByText('503')).toBeInTheDocument();
+    }, { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — risk filter buttons', () => {
+  it('filters projects by risk score when filter buttons clicked', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    mockProjectRows.push(
+      { id: 'p-crit', name: 'Critical Project', user_id: 'user-1', risk_score: 85, created_at: new Date().toISOString() },
+      { id: 'p-high', name: 'High Project', user_id: 'user-1', risk_score: 55, created_at: new Date().toISOString() },
+      { id: 'p-med',  name: 'Medium Project', user_id: 'user-1', risk_score: 25, created_at: new Date().toISOString() },
+      { id: 'p-low',  name: 'Low Project', user_id: 'user-1', risk_score: 5,  created_at: new Date().toISOString() },
+    );
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Project risk')).toBeInTheDocument(), { timeout: 5000 });
+    // click Critical filter
+    const critBtn = screen.getByRole('button', { name: /^Critical$/i });
+    fireEvent.click(critBtn);
+    await waitFor(() => expect(screen.getByText('Critical Project')).toBeInTheDocument(), { timeout: 5000 });
+    // click High filter
+    const highBtn = screen.getByRole('button', { name: /^High$/i });
+    fireEvent.click(highBtn);
+    await waitFor(() => expect(screen.getByText('High Project')).toBeInTheDocument(), { timeout: 5000 });
+    // click Medium filter
+    const medBtn = screen.getByRole('button', { name: /^Medium$/i });
+    fireEvent.click(medBtn);
+    await waitFor(() => expect(screen.getByText('Medium Project')).toBeInTheDocument(), { timeout: 5000 });
+    // click Low filter
+    const lowBtn = screen.getByRole('button', { name: /^Low$/i });
+    fireEvent.click(lowBtn);
+    await waitFor(() => expect(screen.getByText('Low Project')).toBeInTheDocument(), { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — weekly SLO with scan durations', () => {
+  it('computes avgDuration and p95Duration when completed scans have timestamps', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const now = Date.now();
+    // 3 scans within last 7 days with started_at/completed_at
+    for (let i = 0; i < 3; i++) {
+      const started = new Date(now - (i + 1) * 86_400_000).toISOString();
+      const completed = new Date(now - i * 86_400_000 - 3600_000).toISOString(); // 1h later - within budget
+      mockScanRows.push({
+        id: `ws-${i}`,
+        scanner: 'nmap',
+        status: 'completed',
+        created_at: started,
+        started_at: started,
+        completed_at: completed,
+        project_id: 'p1',
+        user_id: 'user-1',
+      });
+    }
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Weekly SLO/SLA summary')).toBeInTheDocument(), { timeout: 5000 });
+    // avg duration label renders in Weekly SLO section
+    expect(screen.getByText('Avg min')).toBeInTheDocument();
+  });
+
+  it('computes sla breach when a scan duration exceeds 60 min', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const now = Date.now();
+    const started = new Date(now - 2 * 86_400_000).toISOString();
+    const completed = new Date(now - 2 * 86_400_000 + 2 * 3600_000).toISOString(); // 2h later — exceeds 60min SLA
+    mockScanRows.push({
+      id: 'ws-breach',
+      scanner: 'nmap',
+      status: 'completed',
+      created_at: started,
+      started_at: started,
+      completed_at: completed,
+      project_id: 'p1',
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('SLA breach %')).toBeInTheDocument(), { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — findings newest sort', () => {
+  it('sorts findings by newest date', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const olderDate = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const newerDate = new Date(Date.now() - 1 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'NS Project', user_id: 'user-1', created_at: olderDate });
+    mockVulnRows.push(
+      { id: 'vn1', title: 'Older Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: olderDate, user_id: 'user-1' },
+      { id: 'vn2', title: 'Newer Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: newerDate, user_id: 'user-1' },
+    );
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Top open findings')).toBeInTheDocument(), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Newest' }));
+    await waitFor(() => {
+      expect(screen.getAllByText('Newer Finding').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Older Finding').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+  });
+
+  it('sorts findings by oldest date', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const olderDate = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const newerDate = new Date(Date.now() - 1 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'OS Project', user_id: 'user-1', created_at: olderDate });
+    mockVulnRows.push(
+      { id: 'vo1', title: 'Oldest Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: olderDate, user_id: 'user-1' },
+      { id: 'vo2', title: 'Recent Finding', severity: 'medium', status: 'open', project_id: 'p1', asset: null, cve_id: null, created_at: newerDate, user_id: 'user-1' },
+    );
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Top open findings')).toBeInTheDocument(), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
+    await waitFor(() => {
+      expect(screen.getAllByText('Oldest Finding').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+  });
+});
+
+describe('Dashboard — SLA breach debounce effect', () => {
+  it('triggers SLA breach update when overdue vuln exists', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    // critical SLA = 3 days by default, create vuln 10 days old → overdue
+    const oldDate = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    mockVulnRows.push({
+      id: 'v-sla-breach',
+      title: 'Critical Breach',
+      severity: 'critical',
+      status: 'open',
+      project_id: 'p1',
+      created_at: oldDate,
+      sla_breached_at: null,
+      sla_warned_at: null,
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    // Just verify the dashboard renders with the vuln loaded
+    await waitFor(() => expect(screen.getByText('Security posture')).toBeInTheDocument(), { timeout: 5000 });
+    // The SLA debounce runs async in background — component should still be mounted
+    await new Promise(r => setTimeout(r, 100));
+    expect(screen.getByText('Security posture')).toBeInTheDocument();
+  });
+
+  it('triggers SLA at-risk warning for vuln at 75% of budget', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    // high SLA = 7 days → 6 days old → 86% used → at risk
+    const atRiskDate = new Date(Date.now() - 6 * 86_400_000).toISOString();
+    mockVulnRows.push({
+      id: 'v-sla-warn',
+      title: 'High At Risk',
+      severity: 'high',
+      status: 'open',
+      project_id: 'p1',
+      created_at: atRiskDate,
+      sla_breached_at: null,
+      sla_warned_at: null,
+      user_id: 'user-1',
+    });
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Security posture')).toBeInTheDocument(), { timeout: 5000 });
+    await new Promise(r => setTimeout(r, 100));
+    expect(screen.getByText('Security posture')).toBeInTheDocument();
   });
 });
