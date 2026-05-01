@@ -475,3 +475,87 @@ describe('Dashboard — StatusBadge via Recent scans', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/projects');
   });
 });
+
+describe('Dashboard — top open findings controls', () => {
+  it('shows empty search state and clears findings filters', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const recentDate = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'Alpha API', user_id: 'user-1', created_at: recentDate });
+    mockVulnRows.push({
+      id: 'v-top-1',
+      title: 'SQL Injection',
+      severity: 'critical',
+      status: 'open',
+      project_id: 'p1',
+      asset: 'api.example.com',
+      cve_id: 'CVE-2026-1234',
+      created_at: recentDate,
+      user_id: 'user-1',
+    });
+
+    renderDashboard();
+
+    const searchInput = await screen.findByPlaceholderText(/search findings/i, {}, { timeout: 5000 });
+    fireEvent.change(searchInput, { target: { value: 'does-not-match' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('No findings match the search.')).toBeInTheDocument();
+    }, { timeout: 5000 });
+
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
+
+    await waitFor(() => {
+      expect((searchInput as HTMLInputElement).value).toBe('');
+      expect(screen.getAllByText('SQL Injection').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+  });
+
+  it('renders project name and CVE link in top open findings', async () => {
+    mockAuthState.user = { id: 'user-1' };
+    const olderDate = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const newerDate = new Date(Date.now() - 1 * 86_400_000).toISOString();
+    mockProjectRows.push({ id: 'p1', name: 'Risky Service', user_id: 'user-1', created_at: olderDate });
+    mockVulnRows.push(
+      {
+        id: 'v-top-2',
+        title: 'Broken Access Control',
+        severity: 'high',
+        status: 'open',
+        project_id: 'p1',
+        asset: 'app.example.com',
+        cve_id: 'CVE-2026-9999',
+        created_at: olderDate,
+        user_id: 'user-1',
+      },
+      {
+        id: 'v-top-3',
+        title: 'Auth Bypass',
+        severity: 'critical',
+        status: 'open',
+        project_id: 'p1',
+        asset: 'auth.example.com',
+        created_at: newerDate,
+        user_id: 'user-1',
+      },
+    );
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Top open findings')).toBeInTheDocument();
+      expect(screen.getAllByText('Risky Service').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+
+    const cveLinks = screen.getAllByRole('link', { name: 'CVE-2026-9999' });
+    expect(cveLinks.length).toBeGreaterThan(0);
+    expect(cveLinks.some((link) => link.getAttribute('href') === 'https://nvd.nist.gov/vuln/detail/CVE-2026-9999')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'A→Z' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /clear/i })).toBeInTheDocument();
+      expect(screen.getAllByText('Auth Bypass').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Broken Access Control').length).toBeGreaterThan(0);
+    }, { timeout: 5000 });
+  });
+});
