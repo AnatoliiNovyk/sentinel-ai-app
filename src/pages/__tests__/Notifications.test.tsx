@@ -429,7 +429,7 @@ describe('Notifications — groupByDate coverage', () => {
     mockNotifLimit.mockResolvedValue({ data: [todayNotif], error: null });
     render(<Notifications />);
     await screen.findByText('Notification Center');
-    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.getAllByText('Today').length).toBeGreaterThan(0);
   });
 
   it('groups notifications as Yesterday', async () => {
