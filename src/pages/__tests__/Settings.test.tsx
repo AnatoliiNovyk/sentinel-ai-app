@@ -545,3 +545,75 @@ describe('Settings — handleUpgrade paths', () => {
     openSpy.mockRestore();
   });
 });
+
+describe('Settings — Agent health with lastJobAt and lastError', () => {
+  afterEach(() => {
+    localStorage.removeItem('agentHealthUrl');
+  });
+
+  it('renders last job timestamp and last error when agent health returns them', async () => {
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: true,
+      statusCode: 200,
+      health: {
+        status: 'ok',
+        uptime: 7200,
+        jobsProcessed: 10,
+        jobsFailed: 1,
+        lastJobAt: '2026-04-30T12:00:00.000Z',
+        lastError: 'timeout on target host',
+        timestamp: '2026-04-30T12:05:00.000Z',
+      },
+      error: null,
+      via: 'direct',
+    });
+
+    await act(async () => { render(<Settings />); });
+    const agentInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    fireEvent.change(agentInput, { target: { value: 'http://95.67.75.146:9090/health' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent online/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Last job:/i)).toBeInTheDocument();
+    expect(screen.getByText(/timeout on target host/i)).toBeInTheDocument();
+  });
+});
+
+describe('Settings — ApiKeyRow show/hide and copy', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('shows masked value by default and toggles to reveal key', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    await act(async () => { render(<Settings />); });
+
+    const showBtns = screen.getAllByRole('button', { name: 'Show key' });
+    expect(showBtns.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(showBtns[0]);
+    expect(screen.getAllByRole('button', { name: 'Hide key' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('copies key to clipboard when Copy key clicked', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      configurable: true,
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    const copyBtns = screen.getAllByRole('button', { name: 'Copy key' });
+    expect(copyBtns.length).toBeGreaterThanOrEqual(1);
+    await act(async () => { fireEvent.click(copyBtns[0]); });
+
+    expect(writeTextMock).toHaveBeenCalled();
+  });
+});
