@@ -615,3 +615,93 @@ describe('Scans — refresh and relative time', () => {
     });
   });
 });
+
+// ── Detail Modal — open/close ────────────────────────────────────────────
+
+describe('Scans — detail modal open/close', () => {
+  beforeEach(() => {
+    setupScansMocks({ vulns: [mockVulns[0]] });
+  });
+
+  it('opens detail modal when View Details button clicked', async () => {
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    const viewBtn = screen.getByRole('button', { name: /view details/i });
+    fireEvent.click(viewBtn);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument();
+    });
+    // Detail modal shows severity/status/asset
+    expect(screen.getAllByText('Severity').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CRITICAL').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('api.example.com').length).toBeGreaterThan(0);
+  });
+
+  it('closes detail modal when X button clicked', async () => {
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /close vulnerability details/i }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /close vulnerability details/i })).not.toBeInTheDocument());
+  });
+
+  it('shows "No remediation plan available yet." when remediation is empty', async () => {
+    const vulnNoRemediation = { ...mockVulns[0], remediation: '', remediation_code: '' };
+    setupScansMocks({ vulns: [vulnNoRemediation] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => expect(screen.getByText(/No remediation plan available yet\./i)).toBeInTheDocument());
+  });
+
+  it('shows CVE in detail modal as "N/A" when not set', async () => {
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument());
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+  });
+});
+
+// ── CSV Export — trigger download ────────────────────────────────────────
+
+describe('Scans — CSV export trigger', () => {
+  beforeEach(() => {
+    setupScansMocks({ vulns: mockVulns });
+  });
+
+  it('triggers CSV download when export button clicked', async () => {
+    const mockClick = vi.fn();
+    const origCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'a') return { click: mockClick, href: '', download: '' } as unknown as HTMLElement;
+      return origCreate(tag);
+    });
+    global.URL.createObjectURL = vi.fn(() => 'blob:fake');
+    global.URL.revokeObjectURL = vi.fn();
+
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /csv/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+    expect(mockClick).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+});
+
+// ── AI Generation error path ─────────────────────────────────────────────
+
+describe('Scans — AI generation error', () => {
+  beforeEach(() => {
+    setupScansMocks({ vulns: [mockVulns[0]] });
+  });
+
+  it('shows AI generation error when callAiGateway throws', async () => {
+    mockCallAiGateway.mockRejectedValueOnce(new Error('Gateway timeout'));
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    const aiBtn = screen.getByRole('button', { name: /generate ai fix/i });
+    fireEvent.click(aiBtn);
+    await waitFor(() => expect(screen.getByText(/AI Generation failed/i)).toBeInTheDocument());
+  });
+});
