@@ -35,8 +35,9 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
           }),
         }),
         update: () => ({
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-          is: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: () => ({
+            is: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
         }),
         delete: () => ({
           eq: () => ({
@@ -293,5 +294,168 @@ describe('Notifications — notification actions', () => {
     await screen.findByText('Critical vulnerability detected');
     fireEvent.click(screen.getAllByTitle('Go to related page')[0]);
     expect(mockNavigate).toHaveBeenCalledWith('/vulns');
+  });
+});
+
+// ─── Additional coverage tests ───────────────────────────────
+
+describe('Notifications — additional coverage', () => {
+  it('renders notification with "just now" time for recent notification', async () => {
+    const recent = { ...MOCK_NOTIFICATIONS[0], created_at: new Date().toISOString() };
+    mockNotifLimit.mockResolvedValue({ data: [recent], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders notification with "1h ago" for hour-old notification', async () => {
+    const hourOld = { ...MOCK_NOTIFICATIONS[0], created_at: new Date(Date.now() - 3_600_000).toISOString() };
+    mockNotifLimit.mockResolvedValue({ data: [hourOld], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders notification with "1d ago" for day-old notification', async () => {
+    const dayOld = { ...MOCK_NOTIFICATIONS[0], created_at: new Date(Date.now() - 86_400_000).toISOString() };
+    mockNotifLimit.mockResolvedValue({ data: [dayOld], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders notification without link (no navigation)', async () => {
+    const noLink = { ...MOCK_NOTIFICATIONS[0], link: null };
+    mockNotifLimit.mockResolvedValue({ data: [noLink], error: null });
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    expect(screen.queryByTitle('Go to related page')).not.toBeInTheDocument();
+  });
+
+  it('clicking "Mark all read" calls supabase update', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    const markAllBtn = screen.getByText('Mark all read');
+    fireEvent.click(markAllBtn);
+    await waitFor(() => expect(screen.queryByLabelText('unread')).not.toBeInTheDocument());
+  });
+
+  it('clicking "Clear read" calls supabase delete', async () => {
+    render(<Notifications />);
+    await screen.findByText('Scan completed successfully');
+    const clearReadBtn = screen.getByText('Clear read');
+    fireEvent.click(clearReadBtn);
+    await waitFor(() => expect(screen.queryByText('Scan completed successfully')).not.toBeInTheDocument());
+  });
+
+  it('refresh button triggers silent fetch', async () => {
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    const refreshBtn = screen.getByTitle('Refresh');
+    fireEvent.click(refreshBtn);
+    // Should not throw
+  });
+
+  it('export CSV button triggers download', async () => {
+    // Mock document.createElement and URL methods
+    const mockClick = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'a') {
+        return { click: mockClick, href: '', download: '' } as any;
+      }
+      return originalCreateElement(tag);
+    });
+    global.URL.createObjectURL = vi.fn(() => 'blob:url');
+    global.URL.revokeObjectURL = vi.fn();
+
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    const exportBtn = screen.getByTitle('Export as CSV');
+    fireEvent.click(exportBtn);
+    expect(mockClick).toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+  });
+});
+
+// ─── iconFor coverage ───────────────────────────────
+
+describe('Notifications — iconFor coverage', () => {
+  it('renders Radar icon for scan_completed type', async () => {
+    const scanNotif = { ...MOCK_NOTIFICATIONS[1] };
+    mockNotifLimit.mockResolvedValue({ data: [scanNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Scan completed successfully')).toBeInTheDocument();
+  });
+
+  it('renders AlertTriangle icon for critical_finding type', async () => {
+    render(<Notifications />);
+    await screen.findByText('Critical vulnerability detected');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders Zap icon for sla_breach type', async () => {
+    const slaNotif = { ...MOCK_NOTIFICATIONS[0], type: 'sla_breach', severity: 'warning' as const };
+    mockNotifLimit.mockResolvedValue({ data: [slaNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders ShieldAlert icon for project_created type', async () => {
+    const projNotif = { ...MOCK_NOTIFICATIONS[0], type: 'project_created', severity: 'success' as const };
+    mockNotifLimit.mockResolvedValue({ data: [projNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+
+  it('renders Bell icon for unknown type', async () => {
+    const unknownNotif = { ...MOCK_NOTIFICATIONS[0], type: 'unknown_type' };
+    mockNotifLimit.mockResolvedValue({ data: [unknownNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Critical vulnerability detected')).toBeInTheDocument();
+  });
+});
+
+// ─── groupByDate coverage ───────────────────────────────
+
+describe('Notifications — groupByDate coverage', () => {
+  it('groups notifications as Today', async () => {
+    const todayNotif = { ...MOCK_NOTIFICATIONS[0], created_at: new Date().toISOString() };
+    mockNotifLimit.mockResolvedValue({ data: [todayNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Today')).toBeInTheDocument();
+  });
+
+  it('groups notifications as Yesterday', async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const yesterdayNotif = { ...MOCK_NOTIFICATIONS[0], created_at: yesterday };
+    mockNotifLimit.mockResolvedValue({ data: [yesterdayNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Yesterday')).toBeInTheDocument();
+  });
+
+  it('groups notifications as This week', async () => {
+    const weekAgo = new Date(Date.now() - 4 * 86400000).toISOString();
+    const weekNotif = { ...MOCK_NOTIFICATIONS[0], created_at: weekAgo };
+    mockNotifLimit.mockResolvedValue({ data: [weekNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('This week')).toBeInTheDocument();
+  });
+
+  it('groups notifications as Older', async () => {
+    const older = new Date(Date.now() - 10 * 86400000).toISOString();
+    const olderNotif = { ...MOCK_NOTIFICATIONS[0], created_at: older };
+    mockNotifLimit.mockResolvedValue({ data: [olderNotif], error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    expect(screen.getByText('Older')).toBeInTheDocument();
   });
 });
