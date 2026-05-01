@@ -766,8 +766,8 @@ jobs:
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function IntegrationsLegacy() {
+// exported for test coverage
+export function IntegrationsLegacy() {
   const [tab, setTab] = useState<Tab>('services');
   const [services, setServices] = useState<Record<string, ServiceConfig>>(loadServices);
   const [webhooks, setWebhooks] = useState<Webhook[]>(loadWebhooks);
