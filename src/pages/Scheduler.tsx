@@ -55,6 +55,9 @@ export default function SchedulerPage() {
   const [formScanner, setFormScanner] = useState(AVAILABLE_SCANNERS[0].id);
   const [formCadence, setFormCadence] = useState(24);
 
+  const projectName = (id: string) => projects.find(p => p.id === id)?.name ?? id.slice(0, 8);
+  const scannerLabel = (id: string) => AVAILABLE_SCANNERS.find(s => s.id === id)?.label ?? id;
+
   const sortedSchedules = useMemo(() => {
     const q = schedSearch.trim().toLowerCase();
     const filtered = q
@@ -142,9 +145,6 @@ export default function SchedulerPage() {
     setShowForm(false);
     setSaving(false);
   };
-
-  const projectName = (id: string) => projects.find(p => p.id === id)?.name ?? id.slice(0, 8);
-  const scannerLabel = (id: string) => AVAILABLE_SCANNERS.find(s => s.id === id)?.label ?? id;
 
   const runNow = async (s: ScanSchedule) => {
     if (!user || running) return;

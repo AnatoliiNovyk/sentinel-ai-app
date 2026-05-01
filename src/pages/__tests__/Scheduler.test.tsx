@@ -365,4 +365,48 @@ describe('SchedulerPage — run now', () => {
     fireEvent.click(screen.getByTitle('Run now'));
     await waitFor(() => expect(dispatchScan).toHaveBeenCalled());
   });
+
+  it('shows error toast when dispatchScan fails', async () => {
+    const { dispatchScan } = await import('../../lib/scanDispatch');
+    (dispatchScan as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, error: 'Network error' });
+    render(<SchedulerPage />);
+    await waitFor(() => screen.getByTitle('Run now'));
+    fireEvent.click(screen.getByTitle('Run now'));
+    await waitFor(() => expect(dispatchScan).toHaveBeenCalled());
+  });
+});
+
+// ── Search empty state ────────────────────────────────────────────────────
+
+describe('SchedulerPage — search empty state', () => {
+  beforeEach(() => {
+    mockSchOrder.mockResolvedValue({ data: [makeSchedule()], error: null });
+    mockPrjOrder.mockResolvedValue({ data: [makeProject()], error: null });
+  });
+
+  it('shows "No schedules match the search" when no results', async () => {
+    render(<SchedulerPage />);
+    await waitFor(() => screen.getByPlaceholderText('Search project or scanner…'));
+    fireEvent.change(screen.getByPlaceholderText('Search project or scanner…'), {
+      target: { value: 'xyzzznotfound' },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('No schedules match the search')).toBeInTheDocument(),
+    );
+  });
+});
+
+// ── Overdue indicator ─────────────────────────────────────────────────────
+
+describe('SchedulerPage — overdue indicator', () => {
+  it('shows "(overdue)" when next_run_at is in the past', async () => {
+    const pastDate = new Date(Date.now() - 3_600_000).toISOString();
+    mockSchOrder.mockResolvedValue({
+      data: [makeSchedule({ next_run_at: pastDate })],
+      error: null,
+    });
+    mockPrjOrder.mockResolvedValue({ data: [makeProject()], error: null });
+    render(<SchedulerPage />);
+    await waitFor(() => expect(screen.getByText('(overdue)')).toBeInTheDocument());
+  });
 });
