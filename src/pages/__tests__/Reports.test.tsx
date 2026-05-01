@@ -6,12 +6,13 @@ import type { Project, Report } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle, mockGetSession } = vi.hoisted(() => ({
+const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle, mockGetSession, mockScansOrder } = vi.hoisted(() => ({
   mockReportsOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockProjectsEq: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockDeleteIn: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockMaybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
   mockGetSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'token-abc' } } }),
+  mockScansOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
 }));
 
 vi.mock('../../lib/supabase', async (importOriginal) => {
@@ -30,7 +31,7 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         }
         if (table === 'scans') {
           return {
-            select: () => ({ eq: () => ({ eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }) }) }),
+            select: () => ({ eq: () => ({ eq: () => ({ order: mockScansOrder }) }) }),
           };
         }
         if (table === 'vulnerabilities') {
@@ -433,6 +434,23 @@ describe('Reports — sort controls', () => {
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
     await waitFor(() => expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument());
   });
+
+  it('shows "No reports match your filters" when search yields no matches', async () => {
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText('Alpha Report')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('Search reports…'), {
+      target: { value: 'xyznonexistentreport' },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('No reports match your filters')).toBeInTheDocument(),
+    );
+    // Clicking "Clear filters" link in the empty state resets search
+    const clearBtn = screen.getAllByRole('button').find(b => /clear filters/i.test(b.textContent ?? ''));
+    fireEvent.click(clearBtn!);
+    await waitFor(() =>
+      expect(screen.getByText('Alpha Report')).toBeInTheDocument(),
+    );
+  });
 });
 
 // ── Delete single report ───────────────────────────────────────────────────
@@ -623,6 +641,21 @@ describe('Reports — ReportView shared report panel', () => {
     fireEvent.click(rotateBtn!);
     await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalled());
   });
+
+  it('copies share URL to clipboard when "Copy" clicked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    await openSharedView();
+    const btns = screen.getAllByRole('button');
+    const sharedBtn = btns.find(b => /^shared$/i.test(b.textContent?.trim() ?? ''));
+    fireEvent.click(sharedBtn!);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    vi.unstubAllGlobals();
+  });
 });
 
 // ── ReportView export buttons ─────────────────────────────────────────────
@@ -631,7 +664,7 @@ describe('Reports — ReportView export and print', () => {
   const report = makeReport({
     id: 'exp-1',
     title: 'Export Test Report',
-    content: '# Test\n\n- item one\n- item two',
+    content: '# Test\n\n## Section\n\n### Subsection\n\nPlain paragraph here.\n\n- item one\n- item two\n\n1. ordered item\n\n**bold** and `code`',
     kind: 'executive',
   });
 
@@ -688,6 +721,17 @@ describe('Reports — ReportView export and print', () => {
     expect(printBtn).toBeInTheDocument();
     // window.open returns null in jsdom → printPdf exits early, no crash
     fireEvent.click(printBtn);
+  });
+
+  it('printPdf writes to window when open returns a mock window', async () => {
+    const mockPrint = vi.fn();
+    const mockDoc = { open: vi.fn(), write: vi.fn(), close: vi.fn() };
+    const mockWin = { document: mockDoc, focus: vi.fn(), print: mockPrint };
+    vi.stubGlobal('open', vi.fn(() => mockWin));
+    await openView();
+    fireEvent.click(screen.getByRole('button', { name: /print pdf/i }));
+    await waitFor(() => expect(mockDoc.write).toHaveBeenCalled());
+    vi.unstubAllGlobals();
   });
 });
 
@@ -852,5 +896,22 @@ describe('Reports — GenerateModal generate flow', () => {
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
     });
+  });
+
+  it('local generation queries vulnerabilities when scans exist', async () => {
+    // Make scans return data → scanIds.length > 0 → vulns query is triggered (line 884)
+    mockScansOrder.mockResolvedValueOnce({
+      data: [{ id: 'scan-abc', user_id: 'user-1', project_id: 'proj-1', created_at: '2026-01-01T00:00:00Z' }],
+      error: null,
+    });
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false }); // force local generation
+    vi.stubGlobal('fetch', mockFetch);
+    await openModal();
+    fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
+    }, { timeout: 5000 });
+    vi.unstubAllGlobals();
+    mockScansOrder.mockResolvedValue({ data: [], error: null });
   });
 });
