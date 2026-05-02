@@ -161,4 +161,58 @@ describe('ReportViewer', () => {
       expect(mockUpdate).not.toHaveBeenCalled();
     });
   });
+
+  describe('content rendering', () => {
+    it('renders as HTML when renderMode is "rendered" (default)', () => {
+      const htmlContent = '# Test report with **bold** text';
+      render(
+        <ReportViewer
+          report={makeReport({ content: htmlContent })}
+          onClose={vi.fn()}
+        />,
+      );
+      // HTML content is rendered via dangerouslySetInnerHTML (check for prose-formatted div)
+      const proseDiv = screen.getByText(/Test report/i).closest('div[class*="prose"]');
+      expect(proseDiv).toBeInTheDocument();
+    });
+
+    it('renders as plain text in <pre> when renderMode is "raw"', async () => {
+      const plainContent = 'Simple plain text content for testing';
+      render(
+        <ReportViewer
+          report={makeReport({ content: plainContent })}
+          onClose={vi.fn()}
+        />,
+      );
+      // Click "Markdown" tab to switch to raw mode
+      const markdownBtn = screen.getByText('Markdown');
+      fireEvent.click(markdownBtn);
+      
+      // Plain text should now be rendered in a <pre> element
+      // Look for the content within a <pre> tag
+      const preElements = screen.queryAllByText(plainContent);
+      const preElement = preElements.find(el => el.tagName === 'PRE');
+      expect(preElement).toBeDefined();
+      expect(preElement?.className).toContain('font-mono');
+    });
+
+    it('switches between rendered and raw modes via buttons', async () => {
+      const content = 'Simple content without markdown';
+      render(
+        <ReportViewer
+          report={makeReport({ content })}
+          onClose={vi.fn()}
+        />,
+      );
+      
+      // Initially should be in rendered mode (Preview button highlighted)
+      const previewBtn = screen.getByText('Preview');
+      expect(previewBtn.className).toContain('bg-slate-800');
+      
+      // Click to raw mode (Markdown button)
+      fireEvent.click(screen.getByText('Markdown'));
+      const markdownBtn = screen.getByText('Markdown');
+      expect(markdownBtn.className).toContain('bg-slate-800');
+    });
+  });
 });
