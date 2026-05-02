@@ -39,6 +39,9 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
   return {
     ...actual,
     supabase: {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+      },
       from: (table: string) => {
         if (table === 'api_usage') {
           return {
@@ -715,7 +718,9 @@ describe('Settings — paid plan billing portal', () => {
 describe('Settings — Stripe checkout fallback', () => {
   afterEach(() => {
     mockAuthProfile.plan = 'free';
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it('opens mailto fallback after failed Stripe checkout fetch', async () => {
@@ -795,7 +800,5 @@ describe('Settings — Stripe checkout fallback', () => {
       expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
     });
     openSpy.mockRestore();
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
   });
 });

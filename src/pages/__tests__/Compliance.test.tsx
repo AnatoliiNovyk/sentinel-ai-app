@@ -383,4 +383,75 @@ describe('Compliance — CIS row color thresholds', () => {
     // Just verify the page renders with CIS section visible
     expect(screen.getByText('CIS Controls v8')).toBeInTheDocument();
   });
+
+  it('applies orange threshold styles for framework and SOC2 rows in 40-59 range', async () => {
+    const now = new Date().toISOString();
+    mockEq.mockResolvedValue({
+      data: Array.from({ length: 9 }, (_, i) => ({
+        id: `v-orange-${i}`,
+        scan_id: 's-1',
+        user_id: 'user-1',
+        title: `Orange threshold finding ${i}`,
+        description: 'Critical finding to lower SOC2 score into orange range',
+        severity: 'critical',
+        cve_id: `CVE-2026-${1000 + i}`,
+        mitre_tactic: 'Initial Access',
+        cis_control: 'CIS-1',
+        asset: `host-${i}.example.com`,
+        remediation: 'Immediate fix',
+        remediation_code: '',
+        remediation_type: 'patch',
+        created_at: now,
+        status: 'open',
+        note: '',
+        status_updated_at: '',
+        sla_breached_at: null,
+        sla_warned_at: null,
+      })),
+      error: null,
+    });
+
+    const { container } = render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('Framework Compliance Overview')).toBeInTheDocument());
+
+    const frameworkSection = screen.getByText('Framework Compliance Overview').closest('section');
+    expect(frameworkSection?.querySelectorAll('.text-orange-400').length ?? 0).toBeGreaterThan(0);
+    expect(frameworkSection?.querySelectorAll('.bg-orange-400').length ?? 0).toBeGreaterThan(0);
+
+    // SOC2 cards use the same orange classes when row.score is in [40, 59].
+    expect(screen.getByText('SOC 2 Trust Services Criteria')).toBeInTheDocument();
+    expect(container.querySelectorAll('.bg-orange-400').length).toBeGreaterThan(0);
+  });
+
+  it('executes CIS sort branches for score ascending and A→Z label sort', async () => {
+    const now = new Date().toISOString();
+    mockEq.mockResolvedValue({
+      data: [
+        {
+          id: 'v-sort-1', scan_id: 's-1', user_id: 'user-1',
+          title: 'Sort A', description: 'A', severity: 'critical', cve_id: '',
+          mitre_tactic: 'Initial Access', cis_control: 'CIS-2', asset: 'a.example.com', remediation: 'fix',
+          remediation_code: '', remediation_type: 'patch', created_at: now, status: 'open', note: '', status_updated_at: '',
+          sla_breached_at: null, sla_warned_at: null,
+        },
+        {
+          id: 'v-sort-2', scan_id: 's-1', user_id: 'user-1',
+          title: 'Sort B', description: 'B', severity: 'medium', cve_id: '',
+          mitre_tactic: 'Initial Access', cis_control: 'CIS-1', asset: 'b.example.com', remediation: 'fix',
+          remediation_code: '', remediation_type: 'patch', created_at: now, status: 'open', note: '', status_updated_at: '',
+          sla_breached_at: null, sla_warned_at: null,
+        },
+      ],
+      error: null,
+    });
+
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('CIS Controls v8')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Score ↑' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A→Z' }));
+
+    expect(screen.getAllByText('Inventory & Control of Enterprise Assets').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Inventory & Control of Software Assets').length).toBeGreaterThanOrEqual(1);
+  });
 });
