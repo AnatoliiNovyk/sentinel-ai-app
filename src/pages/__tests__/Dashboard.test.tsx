@@ -70,7 +70,12 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
       from: (table: string) => {
         if (table === 'scans') return { select: () => makeQueryChain(mockScanRows) };
         if (table === 'projects') return { select: () => makeChainNoLimit(mockProjectRows) };
-        if (table === 'vulnerabilities') return { select: () => makeQueryChain(mockVulnRows) };
+        if (table === 'vulnerabilities') {
+          return {
+            select: () => makeQueryChain(mockVulnRows),
+            update: () => ({ eq: () => ({ is: () => Promise.resolve({ data: null, error: null }) }) }),
+          };
+        }
         if (table === 'scan_jobs') return { select: () => makeQueryChain(mockScanJobRows) };
         if (table === 'team_members') return { select: () => ({ eq: () => Promise.resolve({ data: mockTeamRows, error: null }) }) };
         if (table === 'audit_logs') return { select: () => makeQueryChain(mockProbeAuditRows) };
@@ -785,6 +790,46 @@ describe('Dashboard — findings newest sort', () => {
 });
 
 describe('Dashboard — SLA breach debounce effect', () => {
+  it('executes debounced SLA notification writes for breached and at-risk findings', async () => {
+    mockAuthState.user = { id: 'user-1' };
+
+    const overdueDate = new Date(Date.now() - 10 * 86_400_000).toISOString(); // critical > 3d budget
+    const atRiskDate = new Date(Date.now() - 6 * 86_400_000).toISOString(); // high ~86% of 7d budget
+
+    mockVulnRows.push(
+      {
+        id: 'v-sla-overdue-exec',
+        title: 'Overdue callback coverage',
+        severity: 'critical',
+        status: 'open',
+        project_id: 'p1',
+        created_at: overdueDate,
+        sla_breached_at: null,
+        sla_warned_at: null,
+        user_id: 'user-1',
+      },
+      {
+        id: 'v-sla-atrisk-exec',
+        title: 'At-risk callback coverage',
+        severity: 'high',
+        status: 'open',
+        project_id: 'p1',
+        created_at: atRiskDate,
+        sla_breached_at: null,
+        sla_warned_at: null,
+        user_id: 'user-1',
+      },
+    );
+
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Security posture')).toBeInTheDocument(), { timeout: 5000 });
+
+    // Wait for the 1.5s debounce callback to execute write branches.
+    await new Promise((resolve) => setTimeout(resolve, 1700));
+
+    expect(screen.getByText('Security posture')).toBeInTheDocument();
+  });
+
   it('triggers SLA breach update when overdue vuln exists', async () => {
     mockAuthState.user = { id: 'user-1' };
     // critical SLA = 3 days by default, create vuln 10 days old → overdue
