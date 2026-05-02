@@ -217,10 +217,11 @@ describe('computeCompliance — result structure', () => {
 
   it('handles empty vulnerabilities array', () => {
     const r = computeCompliance([]);
-    expect(r.nistOverall).toBe(0);
-    expect(r.cisOverall).toBe(0);
+    // No vulnerabilities = no penalties = max scores for NIST, CIS
+    expect(r.nistOverall).toBe(100);
+    expect(r.cisOverall).toBe(100);
     expect(r.mitreOverall).toBe(100);
-    expect(r.iso27001Overall).toBe(0);
+    expect(r.iso27001Overall).toBe(100);
   });
 
   it('computes framework scores even with single vuln', () => {
