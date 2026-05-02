@@ -205,5 +205,58 @@ describe('ScanDiff', () => {
       const allBtn = screen.getByRole('button', { name: /^all$/i });
       fireEvent.click(allBtn);
     });
+
+    it('sorts diff with multiple statuses: new before persisted before fixed', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'Fixed finding', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host1.com'),  // persisted
+        makeVuln('v3', 'scan-old', 'Old finding only', 'host2.com'), // fixed
+        makeVuln('v4', 'scan-new', 'New finding only', 'host3.com'), // new
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      const statuses = screen.getAllByText(/^(new|fixed|persisted)$/).map(el => el.textContent);
+      const newIdx = statuses.indexOf('new');
+      const persistedIdx = statuses.indexOf('persisted');
+      const fixedIdx = statuses.indexOf('fixed');
+      // new should appear before persisted which appears before fixed
+      expect(newIdx).toBeLessThan(persistedIdx);
+      expect(persistedIdx).toBeLessThan(fixedIdx);
+    });
+
+    it('diff search filters by title', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'SQL Injection vulnerability', 'host1.com'),
+        makeVuln('v2', 'scan-new', 'XSS Attack', 'host2.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      const searchInput = screen.getByPlaceholderText(/search title or asset/i);
+      fireEvent.change(searchInput, { target: { value: 'sql' } });
+      expect(screen.getByText('SQL Injection vulnerability')).toBeInTheDocument();
+      expect(screen.queryByText('XSS Attack')).not.toBeInTheDocument();
+    });
+
+    it('diff search filters by asset name', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'Vuln A', 'api.example.com'),
+        makeVuln('v2', 'scan-new', 'Vuln B', 'db.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      const searchInput = screen.getByPlaceholderText(/search title or asset/i);
+      fireEvent.change(searchInput, { target: { value: 'api.example' } });
+      expect(screen.getByText('Vuln A')).toBeInTheDocument();
+      expect(screen.queryByText('Vuln B')).not.toBeInTheDocument();
+    });
+
+    it('shows "No entries match" message when filter excludes all', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New finding', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host2.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      // Click "Persisted" filter - no persisted findings exist
+      const persistedBtn = screen.getByRole('button', { name: /^persisted$/i });
+      fireEvent.click(persistedBtn);
+      expect(screen.getByText(/no entries match the current filters/i)).toBeInTheDocument();
+    });
   });
 });
