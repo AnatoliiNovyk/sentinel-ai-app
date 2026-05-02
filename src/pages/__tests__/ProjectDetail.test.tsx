@@ -176,13 +176,13 @@ describe('ProjectDetail', () => {
     );
   });
 
-  it('renders breadcrumb "Projects" button', () => {
-    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+  it('renders breadcrumb "Projects" button', async () => {
+    await act(async () => { render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />); });
     expect(screen.getByRole('button', { name: /projects/i })).toBeInTheDocument();
   });
 
-  it('calls onBack when breadcrumb "Projects" is clicked', () => {
-    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+  it('calls onBack when breadcrumb "Projects" is clicked', async () => {
+    await act(async () => { render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />); });
     fireEvent.click(screen.getByRole('button', { name: /projects/i }));
     expect(mockOnBack).toHaveBeenCalledTimes(1);
   });
