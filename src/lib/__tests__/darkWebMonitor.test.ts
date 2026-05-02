@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   DarkWebMonitorClient,
   detectQueryType,
@@ -277,5 +277,109 @@ describe('Global DarkWebMonitor', () => {
     resetGlobalDarkWebMonitor();
     const after = getGlobalDarkWebMonitor();
     expect(before).not.toBe(after);
+  });
+});
+
+// ─── HIBP API path (requires env key + fetch mock) ───────────────────────────
+
+describe('DarkWebMonitorClient — HIBP API path', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubEnv('VITE_HIBP_API_KEY', 'test-hibp-key-12345');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('uses HaveIBeenPwned v3 source when HIBP key is set and email given', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ([{
+        Name: 'TestBreach',
+        Title: 'Test Breach Service',
+        BreachDate: '2023-01-01',
+        AddedDate: '2023-06-01',
+        DataClasses: ['Passwords', 'Email addresses'],
+        IsVerified: true,
+        PwnCount: 5000000,
+        Description: 'A test breach for unit testing.',
+      }]),
+    }));
+    const { DarkWebMonitorClient: Client } = await import('../darkWebMonitor');
+    const c = new Client();
+    const result = await c.scan('victim@test.com');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.sources).toContain('HaveIBeenPwned v3');
+      expect(result.data.breachCount).toBe(1);
+    }
+  });
+
+  it('returns empty breaches when HIBP returns 404 (no breaches)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    }));
+    const { DarkWebMonitorClient: Client } = await import('../darkWebMonitor');
+    const c = new Client();
+    const result = await c.scan('clean@test.com');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.breachCount).toBe(0);
+    }
+  });
+
+  it('returns failure when fetch throws (catch branch)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+    const { DarkWebMonitorClient: Client } = await import('../darkWebMonitor');
+    const c = new Client();
+    const result = await c.scan('crash@test.com');
+    expect(result.ok).toBe(false);
+  });
+
+  it('maps exotic DataClasses to known types via hibpBreachToEntry', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ([{
+        Name: 'BigBreach',
+        Title: 'Big Breach',
+        BreachDate: '2022-01-01',
+        AddedDate: '2022-03-01',
+        DataClasses: ['Credit/Debit Cards', 'Social security numbers', 'Auth Tokens', 'UnknownClass'],
+        IsVerified: false,
+        PwnCount: 500000,
+        Description: '<p>HTML stripped breach</p>',
+      }]),
+    }));
+    const { DarkWebMonitorClient: Client } = await import('../darkWebMonitor');
+    const c = new Client();
+    const result = await c.scan('test@domain.com');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const dc = result.data.breaches[0].dataClasses;
+      expect(dc).toContain('Credit cards');
+      expect(dc).toContain('SSNs');
+      expect(dc).toContain('Session tokens');
+      expect(dc).toContain('PII');
+      // HTML should be stripped from description
+      expect(result.data.breaches[0].description).not.toContain('<p>');
+    }
+  });
+
+  it('HIBP non-ok non-404 response throws (caught as failure)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    }));
+    const { DarkWebMonitorClient: Client } = await import('../darkWebMonitor');
+    const c = new Client();
+    const result = await c.scan('error@test.com');
+    expect(result.ok).toBe(false);
   });
 });
