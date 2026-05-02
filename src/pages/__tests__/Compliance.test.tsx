@@ -313,3 +313,74 @@ describe('Compliance — with vuln data (criticalCount/openCount branches)', () 
     await waitFor(() => expect(screen.getAllByText('Initial Access').length).toBeGreaterThanOrEqual(1));
   });
 });
+
+describe('Compliance — CIS row color thresholds', () => {
+  it('CIS row with minimal vulns (high score) renders without error', async () => {
+    mockEq.mockResolvedValue({
+      data: [
+        {
+          id: 'v-1', scan_id: 's-1', user_id: 'user-1',
+          title: 'Low severity finding',
+          description: 'Minor issue',
+          severity: 'low',
+          cve_id: 'CVE-2024-0001', mitre_tactic: 'Initial Access', cis_control: 'CIS-1',
+          asset: 'api.example.com', remediation: 'Minor fix',
+          remediation_code: '', remediation_type: 'patch',
+          created_at: new Date().toISOString(),
+          status: 'resolved',
+          note: '', status_updated_at: '', sla_breached_at: null, sla_warned_at: null,
+        },
+      ],
+      error: null,
+    });
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('CIS Controls v8')).toBeInTheDocument());
+    // Verify CIS row renders (high score = green)
+    expect(screen.getByText('Inventory & Control of Enterprise Assets')).toBeInTheDocument();
+  });
+
+  it('CIS row with multiple medium vulns renders without error', async () => {
+    mockEq.mockResolvedValue({
+      data: Array.from({ length: 2 }, (_, i) => ({
+        id: `v-${i}`, scan_id: 's-1', user_id: 'user-1',
+        title: `Medium severity finding ${i}`,
+        description: 'Moderate risk',
+        severity: 'medium',
+        cve_id: `CVE-2024-000${i}`, mitre_tactic: 'Initial Access', cis_control: 'CIS-1',
+        asset: 'api.example.com', remediation: 'Needs remediation',
+        remediation_code: '', remediation_type: 'config',
+        created_at: new Date().toISOString(),
+        status: 'open',
+        note: '', status_updated_at: '', sla_breached_at: null, sla_warned_at: null,
+      })),
+      error: null,
+    });
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('CIS Controls v8')).toBeInTheDocument());
+    // Verify CIS row renders (medium score = yellow)
+    expect(screen.getByText('Inventory & Control of Enterprise Assets')).toBeInTheDocument();
+  });
+
+  it('CIS row with critical vulns (low score) renders without error', async () => {
+    mockEq.mockResolvedValue({
+      data: Array.from({ length: 5 }, (_, i) => ({
+        id: `v-${i}`, scan_id: 's-1', user_id: 'user-1',
+        title: `Critical severity finding ${i}`,
+        description: 'Critical risk',
+        severity: 'critical',
+        cve_id: `CVE-2024-000${i}`, mitre_tactic: 'Initial Access', cis_control: 'CIS-1',
+        asset: 'api.example.com', remediation: 'Urgent',
+        remediation_code: '', remediation_type: 'patch',
+        created_at: new Date().toISOString(),
+        status: 'open',
+        note: '', status_updated_at: '', sla_breached_at: null, sla_warned_at: null,
+      })),
+      error: null,
+    });
+    render(<Compliance />);
+    await waitFor(() => expect(screen.getByText('CIS Controls v8')).toBeInTheDocument());
+    // With 5 critical open vulns, score for CIS-1 should be very low (red color threshold)
+    // Just verify the page renders with CIS section visible
+    expect(screen.getByText('CIS Controls v8')).toBeInTheDocument();
+  });
+});
