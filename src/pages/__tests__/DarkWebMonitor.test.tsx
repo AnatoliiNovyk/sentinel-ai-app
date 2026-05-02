@@ -412,6 +412,53 @@ describe('OsintAnalyzer — filter and sort', () => {
     expect(screen.getByText('Risk ↑')).toBeInTheDocument();
     expect(screen.getByText('A→Z')).toBeInTheDocument();
   });
+
+  it('executes all sort modes with multiple results', async () => {
+    mockScan
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          breachCount: 2,
+          breaches: [{ source: 'Adobe', severity: 'critical', dataClasses: ['email'], breachDate: '2020-06-01' }],
+          scannedAt: '2026-04-24T00:00:00Z',
+          riskScore: 90,
+          riskLevel: 'critical',
+          recommendedActions: ['Rotate passwords'],
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          breachCount: 0,
+          breaches: [],
+          scannedAt: '2026-04-24T00:01:00Z',
+          riskScore: 5,
+          riskLevel: 'low',
+          recommendedActions: [],
+        },
+      });
+
+    render(<OsintAnalyzer />);
+    const input = screen.getByPlaceholderText(/Enter email, domain or username/i);
+
+    fireEvent.change(input, { target: { value: 'zeta@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Analysis Results')).toBeInTheDocument());
+
+    fireEvent.change(input, { target: { value: 'alpha@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => {
+      expect(screen.getAllByText('zeta@example.com').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('alpha@example.com').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Risk ↓' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Risk ↑' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A→Z' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Newest' }));
+
+    expect(screen.getByText('Risk Distribution')).toBeInTheDocument();
+  });
 });
 
 // ─── Export ────────────────────────────────────────────────────────────────────
