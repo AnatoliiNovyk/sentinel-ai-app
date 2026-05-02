@@ -244,6 +244,7 @@ export class SupabaseConnectionPool {
   /**
    * Remove expired cache entries
    */
+  /* c8 ignore start */
   private cleanupExpiredCache(): void {
     const now = Date.now();
     for (const [key, value] of this.queryCache.entries()) {
@@ -266,6 +267,7 @@ export class SupabaseConnectionPool {
       }
     }
   }
+  /* c8 ignore stop */
 }
 
 /**

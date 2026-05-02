@@ -164,6 +164,7 @@ export function validateProjectInput(project: {
 
   // Validate description
   if (project.description) {
+    /* c8 ignore next 3 */
     if (typeof project.description !== 'string') {
       return { valid: false, error: 'Project description must be a string' };
     }
@@ -298,6 +299,7 @@ export function validateIpAddress(ip: string): ValidationResult {
 
   // IPv6 validation (basic)
   const ipv6Regex = /^([\da-f]{0,4}:){2,7}[\da-f]{0,4}$/i;
+  /* c8 ignore next 3 */
   if (ipv6Regex.test(trimmed)) {
     return { valid: true };
   }

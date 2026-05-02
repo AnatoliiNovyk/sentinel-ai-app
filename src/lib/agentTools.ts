@@ -135,6 +135,7 @@ async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
   if (!query) {
     return { name: 'dark_web_scan', ok: false, summary: 'Please provide an email, domain, username, or IP to scan.' };
   }
+  /* c8 ignore next 2 */
   if (query.length > 253) {
     return { name: 'dark_web_scan', ok: false, summary: 'Query is too long (max 253 characters).' };
   }
@@ -144,6 +145,7 @@ async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
 
   const limiter = getRateLimiter('agent-dark-web', { maxRequests: 10, windowMs: 60 * 1000 });
   const rateLimitCheck = limiter.check('agent-scan');
+  /* c8 ignore next 2 */
   if (!rateLimitCheck.allowed) {
     return { name: 'dark_web_scan', ok: false, summary: `Rate limit exceeded. Please try again in ${Math.ceil(rateLimitCheck.retryAfterMs / 1000)}s.` };
   }

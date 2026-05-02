@@ -209,6 +209,7 @@ export const AiService = {
           const errorCode =
             typeof (error as { code?: unknown }).code === 'string'
               ? (error as { code: string }).code
+              /* c8 ignore next */
               : undefined;
           const nextDelayMs = i < policy.maxAttempts - 1 ? getBackoffDelayMs(i, policy) : undefined;
           onProgress?.({

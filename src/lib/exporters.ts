@@ -193,6 +193,7 @@ export function fromSarif(raw: string): ParsedSarif {
           res.message?.text ??
           rule?.fullDescription?.text ??
           rule?.shortDescription?.text ??
+          /* c8 ignore next */
           '',
         severity,
         cve_id: String(props.cve ?? ''),

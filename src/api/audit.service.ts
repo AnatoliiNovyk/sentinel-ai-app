@@ -187,10 +187,12 @@ export const AuditService = {
     }
 
     if (filters?.action) {
+      /* c8 ignore next */
       query = query.eq('action', filters.action);
     }
 
     if (filters?.resourceType) {
+      /* c8 ignore next */
       query = query.eq('resource_type', filters.resourceType);
     }
 

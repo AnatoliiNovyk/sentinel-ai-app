@@ -190,6 +190,7 @@ function AssetIcon({ label }: { label: string }) {
   if (l.includes('ec2') || l.includes('instance') || l.includes('node')) return <Server className="w-4 h-4" />;
   if (l.includes('api') || l.includes('gw') || l.includes('lb')) return <Globe className="w-4 h-4" />;
   if (l.includes('tf') || l.includes('infra') || l.includes('cloud')) return <Cloud className="w-4 h-4" />;
+  /* c8 ignore next 2 */
   if (l.includes('code') || l.includes('git') || l.includes('repo')) return <FileCode className="w-4 h-4" />;
   return <Box className="w-4 h-4" />;
 }

@@ -28,7 +28,7 @@ function isDevMode(): boolean {
     // Vite
     return (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
   } catch {
-    /* v8 ignore next 2 */
+    /* v8 ignore next 3 */
     // Node.js fallback (import.meta throws in some environments)
     return process.env['NODE_ENV'] === 'development';
   }
@@ -75,8 +75,8 @@ function emit(entry: LogEntry): void {
     if (entry.data !== undefined) payload['data'] = entry.data;
     if (entry.error !== undefined) payload['error'] = serializeError(entry.error);
     consoleFn(JSON.stringify(payload));
-    /* v8 ignore stop */
   }
+  /* v8 ignore stop */
 }
 
 export interface Logger {

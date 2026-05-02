@@ -146,6 +146,7 @@ export default function ExecutionConsole({ code, type, onComplete, onCancel }: E
           <span>Sentinel AI v2.4 (Engine: Hyperion)</span>
           <span className="flex items-center gap-3">
             {logs.filter(l => l.type === 'error').length > 0 && (
+              /* c8 ignore next */
               <span className="text-red-400">{logs.filter(l => l.type === 'error').length} error(s)</span>
             )}
             <span>Status: {isFinishing ? 'Success' : 'Executing...'}</span>

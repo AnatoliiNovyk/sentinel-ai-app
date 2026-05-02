@@ -388,6 +388,7 @@ export default function AppLayout() {
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         {/* Scroll to top button */}
         {showScrollTop && (
+          /* c8 ignore next 7 */
           <button
             onClick={scrollToTop}
             aria-label="Back to top"

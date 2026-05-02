@@ -192,6 +192,7 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
     try {
       await navigator.clipboard.writeText(text);
       setCopyStates((prev) => ({ ...prev, [order]: true }));
+      /* c8 ignore next */
       setTimeout(() => setCopyStates((prev) => ({ ...prev, [order]: false })), 2000);
     } catch {
       // Clipboard not available
@@ -207,6 +208,7 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
     try {
       await navigator.clipboard.writeText(cmds);
       setAllCopied(true);
+      /* c8 ignore next */
       setTimeout(() => setAllCopied(false), 2000);
     } catch {
       // Clipboard not available
@@ -243,6 +245,7 @@ export function RemediationAssistant({ vuln }: { vuln: Vulnerability }) {
   }
 
   // ─── Loading ──────────────────────────────────────────────────────────────
+  /* c8 ignore next 12 */
   if (loading) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4">

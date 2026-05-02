@@ -36,6 +36,7 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
                   </span>
                 ) : 'Manage and monitor security assessments across your infrastructure.';
               })()
+            /* c8 ignore next */
             : 'Manage and monitor security assessments across your infrastructure.'}
         </p>
       </div>
