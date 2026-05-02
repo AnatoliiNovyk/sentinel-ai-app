@@ -325,8 +325,8 @@ describe('AuthContext', () => {
       expect(capturedAuth!.organizations).toEqual([]);
     });
 
-    it('fetches existing profile when user is set via auth callback', async () => {
-      const mockUser = { id: 'user-1', email: 'test@example.com', user_metadata: {} };
+    it('creates profile via insert when profile does not exist', async () => {
+      const mockUser = { id: 'user-new', email: 'new@example.com', user_metadata: { full_name: 'New User' } };
 
       let capturedCb: ((event: string, session: unknown) => void) | undefined;
       mockOnAuthStateChange.mockImplementation((cb: (event: string, session: unknown) => void) => {
@@ -334,21 +334,21 @@ describe('AuthContext', () => {
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       });
 
+      const mockInsertMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: 'user-new', email: 'new@example.com', full_name: 'New User' },
+        error: null,
+      });
+      const mockInsertSelect = vi.fn().mockReturnValue({ maybeSingle: mockInsertMaybeSingle });
+      const mockInsert = vi.fn().mockReturnValue({ select: mockInsertSelect });
+
+      // profiles.select returns null (no profile) → triggers insert
       mockProfilesSelect.mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: 'user-1', email: 'test@example.com', full_name: 'Test User' },
-              error: null,
-            }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         }),
-      });
-
-      mockOrgsSelect.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: [{ id: 'org-1', name: 'Org One' }], error: null }),
-        }),
+        insert: mockInsert,
       });
 
       let capturedAuth: ReturnType<typeof useAuth> | undefined;
@@ -366,8 +366,12 @@ describe('AuthContext', () => {
       });
 
       await waitFor(() => {
-        expect(capturedAuth!.profile?.id).toBe('user-1');
-        expect(capturedAuth!.organizations).toHaveLength(1);
+        expect(mockInsert).toHaveBeenCalledWith({
+          id: 'user-new',
+          email: 'new@example.com',
+          full_name: 'New User',
+        });
+        expect(capturedAuth!.profile?.id).toBe('user-new');
       });
     });
   });

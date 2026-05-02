@@ -183,4 +183,47 @@ describe('RemediationModal — copy command', () => {
     fireEvent.click(copyBtn);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('sudo apt upgrade');
   });
+
+  it('copies playbook command to clipboard', () => {
+    const vuln = makeVuln({ asset: '10.0.0.1', cve_id: '' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+    // First playbook copy button
+    const copyBtns = screen.getAllByText('Copy');
+    fireEvent.click(copyBtns[0]);
+    expect(navigator.clipboard.writeText).toHaveBeenCalled();
+  });
+});
+
+describe('RemediationModal — aws-cli steps', () => {
+  it('shows Configure AWS CLI step for aws-cli type', () => {
+    const vuln = makeVuln({ remediation_type: 'aws-cli' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('Configure AWS CLI')).toBeInTheDocument();
+    expect(screen.getByText('Run remediation command')).toBeInTheDocument();
+  });
+
+  it('shows kubectl steps for kubectl type', () => {
+    const vuln = makeVuln({ remediation_type: 'kubectl' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('Check kubectl context')).toBeInTheDocument();
+    expect(screen.getByText('Verify rollout')).toBeInTheDocument();
+  });
+});
+
+describe('RemediationModal — toggle uncomplete step', () => {
+  it('un-checking completed step reduces progress', () => {
+    const vuln = makeVuln({ remediation_type: 'bash', remediation_code: 'echo fix' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    const firstStepToggle = Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.includes('STEP 1'),
+    );
+    expect(firstStepToggle).toBeDefined();
+    // Check it
+    fireEvent.click(firstStepToggle!);
+    expect(screen.getByText('33%')).toBeInTheDocument();
+    // Uncheck it
+    fireEvent.click(firstStepToggle!);
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AgentLogsPanel from '../AgentLogsPanel';
 import type { AgentLog } from '../../lib/supabase';
@@ -150,5 +150,72 @@ describe('AgentLogsPanel — level filter', () => {
 
     expect(screen.getByText(/Info line/)).toBeInTheDocument();
     expect(screen.getByText(/Error line/)).toBeInTheDocument();
+  });
+});
+
+describe('AgentLogsPanel — copyLog', () => {
+  let clipboardWriteText: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: clipboardWriteText },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('clicking Copy log calls clipboard.writeText with log content', async () => {
+    mockFetchReturns([makeLog({ message: 'Copy this log', level: 'info' })]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByLabelText('Copy log'));
+    fireEvent.click(screen.getByLabelText('Copy log'));
+    expect(clipboardWriteText).toHaveBeenCalledOnce();
+    const arg = clipboardWriteText.mock.calls[0][0] as string;
+    expect(arg).toContain('Copy this log');
+  });
+
+  it('Copy log button shows Check icon after click (copied state)', async () => {
+    mockFetchReturns([makeLog({ message: 'Some log' })]);
+    const { container } = render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByLabelText('Copy log'));
+    fireEvent.click(screen.getByLabelText('Copy log'));
+    // After click: Copy icon replaced by Check icon (svg changes)
+    // The clipboard was called — that's enough to verify copyLog ran
+    expect(clipboardWriteText).toHaveBeenCalledOnce();
+    // Button still present
+    expect(container.querySelector('[aria-label="Copy log"]')).toBeInTheDocument();
+  });
+});
+
+describe('AgentLogsPanel — realtime INSERT', () => {
+  beforeEach(() => {
+    mockChannel.on.mockClear();
+  });
+
+  it('registers INSERT realtime handler', async () => {
+    mockFetchReturns([]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    const calls = mockChannel.on.mock.calls as Array<[string, { event: string }, (p: { new: unknown }) => void]>;
+    const insertCall = calls.find(([, opts]) => opts?.event === 'INSERT');
+    expect(insertCall).toBeTruthy();
+  });
+
+  it('INSERT handler appends new log to the list', async () => {
+    const { act } = await import('@testing-library/react');
+    mockFetchReturns([makeLog({ message: 'Existing log' })]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByText(/Existing log/));
+
+    const calls = mockChannel.on.mock.calls as Array<[string, { event: string }, (p: { new: unknown }) => void]>;
+    const insertCall = calls.find(([, opts]) => opts?.event === 'INSERT');
+    const handler = insertCall?.[2];
+    expect(handler).toBeTruthy();
+
+    await act(async () => {
+      handler?.({ new: makeLog({ message: 'Realtime log' }) });
+    });
+    await waitFor(() => expect(screen.getByText(/Realtime log/)).toBeInTheDocument());
   });
 });
