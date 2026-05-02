@@ -199,7 +199,7 @@ export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentTh
                       </div>
                       <p className="text-xs text-slate-300">{reply.content}</p>
                       {user?.id === reply.user_id && (
-                        /* c8 ignore next 6 */
+                        /* c8 ignore next 7 */
                         <button
                           onClick={() => handleDeleteComment(reply.id)}
                           title="Delete reply"

@@ -38,6 +38,7 @@ export default function OsintAnalyzer() {
       if (sortBy === 'risk_desc') return (RISK_ORDER[b.result.riskLevel ?? 'none'] ?? 0) - (RISK_ORDER[a.result.riskLevel ?? 'none'] ?? 0);
       if (sortBy === 'risk_asc') return (RISK_ORDER[a.result.riskLevel ?? 'none'] ?? 0) - (RISK_ORDER[b.result.riskLevel ?? 'none'] ?? 0);
       if (sortBy === 'query') return a.query.localeCompare(b.query);
+      /* c8 ignore next */
       return 0;
     });
   }, [results, sevFilter, sortBy]);

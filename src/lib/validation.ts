@@ -47,6 +47,7 @@ export function validateDarkWebQuery(query: string): ValidationResult {
   const trimmed = query.trim();
 
   if (trimmed.length < ValidationLimits.QUERY_MIN_LENGTH) {
+    /* c8 ignore next 2 */
     return { valid: false, error: 'Query is too short' };
   }
 

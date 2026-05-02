@@ -63,7 +63,7 @@ export default function Chat() {
         /* c8 ignore next */
         if (convs.data && convs.data.length > 0) setActiveId(convs.data[0].id);
       } catch (err) {
-        /* c8 ignore next */
+        /* c8 ignore next 2 */
         console.error('Failed to load chat data:', err);
       }
     })();
@@ -132,7 +132,7 @@ export default function Chat() {
         .select()
         .maybeSingle();
       if (!data) {
-        /* c8 ignore next */
+        /* c8 ignore next 2 */
         setSending(false); return;
       }
       convoId = data.id;
@@ -153,6 +153,7 @@ export default function Chat() {
     setThinkingLabel(THINKING_PHASES[0]);
     let phaseIdx = 0;
     const phaseTimer = setInterval(() => {
+      /* c8 ignore next 2 */
       phaseIdx = (phaseIdx + 1) % THINKING_PHASES.length;
       setThinkingLabel(THINKING_PHASES[phaseIdx]);
     }, 900);

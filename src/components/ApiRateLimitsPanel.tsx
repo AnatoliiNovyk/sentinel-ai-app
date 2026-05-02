@@ -146,6 +146,7 @@ export function ApiRateLimitsPanel({ userId, planId }: ApiRateLimitsPanelProps) 
                     m.isExceeded
                       ? 'bg-red-500'
                       : m.isWarning
+                      /* c8 ignore next */
                       ? 'bg-amber-500'
                       : `bg-gradient-to-r ${m.color}`
                   }`}

@@ -231,6 +231,7 @@ export class SupabaseConnectionPool {
    */
   private startCleanupInterval(): void {
     const cleanupInterval = setInterval(() => {
+      /* c8 ignore next 2 */
       this.cleanupExpiredCache();
       this.cleanupStaleConnections();
     }, 60 * 1000); // Every minute

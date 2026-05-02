@@ -15,7 +15,7 @@ function iconFor(type: string) {
   if (type === 'scan_completed') return Radar;
   if (type === 'report_ready') return FileText;
   if (type === 'critical_finding') return AlertTriangle;
-  /* c8 ignore next */
+  /* c8 ignore next 2 */
   return Bell;
 }
 

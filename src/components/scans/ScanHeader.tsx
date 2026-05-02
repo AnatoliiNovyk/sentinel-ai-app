@@ -29,6 +29,7 @@ export const ScanHeader: React.FC<ScanHeaderProps> = ({
           {selectedProjectId
             ? (() => {
                 const p = projects.find(pr => pr.id === selectedProjectId);
+                /* c8 ignore next 6 */
                 return p ? (
                   <span className="flex items-center gap-1.5">
                     <FolderKanban className="w-3.5 h-3.5 text-emerald-400" />

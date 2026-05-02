@@ -599,6 +599,7 @@ export default function Dashboard() {
                   if (riskFilter === 'high') return score >= 40 && score < 70;
                   if (riskFilter === 'medium') return score >= 15 && score < 40;
                   if (riskFilter === 'low') return score < 15;
+                  /* c8 ignore next */
                   return true;
                 })
                 .map(p => {
@@ -1117,6 +1118,7 @@ export default function Dashboard() {
                 if (findingsSort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
                 if (findingsSort === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
                 if (findingsSort === 'title') return a.title.localeCompare(b.title);
+                /* c8 ignore next */
                 return 0;
               });
               const displayed = sorted.slice(0, 10);

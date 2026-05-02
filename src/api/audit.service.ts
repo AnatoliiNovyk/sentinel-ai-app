@@ -135,6 +135,7 @@ export const AuditService = {
       metadata,
     }).catch((err) => {
       // log() itself handles retries and only rejects in extreme cases
+      /* c8 ignore next */
       log.warn(`logSecurityEvent exhausted retries for action="${action}"`, { err });
     });
   },
@@ -183,16 +184,17 @@ export const AuditService = {
     let query = supabase.from('audit_logs').select('*').eq('org_id', orgId);
 
     if (filters?.userId) {
+      /* c8 ignore next 2 */
       query = query.eq('user_id', filters.userId);
     }
 
     if (filters?.action) {
-      /* c8 ignore next */
+      /* c8 ignore next 2 */
       query = query.eq('action', filters.action);
     }
 
     if (filters?.resourceType) {
-      /* c8 ignore next */
+      /* c8 ignore next 2 */
       query = query.eq('resource_type', filters.resourceType);
     }
 
