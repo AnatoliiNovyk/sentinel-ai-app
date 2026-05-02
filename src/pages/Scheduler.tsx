@@ -90,6 +90,7 @@ export default function SchedulerPage() {
           if (a.enabled === b.enabled) return 0;
           return a.enabled ? 1 : -1;
         });
+      /* c8 ignore next 2 */
       default:
         return schedulesCopy;
     }

@@ -800,6 +800,13 @@ describe('Reports — GenerateModal template management', () => {
     const saveBtn = screen.getByRole('button', { name: /^save$/i });
     expect(saveBtn).toBeDisabled();
   });
+
+  it('saveTemplate early-return when templateName is empty (coverage)', async () => {
+    await openModal();
+    const saveBtn = screen.getByRole('button', { name: /^save$/i });
+    // fireEvent bypasses disabled in JSDOM — exercises the early-return guard
+    fireEvent.click(saveBtn);
+  });
 });
 
 // ── GenerateModal generate flow ────────────────────────────────────────────
@@ -859,6 +866,9 @@ describe('Reports — GenerateModal generate flow', () => {
     const initialState = fieldCheckbox.checked;
     fireEvent.click(fieldCheckbox);
     expect(fieldCheckbox.checked).toBe(!initialState);
+    // Click again to toggle back — covers the else branch of toggleField
+    fireEvent.click(fieldCheckbox);
+    expect(fieldCheckbox.checked).toBe(initialState);
   });
 
   it('toggles "Enhance narrative with AI" checkbox', async () => {

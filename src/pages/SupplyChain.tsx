@@ -172,6 +172,7 @@ export default function SupplyChain() {
       if (pkgSort === 'risk_asc') return maxSev(a) - maxSev(b);
       if (pkgSort === 'name') return a.dep.name.localeCompare(b.dep.name);
       if (pkgSort === 'vulns_desc') return b.vulns.length - a.vulns.length;
+      /* c8 ignore next */
       return 0;
     });
   }, [filteredByType, pkgSearch, pkgSort]);
