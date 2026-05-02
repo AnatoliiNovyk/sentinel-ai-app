@@ -45,6 +45,12 @@ All 56 tests passing ✅
 - **What:** Opens detail modal for vulnerabilities with `severity: 'low'` and `severity: 'info'`, which fall through the ternary chain to the final else branch giving `'bg-blue-500/20 text-blue-500'` class.
 - **Coverage:** Line 673 — fallback color class in detail modal severity badge.
 
+#### 5. CurrentScanMode UNKNOWN Fallback (Line 96)
+- **File:** `src/pages/__tests__/Scans.test.tsx`
+- **Test:** `Scans — currentScanMode UNKNOWN fallback (line 96)`
+- **What:** Renders with empty scans array to test the UNKNOWN fallback in currentScanMode calculation.
+- **Coverage:** Line 96 — `if (!scan) return 'UNKNOWN';` in currentScanMode IIFE.
+
 ---
 
 ## Test Results
