@@ -214,4 +214,19 @@ describe('computeCompliance — result structure', () => {
     expect(r.soc2Overall).toBeGreaterThanOrEqual(0);
     expect(r.soc2Overall).toBeLessThanOrEqual(100);
   });
+
+  it('handles empty vulnerabilities array', () => {
+    const r = computeCompliance([]);
+    expect(r.nistOverall).toBe(0);
+    expect(r.cisOverall).toBe(0);
+    expect(r.mitreOverall).toBe(100);
+    expect(r.iso27001Overall).toBe(0);
+  });
+
+  it('computes framework scores even with single vuln', () => {
+    const r = computeCompliance([makeVuln({ severity: 'low' })]);
+    expect(r.nistOverall).toBeGreaterThanOrEqual(0);
+    expect(r.cisOverall).toBeGreaterThanOrEqual(0);
+    expect(r.mitreOverall).toBeGreaterThanOrEqual(0);
+  });
 });
