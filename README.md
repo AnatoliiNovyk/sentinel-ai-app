@@ -194,7 +194,70 @@ Reports can be:
 
 ---
 
-## 🔧 Tech Stack
+## � Deploying the Sentinel Agent
+
+The `sentinel-agent/` directory contains a standalone Node.js polling agent that executes real security scans (nmap, trivy, etc.) on your VPS or private infrastructure.
+
+### Prerequisites
+
+- Docker + Docker Compose installed on the target server
+- Network access to your Supabase project URL
+- Docker socket access for container-based scanners (`/var/run/docker.sock`)
+
+### Setup
+
+**1. Configure environment**
+
+```bash
+cp sentinel-agent/.env.example sentinel-agent/.env
+```
+
+Edit `sentinel-agent/.env` and fill in:
+
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_ANON_KEY=<anon-key>
+AGENT_SECRET=<long-random-secret>
+```
+
+> `AGENT_SECRET` must match the value configured in your Supabase `agent_secret` setting. Use a cryptographically random string (e.g. `openssl rand -hex 32`).
+
+**2. Start with Docker Compose**
+
+```bash
+cd sentinel-agent
+docker compose up -d --build
+```
+
+The agent will start polling Supabase for pending scan jobs every 3–30 seconds (exponential backoff).
+
+**3. Verify the agent is running**
+
+```bash
+docker compose logs -f agent
+```
+
+You should see: `[agent] Polling for pending scan jobs...`
+
+### Automated VPS Setup
+
+The `sentinel-agent/setup-vps.sh` script installs Docker, copies the agent, and configures it as a systemd service:
+
+```bash
+scp sentinel-agent/setup-vps.sh user@your-vps:~/
+ssh user@your-vps "bash ~/setup-vps.sh"
+```
+
+### Security Notes
+
+- Never commit `sentinel-agent/.env` — it contains service-role credentials.
+- The agent runs with Docker socket access; restrict access to trusted hosts only.
+- Rotate `AGENT_SECRET` periodically and update both the agent `.env` and Supabase config.
+
+---
+
+## �🔧 Tech Stack
 
 | Layer | Technology |
 |---|---|
