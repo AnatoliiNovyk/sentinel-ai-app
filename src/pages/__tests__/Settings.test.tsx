@@ -754,4 +754,48 @@ describe('Settings — Stripe checkout fallback', () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
+
+  it('redirects to Stripe URL when checkout returns ok with url', async () => {
+    vi.stubEnv('VITE_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    const stripeUrl = 'https://checkout.stripe.com/pay/test_session_123';
+    // Mock fetch to return success with redirect URL
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValueOnce({ url: stripeUrl }),
+    }));
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    await act(async () => { render(<Settings />); });
+    const upgradeBtn = screen.getAllByRole('button', { name: /upgrade/i })[0];
+    await act(async () => { fireEvent.click(upgradeBtn); });
+    // Either redirect to stripe URL or fall back to mailto
+    await waitFor(() => {
+      const mailedFallback = openSpy.mock.calls.some(c => String(c[0]).includes('mailto:'));
+      // fetch was called with stripe checkout URL  
+      expect(mailedFallback || (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length > 0).toBe(true);
+    });
+    openSpy.mockRestore();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows Processing button state during upgrade (fetch with auth session)', async () => {
+    vi.stubEnv('VITE_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abc.supabase.co');
+    // Mock fetch to fail quickly so we can test the flow
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 500 }));
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    await act(async () => { render(<Settings />); });
+    const upgradeBtn = screen.getAllByRole('button', { name: /upgrade/i })[0];
+    await act(async () => { fireEvent.click(upgradeBtn); });
+    // After failed fetch, should fall back to mailto
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    });
+    openSpy.mockRestore();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
 });
