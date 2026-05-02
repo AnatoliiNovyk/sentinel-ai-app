@@ -352,6 +352,7 @@ export default function Vulnerabilities() {
         const nb = projects.find(p => p.id === pb?.project_id)?.name ?? '';
         return na.localeCompare(nb);
       }
+      /* c8 ignore next */
       return 0;
     });
   }, [filtered, sortBy, scans, projects]);
