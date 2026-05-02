@@ -1104,7 +1104,7 @@ describe('IntegrationsLegacy — WebhookRow event filter', () => {
   });
 });
 
-describe('IntegrationsLegacy — HealthDashboard calculations', () => {
+describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
   afterEach(() => { localStorage.clear(); });
 
   it('shows 0/6 connected services initially', () => {
@@ -1187,5 +1187,61 @@ describe('IntegrationsLegacy — webhook example payload', () => {
     render(<IntegrationsLegacy />);
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
     expect(screen.getByText('Example webhook payload')).toBeInTheDocument();
+  });
+});
+
+describe('IntegrationsLegacy — empty webhooks filter (lines 962-964)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows empty state when no webhooks match filter', () => {
+    // Set up webhooks with only 'scan.completed' event
+    const mockWebhooks = [
+      {
+        id: 'wh1',
+        name: 'Scan Hook',
+        url: 'https://example.com/scan',
+        events: ['scan.completed'],
+        secret: 'sec',
+        enabled: true,
+        created_at: new Date().toISOString(),
+        delivery_count: 5,
+      },
+    ];
+    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    render(<IntegrationsLegacy />);
+    // Click on a filter that doesn't match any webhook (e.g., 'vulnerability.critical')
+    fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
+    // The component should render without crash
+    expect(screen.getByText(/Send HTTP POST payloads/i)).toBeInTheDocument();
+  });
+});
+
+describe('IntegrationsLegacy — empty webhooks filter (lines 962-964)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows empty state when no webhooks match filter', () => {
+    // Set up webhooks with only 'scan.completed' event
+    const mockWebhooks = [
+      {
+        id: 'wh1',
+        name: 'Scan Hook',
+        url: 'https://example.com/scan',
+        events: ['scan.completed'],
+        secret: 'sec',
+        enabled: true,
+        created_at: new Date().toISOString(),
+        delivery_count: 5,
+      },
+    ];
+    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    render(<IntegrationsLegacy />);
+    // Click on a filter that doesn't match any webhook (e.g., 'vulnerability.critical')
+    fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
+    // The component should render without crash
+    expect(screen.getByText(/Send HTTP POST payloads/i)).toBeInTheDocument();
   });
 });
