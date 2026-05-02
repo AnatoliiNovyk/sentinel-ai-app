@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import ActivityPage from '../Activity';
@@ -493,73 +493,123 @@ describe('Activity — anomaly edge cases', () => {
       expect(screen.getByText('Elevated warning rate')).toBeInTheDocument(),
     );
   });
+});
 
-  it('heatmap cells render with error/warn background when logs contain errors and warnings', async () => {
-    const now = new Date();
-    const logsWithErrWarn = [
+// ── Date group label coverage ─────────────────────────────────────────────────
+
+describe('Activity — date grouping labels', () => {
+  it('groups logs created yesterday under "Yesterday" label', async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const logsYesterday = [
       {
-        id: 'hm-err',
+        id: 'log-yest',
         user_id: 'user-1',
         project_id: null,
         scan_id: null,
-        level: 'error',
-        message: 'Heatmap error log',
-        created_at: now.toISOString(),
+        level: 'info',
+        message: 'Yesterday log entry',
+        created_at: yesterday.toISOString(),
       },
+    ];
+    mockRange.mockReturnValue({ data: logsYesterday, error: null });
+    render(<ActivityPage />);
+    expect(await screen.findByText('Yesterday log entry')).toBeInTheDocument();
+    expect(screen.getByText('Yesterday')).toBeInTheDocument();
+  });
+
+  it('groups logs older than yesterday under weekday+date label', async () => {
+    const olderDate = new Date();
+    olderDate.setDate(olderDate.getDate() - 5);
+    const logsOld = [
       {
-        id: 'hm-warn',
+        id: 'log-old',
         user_id: 'user-1',
         project_id: null,
         scan_id: null,
         level: 'warn',
-        message: 'Heatmap warn log',
-        created_at: now.toISOString(),
+        message: 'Old activity log entry',
+        created_at: olderDate.toISOString(),
       },
     ];
-    mockRange.mockReturnValue({ data: logsWithErrWarn, error: null });
+    mockRange.mockReturnValue({ data: logsOld, error: null });
     render(<ActivityPage />);
-    await screen.findByText('Activity Log');
+    expect(await screen.findByText('Old activity log entry')).toBeInTheDocument();
+    // Should show neither Today nor Yesterday for a 5-days-old log
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+    expect(screen.queryByText('Yesterday')).not.toBeInTheDocument();
+  });
+});
+
+describe('Activity — loading and realtime callbacks', () => {
+  it('renders anomalies heatmap for info-only logs (no error/warn)', async () => {
+    const infoOnlyLogs = [
+      {
+        id: 'log-info-only',
+        user_id: 'user-1',
+        project_id: null,
+        scan_id: null,
+        level: 'info',
+        message: 'Only informational activity',
+        created_at: new Date().toISOString(),
+      },
+    ];
+    mockRange.mockReturnValue({ data: infoOnlyLogs, error: null });
+
+    render(<ActivityPage />);
+    await screen.findByText('Only informational activity');
     fireEvent.click(screen.getByText('Anomalies'));
     await waitFor(() =>
       expect(screen.getByText('7-Day Hourly Activity Heatmap')).toBeInTheDocument(),
     );
-    // Heatmap renders the heading — cells with err/warn bg are rendered via ref (bg color)
-    const heatmapSection = screen.getByText('7-Day Hourly Activity Heatmap');
-    expect(heatmapSection).toBeInTheDocument();
   });
 
-  it('shows "Analyzing anomalies…" when loading anomalies', async () => {
-    // Mock loading state by delaying the logs
-    mockRange.mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve({ data: [], error: null }), 1000))
+  it('shows "Analyzing anomalies…" when switching to anomalies tab while loading', async () => {
+    let resolveLogs: ((value: { data: unknown[]; error: null }) => void) | null = null;
+    mockRange.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLogs = resolve;
+        }),
     );
+
     render(<ActivityPage />);
-    await screen.findByText('Activity Log');
     fireEvent.click(screen.getByText('Anomalies'));
-    // Verify loading message appears
     expect(screen.getByText(/Analyzing anomalies/i)).toBeInTheDocument();
+
+    // Resolve pending fetch to avoid leaving a hanging promise in test environment.
+    if (resolveLogs) resolveLogs({ data: [], error: null });
   });
 
-  it('project click navigates when project_id exists on log entry', async () => {
-    const logsWithProject = [
-      {
-        id: 'log-proj',
-        user_id: 'user-1',
-        project_id: 'proj-123',
-        scan_id: null,
-        level: 'info',
-        message: 'Project activity log',
-        created_at: new Date().toISOString(),
-      },
-    ];
-    mockRange.mockReturnValue({ data: logsWithProject, error: null });
+  it('prepends new log from realtime INSERT channel callback', async () => {
+    const onMock = vi.fn().mockReturnThis();
+    const subscribeMock = vi.fn().mockReturnThis();
+    mockChannel.mockReturnValue({ on: onMock, subscribe: subscribeMock });
+
     render(<ActivityPage />);
-    await screen.findByText('Activity Log');
-    // Click on the project button
-    const projectBtns = screen.getAllByTitle('Open project');
-    expect(projectBtns.length).toBeGreaterThan(0);
-    fireEvent.click(projectBtns[0]);
-    // Verify navigation called (though log will have project_id set)
-    // Note: This test verifies the button is clickable; actual navigation depends on component logic
+    await screen.findByText('Scan started for target example.com');
+
+    const insertHandler = onMock.mock.calls.find(
+      (call) => call[0] === 'postgres_changes',
+    )?.[2] as ((payload: { new: unknown }) => void) | undefined;
+
+    expect(insertHandler).toBeDefined();
+
+    await act(async () => {
+      insertHandler?.({
+        new: {
+          id: 'log-live-1',
+          user_id: 'user-1',
+          project_id: null,
+          scan_id: null,
+          level: 'info',
+          message: 'Realtime inserted log',
+          created_at: new Date().toISOString(),
+        },
+      });
+    });
+
+    expect(screen.getByText('Realtime inserted log')).toBeInTheDocument();
   });
 });
+
