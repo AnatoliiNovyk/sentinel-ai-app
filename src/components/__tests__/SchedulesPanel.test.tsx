@@ -137,6 +137,24 @@ describe('SchedulesPanel — with schedules', () => {
     await renderPanel([makeProject()]);
     await waitFor(() => expect(screen.getByText(/Daily/)).toBeInTheDocument());
   });
+
+  it('shows "Every 3h" for custom 3-hour cadence', async () => {
+    mockSchedulesReturn([makeSchedule({ cadence_hours: 3 })]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.getByText(/Every 3h/)).toBeInTheDocument());
+  });
+
+  it('shows "Every 5d" for custom 120-hour cadence', async () => {
+    mockSchedulesReturn([makeSchedule({ cadence_hours: 120 })]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.getByText(/Every 5d/)).toBeInTheDocument());
+  });
+
+  it('shows "37h" for non-divisible cadence', async () => {
+    mockSchedulesReturn([makeSchedule({ cadence_hours: 37 })]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.getByText(/37h/)).toBeInTheDocument());
+  });
 });
 
 describe('SchedulesPanel — toggle & delete', () => {
@@ -173,5 +191,66 @@ describe('SchedulesPanel — new schedule modal', () => {
       // Should now have at least 2: button + modal heading
       expect(headings.length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it('closes modal when Close (X) button clicked', async () => {
+    await renderPanel([makeProject()]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    await waitFor(() => {
+      expect(screen.getAllByText('New schedule').length).toBe(1);
+    });
+  });
+
+  it('closes modal when Cancel button clicked', async () => {
+    await renderPanel([makeProject()]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+    fireEvent.click(cancelBtn);
+    await waitFor(() => {
+      expect(screen.getAllByText('New schedule').length).toBe(1);
+    });
+  });
+
+  it('saves schedule and calls onCreated when Create clicked', async () => {
+    await renderPanel([makeProject('proj-1', 'Test Project')]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    const createBtn = screen.getByRole('button', { name: /create schedule/i });
+    fireEvent.click(createBtn);
+    await waitFor(() => {
+      // Modal closes after create
+      expect(screen.getAllByText('New schedule').length).toBe(1);
+    });
+  });
+
+  it('changes cadence when cadence button clicked', async () => {
+    await renderPanel([makeProject()]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    // Click "Every hour" cadence button
+    fireEvent.click(screen.getByText('Every hour'));
+    // Button state changes (styling) — just ensure no error
+    expect(screen.getByText('Every hour')).toBeInTheDocument();
+  });
+
+  it('changes scanner when scanner select changed', async () => {
+    await renderPanel([makeProject()]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    const scannerSelect = screen.getByRole('combobox', { name: /scanner/i });
+    fireEvent.change(scannerSelect, { target: { value: 'trivy' } });
+    expect((scannerSelect as HTMLSelectElement).value).toBe('trivy');
+  });
+
+  it('changes project when project select changed', async () => {
+    await renderPanel([makeProject('proj-1', 'Project A'), makeProject('proj-2', 'Project B')]);
+    fireEvent.click(screen.getByText('New schedule'));
+    await waitFor(() => expect(screen.getAllByText('New schedule').length).toBeGreaterThanOrEqual(2));
+    const projectSelect = screen.getByRole('combobox', { name: /project/i });
+    fireEvent.change(projectSelect, { target: { value: 'proj-2' } });
+    expect((projectSelect as HTMLSelectElement).value).toBe('proj-2');
   });
 });

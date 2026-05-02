@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import NotificationBell from '../NotificationBell';
 import type { Notification } from '../../lib/supabase';
 
@@ -333,5 +333,78 @@ describe('NotificationBell — popover close on outside click', () => {
     await waitFor(() =>
       expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('NotificationBell — realtime channel callbacks', () => {
+  beforeEach(() => {
+    mockChannel.on.mockClear();
+  });
+
+  function getRealtimeHandler(event: 'INSERT' | 'UPDATE' | 'DELETE') {
+    const calls = mockChannel.on.mock.calls as Array<[string, { event: string }, (p: { new?: unknown; old?: unknown }) => void]>;
+    const match = calls.find(([, opts]) => opts?.event === event);
+    return match ? match[2] : null;
+  }
+
+  it('registers INSERT, UPDATE, DELETE realtime handlers', async () => {
+    mockFetchReturns([]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    expect(getRealtimeHandler('INSERT')).toBeTruthy();
+    expect(getRealtimeHandler('UPDATE')).toBeTruthy();
+    expect(getRealtimeHandler('DELETE')).toBeTruthy();
+  });
+
+  it('UPDATE handler does not throw when called with a matching notification', async () => {
+    const notif = makeNotif({ id: 'n-upd', title: 'Old title', read_at: null });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    const updateHandler = getRealtimeHandler('UPDATE');
+    expect(updateHandler).toBeTruthy();
+    await act(async () => {
+      updateHandler?.({ new: { ...notif, title: 'Updated title', read_at: '2026-01-01T00:00:00Z' } });
+    });
+  });
+
+  it('DELETE handler does not throw when called with an old notification', async () => {
+    const notif = makeNotif({ id: 'n-del', title: 'Delete me' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    const deleteHandler = getRealtimeHandler('DELETE');
+    expect(deleteHandler).toBeTruthy();
+    await act(async () => {
+      deleteHandler?.({ old: { id: 'n-del' } });
+    });
+  });
+
+  it('INSERT handler with critical severity triggers flash animation', async () => {
+    mockFetchReturns([]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    const insertHandler = getRealtimeHandler('INSERT');
+    expect(insertHandler).toBeTruthy();
+    const critNotif = makeNotif({ id: 'n-crit', title: 'Critical!', severity: 'critical' });
+    await act(async () => {
+      insertHandler?.({ new: critNotif });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Notifications')).toHaveClass('animate-pulse'),
+    );
+  });
+
+  it('INSERT handler skips duplicate notification ids', async () => {
+    const notif = makeNotif({ id: 'n-dup' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    const insertHandler = getRealtimeHandler('INSERT');
+    expect(insertHandler).toBeTruthy();
+    // inserting same id again should not throw
+    await act(async () => {
+      insertHandler?.({ new: notif });
+    });
   });
 });

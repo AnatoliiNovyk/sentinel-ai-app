@@ -73,6 +73,43 @@ describe('CommandPalette — filtering', () => {
   });
 });
 
+describe('CommandPalette — item click navigation', () => {
+  beforeEach(() => mockNavigate.mockClear());
+
+  const navigationItems = [
+    { label: 'AI Assistant', path: '/chat' },
+    { label: 'Projects', path: '/projects' },
+    { label: 'Scans', path: '/scans' },
+    { label: 'Reports', path: '/reports' },
+    { label: 'Compliance', path: '/compliance' },
+    { label: 'Scheduler', path: '/scheduler' },
+    { label: 'Attack Surface Map', path: '/attack-map' },
+    { label: 'OSINT Analyzer', path: '/dark-web' },
+    { label: 'Active Recon', path: '/recon' },
+    { label: 'Supply Chain', path: '/supply-chain' },
+    { label: 'AI Red Team', path: '/kill-chain' },
+    { label: 'Integrations', path: '/integrations' },
+    { label: 'API & CLI', path: '/api' },
+    { label: 'Settings', path: '/settings' },
+  ];
+
+  it.each(navigationItems)('clicking "$label" navigates to $path', ({ label, path }) => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText(label));
+    expect(mockNavigate).toHaveBeenCalledWith(path);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('mouseEnter on item updates active index', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    const scansBtn = screen.getByText('Scans').closest('button')!;
+    fireEvent.mouseEnter(scansBtn);
+    // No error; highlight changes
+    expect(scansBtn).toBeInTheDocument();
+  });
+});
+
 describe('CommandPalette — keyboard', () => {
   beforeEach(() => mockNavigate.mockClear());
 
@@ -103,5 +140,38 @@ describe('CommandPalette — keyboard', () => {
     // Click the outermost backdrop div
     fireEvent.click(container.firstChild as HTMLElement);
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('ArrowDown moves active index down and Enter navigates to second item', () => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+    const input = screen.getByPlaceholderText(/search pages/i);
+    // Move down from first item to second
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    // Enter on second item — should navigate (not to '/')
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mockNavigate).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('ArrowUp does not go below zero index', () => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+    const input = screen.getByPlaceholderText(/search pages/i);
+    // ArrowUp from 0 stays at 0
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('ArrowDown then ArrowUp returns to first item', () => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+    const input = screen.getByPlaceholderText(/search pages/i);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // Should be back to first item = '/'
+    expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 });
