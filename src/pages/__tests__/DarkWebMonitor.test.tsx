@@ -264,6 +264,15 @@ describe('OsintAnalyzer — input validation', () => {
     await waitFor(() => expect(screen.getByText(/Query is too long/i)).toBeInTheDocument());
   });
 
+  it('shows validation error when Enter is pressed on empty input', async () => {
+    render(<OsintAnalyzer />);
+    const input = screen.getByPlaceholderText(/Enter email, domain or username/i);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(screen.getByText(/Please enter an email, domain, IP address, or username/i)).toBeInTheDocument(),
+    );
+  });
+
   it('submits on Enter key press', async () => {
     mockScan.mockResolvedValue({
       ok: true,
@@ -274,6 +283,19 @@ describe('OsintAnalyzer — input validation', () => {
     fireEvent.change(input, { target: { value: 'enter@example.com' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(mockScan).toHaveBeenCalledWith('enter@example.com'));
+  });
+
+  it('shows fallback error when scan throws non-Error value', async () => {
+    mockScan.mockRejectedValue('raw failure');
+    render(<OsintAnalyzer />);
+    const input = screen.getByPlaceholderText(/Enter email, domain or username/i);
+    fireEvent.change(input, { target: { value: 'throw@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Analysis Results')).toBeInTheDocument();
+      expect(screen.getByText('Unknown error during scan')).toBeInTheDocument();
+    });
   });
 });
 
