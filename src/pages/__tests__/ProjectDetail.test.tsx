@@ -3,13 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ProjectDetail from '../ProjectDetail';
 import type { Project } from '../../lib/supabase';
 
-const { mockNotifsLimit, mockVulnsIn, mockScansOrder, mockReportsOrder, mockProjectsUpdate, mockScanJobsLimit } = vi.hoisted(() => ({
+const { mockNotifsLimit, mockVulnsIn, mockScansOrder, mockReportsOrder, mockProjectsUpdate, mockScanJobsLimit, mockDownloadFile } = vi.hoisted(() => ({
   mockNotifsLimit: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockVulnsIn: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockScansOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockReportsOrder: vi.fn().mockResolvedValue({ data: [], error: null }),
   mockProjectsUpdate: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
   mockScanJobsLimit: vi.fn().mockResolvedValue({ data: [], error: null }),
+  mockDownloadFile: vi.fn(),
+}));
+
+vi.mock('../../lib/exporters', () => ({
+  downloadFile: mockDownloadFile,
+  toJsonExport: vi.fn().mockReturnValue('{}'),
+  toSarif: vi.fn().mockReturnValue('{}'),
 }));
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -371,6 +378,56 @@ describe('ProjectDetail — Export dropdown', () => {
   });
 
   it('clicking All Project Data calls downloadFile', async () => {
+    const { downloadFile } = await import('../../lib/exporters');
+    (downloadFile as ReturnType<typeof vi.fn>).mockClear();
+    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+    await waitFor(() => screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(screen.getByText(/All Project Data/i));
+    expect(downloadFile).toHaveBeenCalled();
+  });
+
+  it('clicking Findings as CSV with vulns iterates rows (lines 183-184)', async () => {
+    const fakeVuln = {
+      id: 'v1', scan_id: 's1', user_id: 'user-1', project_id: 'proj-1',
+      title: 'XSS', severity: 'high', status: 'open', asset: 'app.example.com',
+      description: 'Cross-site scripting', remediation: 'Sanitize input',
+      cve: 'CVE-2021-1234', cvss: 7.5, cve_id: null, mitre_tactic: null, cis_control: null,
+      created_at: '2026-01-01T00:00:00Z', triage_status: null, sla_breached_at: null, sla_warned_at: null,
+    };
+    const fakeScan = {
+      id: 's1', user_id: 'user-1', project_id: 'proj-1', scanner: 'nmap',
+      target: 'example.com', status: 'completed',
+      created_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T01:00:00Z',
+    };
+    mockScansOrder.mockResolvedValueOnce({ data: [fakeScan], error: null });
+    mockVulnsIn.mockResolvedValueOnce({ data: [fakeVuln], error: null });
+    const { downloadFile } = await import('../../lib/exporters');
+    (downloadFile as ReturnType<typeof vi.fn>).mockClear();
+    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+    // wait for vulns to load (Overview shows risk score when vulns present)
+    await act(async () => { await new Promise(r => setTimeout(r, 100)); });
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    await waitFor(() => screen.getByText(/Findings as CSV/i));
+    fireEvent.click(screen.getByText(/Findings as CSV/i));
+    expect(downloadFile).toHaveBeenCalled();
+  });
+
+  it('clicking All Project Data with vulns and scans (lines 237-242, 245-251)', async () => {
+    const fakeVuln = {
+      id: 'v1', scan_id: 's1', user_id: 'user-1', project_id: 'proj-1',
+      title: 'XSS', severity: 'high', status: 'open', asset: 'app.example.com',
+      description: 'Cross-site scripting', remediation: 'Sanitize input',
+      cve: 'CVE-2021-1234', cvss: 7.5, cve_id: null, mitre_tactic: null, cis_control: null,
+      created_at: '2026-01-01T00:00:00Z', triage_status: null, sla_breached_at: null, sla_warned_at: null,
+    };
+    const fakeScan = {
+      id: 's1', user_id: 'user-1', project_id: 'proj-1', scanner: 'nmap',
+      target: 'example.com', status: 'completed',
+      created_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T01:00:00Z',
+    };
+    mockScansOrder.mockResolvedValueOnce({ data: [fakeScan], error: null });
+    mockVulnsIn.mockResolvedValueOnce({ data: [fakeVuln], error: null });
     const { downloadFile } = await import('../../lib/exporters');
     (downloadFile as ReturnType<typeof vi.fn>).mockClear();
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
@@ -836,7 +893,6 @@ describe('ProjectDetail — ScansTab vulnsByScan mapping', () => {
     expect(downloadFile).toHaveBeenCalled();
   });
 
-
   it('ScansTab status filter "failed" shows no-match message', async () => {
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     fireEvent.click(screen.getByRole('button', { name: /^scans/i }));
@@ -1038,3 +1094,65 @@ describe('ProjectDetail — additional coverage', () => {
     expect(screen.getByText('pending')).toBeInTheDocument();
   });
 });
+
+// ── ProjectDetail — remaining uncovered lines ──────────────────────────
+
+describe('ProjectDetail — remaining uncovered lines', () => {
+  const mockOnBack = vi.fn();
+
+  beforeEach(() => {
+    mockOnBack.mockReset();
+    mockScansOrder.mockResolvedValue({ data: [], error: null });
+    mockReportsOrder.mockResolvedValue({ data: [], error: null });
+    mockVulnsIn.mockResolvedValue({ data: [], error: null });
+  });
+
+  it('load() catch block (lines 124-125): logs error when supabase throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockScansOrder.mockRejectedValueOnce(new Error('network error'));
+    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+    await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith('Failed to load project details:', expect.any(Error)));
+    consoleSpy.mockRestore();
+  });
+
+  it('handleClickOutside (lines 130-133): closes export dropdown on outside click', async () => {
+    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+    await waitFor(() => screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    expect(screen.getByText(/Findings as CSV/i)).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByText(/Findings as CSV/i)).not.toBeInTheDocument());
+  });
+
+  it('trend === 0 renders "No change" message (line 563)', async () => {
+    const fakeScan1 = {
+      id: 's1', user_id: 'user-1', project_id: 'proj-1', scanner: 'nmap',
+      target: 'example.com', status: 'completed',
+      created_at: '2026-01-01T00:00:00Z', completed_at: '2026-01-01T01:00:00Z',
+    };
+    const fakeScan2 = {
+      id: 's2', user_id: 'user-1', project_id: 'proj-1', scanner: 'nmap',
+      target: 'example.com', status: 'completed',
+      created_at: '2026-01-02T00:00:00Z', completed_at: '2026-01-02T01:00:00Z',
+    };
+    // Both scans have same number of vulns → trend = 0
+    const fakeVuln1 = {
+      id: 'v1', scan_id: 's1', user_id: 'user-1', project_id: 'proj-1',
+      title: 'XSS', severity: 'high', status: 'open', asset: 'app.example.com',
+      description: 'desc', remediation: 'fix', cve: null, cvss: null,
+      cve_id: null, mitre_tactic: null, cis_control: null,
+      created_at: '2026-01-01T00:00:00Z', triage_status: null, sla_breached_at: null, sla_warned_at: null,
+    };
+    const fakeVuln2 = {
+      ...fakeVuln1, id: 'v2', scan_id: 's2',
+    };
+    mockScansOrder.mockResolvedValue({ data: [fakeScan2, fakeScan1], error: null });
+    mockVulnsIn.mockResolvedValue({ data: [fakeVuln1, fakeVuln2], error: null });
+    render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
+    await waitFor(() => {
+      const text = document.body.textContent;
+      expect(text).toMatch(/No change vs previous scan/);
+    }, { timeout: 5000 });
+  });
+});
+
