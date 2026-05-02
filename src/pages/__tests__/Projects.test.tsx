@@ -17,6 +17,15 @@ const { mockOrder, mockDeleteEq, mockInsert, mockUpdateEq, mockUpdate } = vi.hoi
   };
 });
 
+const { mockAuthUser } = vi.hoisted(() => {
+  // Use stable references to prevent useCallback/useEffect re-firing on each render
+  const _user = { id: 'user-1' };
+  const _orgs = [{ id: 'org-1', name: 'Test Org' }];
+  return {
+    mockAuthUser: vi.fn(() => ({ user: _user, organizations: _orgs })),
+  };
+});
+
 vi.mock('../../lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/supabase')>();
   return {
@@ -32,14 +41,9 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
   };
 });
 
-vi.mock('../../context/useAuth', () => {
-  // Stable references: prevents useCallback/useEffect re-firing on each render
-  const _user = { id: 'user-1' };
-  const _orgs = [{ id: 'org-1', name: 'Test Org' }];
-  return {
-    useAuth: () => ({ user: _user, organizations: _orgs }),
-  };
-});
+vi.mock('../../context/useAuth', () => ({
+  useAuth: () => mockAuthUser(),
+}));
 
 // ProjectDetail renders a full page — keep it minimal
 vi.mock('../ProjectDetail', () => ({
@@ -691,6 +695,57 @@ describe('Projects — kanban drag and drop', () => {
       }
     }
     expect(screen.getByText('DropProj')).toBeInTheDocument();
+  });
+});
+
+// ─── Kanban onDelete callback coverage ──────────────────────────────────────
+
+describe('Projects — kanban delete triggers confirm dialog', () => {
+  beforeEach(() => {
+    mockOrder.mockResolvedValue({
+      data: [
+        makeProject({ id: 'p1', name: 'KanbanDelProj', status: 'todo' }),
+        makeProject({ id: 'p2', name: 'AnotherProj', status: 'in_progress' }),
+      ],
+      error: null,
+    });
+  });
+
+  it('clicking delete in kanban card sets confirmId and opens confirm dialog', async () => {
+    render(<Projects />);
+    await waitFor(() => screen.getByTitle('Kanban view'));
+    fireEvent.click(screen.getByTitle('Kanban view'));
+    await waitFor(() => screen.getByText('KanbanDelProj'));
+    const deleteBtns = screen.getAllByLabelText('Delete project');
+    fireEvent.click(deleteBtns[0]);
+    // onDelete callback triggers setConfirmId + setConfirmName → ConfirmDialog opens
+    const dialog = await screen.findByRole('dialog', { name: /delete project/i });
+    expect(dialog).toBeInTheDocument();
+  });
+});
+
+// ─── ProjectModal no-user guard ──────────────────────────────────────────────
+
+describe('Projects — ProjectModal warns when user is null', () => {
+  afterEach(() => {
+    // Restore the default implementation after this suite
+    mockAuthUser.mockImplementation(() => ({ user: { id: 'user-1' }, organizations: [{ id: 'org-1', name: 'Test Org' }] }));
+  });
+
+  it('shows warning toast and does not insert when user is null at submit', async () => {
+    mockAuthUser.mockImplementation(() => ({ user: null, organizations: [] }));
+    mockOrder.mockResolvedValue({ data: [], error: null });
+    render(<Projects />);
+    // Header "New project" button is always visible regardless of loading state
+    const newProjBtn = await screen.findByRole('button', { name: /new project/i });
+    fireEvent.click(newProjBtn);
+    await waitFor(() => screen.getByRole('heading', { name: /new project/i }));
+    // Fill required fields
+    fireEvent.change(screen.getByPlaceholderText('Production AWS'), { target: { value: 'NullUserProj' } });
+    fireEvent.change(screen.getByPlaceholderText('example.com'), { target: { value: 'null.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    // insert should NOT be called because the !user guard returns early
+    await waitFor(() => expect(mockInsert).not.toHaveBeenCalled());
   });
 });
 

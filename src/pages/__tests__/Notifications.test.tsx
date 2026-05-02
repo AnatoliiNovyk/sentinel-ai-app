@@ -459,3 +459,32 @@ describe('Notifications — groupByDate coverage', () => {
     expect(screen.getByText('Older')).toBeInTheDocument();
   });
 });
+
+// ─── Load more pagination ────────────────────────────────────────────────────
+
+describe('Notifications — load more pagination', () => {
+  it('shows "Load more" button when filtered list exceeds PAGE_SIZE (50) and clicking it loads all', async () => {
+    const manyNotifs = Array.from({ length: 51 }, (_, i) => ({
+      id: `n-page-${i + 1}`,
+      user_id: 'user-1',
+      title: `Paged Notification ${i + 1}`,
+      body: `Body ${i + 1}`,
+      type: 'critical_finding',
+      severity: 'info',
+      read_at: null,
+      link: null,
+      created_at: new Date().toISOString(),
+    }));
+    mockNotifLimit.mockResolvedValue({ data: manyNotifs, error: null });
+    render(<Notifications />);
+    await screen.findByText('Notification Center');
+    // With 51 items and PAGE_SIZE=50, hasMore is true → button renders
+    const loadMoreBtn = await screen.findByRole('button', { name: /load more/i });
+    expect(loadMoreBtn).toBeInTheDocument();
+    fireEvent.click(loadMoreBtn);
+    // After clicking page increments → all 51 shown → button disappears
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument(),
+    );
+  });
+});

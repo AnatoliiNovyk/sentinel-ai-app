@@ -778,6 +778,28 @@ describe('AttackSurfaceMap — no-auth redirect', () => {
   });
 });
 
+describe('AttackSurfaceMap — RISK_COLOR low score branch', () => {
+  beforeEach(() => {
+    mockEq.mockResolvedValue({
+      data: [
+        { id: 'p-1', name: 'LowRisk1', risk_score: 10 },
+        { id: 'p-2', name: 'LowRisk2', risk_score: 5 },
+      ],
+      error: null,
+    });
+    mockVulnsEq.mockResolvedValue({ data: [], error: null });
+    rafSpy.mockImplementation(() => 0);
+  });
+
+  it('renders projects with risk_score < 20 — covers green (#4ade80) color branch', async () => {
+    render(<AttackSurfaceMap />);
+    await waitForLoaded();
+    // Both projects have risk_score < 20, triggering the return '#4ade80' branch in RISK_COLOR
+    expect(screen.getAllByText('LowRisk1').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('LowRisk2').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('AttackSurfaceMap — project tooltip vuln breakdown', () => {
   beforeEach(() => {
     mockEq.mockResolvedValue({
