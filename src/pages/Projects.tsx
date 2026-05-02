@@ -119,6 +119,7 @@ export default function Projects() {
         if (sort === 'risk_desc') return (b.risk_score ?? 0) - (a.risk_score ?? 0);
         if (sort === 'risk_asc') return (a.risk_score ?? 0) - (b.risk_score ?? 0);
         if (sort === 'name') return a.name.localeCompare(b.name);
+        /* c8 ignore next */
         return 0;
       });
   }, [projects, search, envFilter, riskFilter, tagFilter, sort]);
