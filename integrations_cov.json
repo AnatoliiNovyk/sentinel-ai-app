@@ -1,0 +1,14 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32mтЬУ[39m src/pages/__tests__/Integrations.test.tsx [2m([22m[2m33 tests[22m[2m)[22m[33m 715[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m33 passed[39m[22m[90m (33)[39m
+[2m   Start at [22m 23:12:42
+[2m   Duration [22m 2.80s[2m (transform 161ms, setup 205ms, collect 207ms, tests 715ms, environment 862ms, prepare 184ms)[22m
+
+ERROR: Coverage for lines (28.9%) does not meet global threshold (60%)
+ERROR: Coverage for functions (25%) does not meet global threshold (55%)
+ERROR: Coverage for statements (28.9%) does not meet global threshold (60%)
