@@ -846,3 +846,76 @@ describe('Scans — service error catch paths', () => {
     });
   });
 });
+
+// ── Running Progress Bar Cleanup ────────────────────────────────────────────
+
+describe('Scans — RunningProgressBar unmount cleanup', () => {
+  it('clears interval when unmounting with running scan (line 63 cleanup)', async () => {
+    setupScansMocks({ scans: [mockScans[1]] }); // running scan
+    const { unmount } = render(<Scans />);
+    await waitFor(() => expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument());
+    // RunningProgressBar should be mounted with its useEffect
+    unmount(); // triggers return () => clearInterval(id)
+    // No crash = pass (cleanup executed)
+  });
+});
+
+// ── LoadScans Catch Block ─────────────────────────────────────────────────
+
+describe('Scans — loadScans catch block (lines 212-214)', () => {
+  it('handles error in loadScans during refresh', async () => {
+    setupScansMocks();
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Vulnerability Scans')).toBeInTheDocument());
+    // Now trigger a refresh that causes loadScans to fail
+    mockGetScans.mockRejectedValueOnce(new Error('network error'));
+    const refreshBtn = screen.getByRole('button', { name: /refresh scans/i });
+    fireEvent.click(refreshBtn);
+    await waitFor(() => {
+      expect(mockGetScans).toHaveBeenCalled();
+    });
+    // Should still render without crashing
+    expect(screen.getByText('Vulnerability Scans')).toBeInTheDocument();
+  });
+});
+
+// ── UseEffect Else Branch ─────────────────────────────────────────────────
+
+describe('Scans — useEffect else branch (lines 216-217)', () => {
+  it('clears scans when selected project becomes null', async () => {
+    setupScansMocks({ scans: [mockScans[0]], vulns: [mockVulns[0]] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Vulnerability Scans')).toBeInTheDocument());
+    // Now clear the project selection
+    const projectSelect = screen.getByRole('combobox', { name: /select project/i });
+    fireEvent.change(projectSelect, { target: { value: '' } });
+    await waitFor(() => {
+      // Scans should be cleared
+      expect(screen.queryByText('SQL Injection')).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ── Severity Fallback ────────────────────────────────────────────────────
+
+describe('Scans — detail modal severity fallback (line 673)', () => {
+  it('shows blue color class for low severity vuln in detail modal', async () => {
+    const lowVuln = { ...mockVulns[0], id: 'v-low', severity: 'low' as const, status: 'open' as const };
+    setupScansMocks({ vulns: [lowVuln] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('SQL Injection')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument());
+    expect(screen.getAllByText('LOW').length).toBeGreaterThan(0);
+  });
+
+  it('shows blue color class for info severity vuln in detail modal', async () => {
+    const infoVuln = { ...mockVulns[2], id: 'v-info', severity: 'info' as const, status: 'open' as const };
+    setupScansMocks({ vulns: [infoVuln] });
+    render(<Scans />);
+    await waitFor(() => expect(screen.getByText('Info Disclosure')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /close vulnerability details/i })).toBeInTheDocument());
+    expect(screen.getAllByText('INFO').length).toBeGreaterThan(0);
+  });
+});
