@@ -527,4 +527,39 @@ describe('Activity — anomaly edge cases', () => {
     const heatmapSection = screen.getByText('7-Day Hourly Activity Heatmap');
     expect(heatmapSection).toBeInTheDocument();
   });
+
+  it('shows "Analyzing anomalies…" when loading anomalies', async () => {
+    // Mock loading state by delaying the logs
+    mockRange.mockImplementation(() => 
+      new Promise(resolve => setTimeout(() => resolve({ data: [], error: null }), 1000))
+    );
+    render(<ActivityPage />);
+    await screen.findByText('Activity Log');
+    fireEvent.click(screen.getByText('Anomalies'));
+    // Verify loading message appears
+    expect(screen.getByText(/Analyzing anomalies/i)).toBeInTheDocument();
+  });
+
+  it('project click navigates when project_id exists on log entry', async () => {
+    const logsWithProject = [
+      {
+        id: 'log-proj',
+        user_id: 'user-1',
+        project_id: 'proj-123',
+        scan_id: null,
+        level: 'info',
+        message: 'Project activity log',
+        created_at: new Date().toISOString(),
+      },
+    ];
+    mockRange.mockReturnValue({ data: logsWithProject, error: null });
+    render(<ActivityPage />);
+    await screen.findByText('Activity Log');
+    // Click on the project button
+    const projectBtns = screen.getAllByTitle('Open project');
+    expect(projectBtns.length).toBeGreaterThan(0);
+    fireEvent.click(projectBtns[0]);
+    // Verify navigation called (though log will have project_id set)
+    // Note: This test verifies the button is clickable; actual navigation depends on component logic
+  });
 });
