@@ -189,34 +189,35 @@ export function printReportAsPDF(title: string, markdownContent: string): void {
 <div id="content"></div>
 <script>
 // Minimal markdown to HTML converter
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 const md = document.getElementById('raw').textContent;
 const lines = md.split('\\n');
 let html = '';
 let inTable = false;
 for (const line of lines) {
-  if (line.startsWith('# ')) { html += '<h1>' + line.slice(2) + '</h1>'; continue; }
-  if (line.startsWith('## ')) { html += '<h2>' + line.slice(3) + '</h2>'; continue; }
-  if (line.startsWith('### ')) { html += '<h3>' + line.slice(4) + '</h3>'; continue; }
+  if (line.startsWith('# ')) { html += '<h1>' + esc(line.slice(2)) + '</h1>'; continue; }
+  if (line.startsWith('## ')) { html += '<h2>' + esc(line.slice(3)) + '</h2>'; continue; }
+  if (line.startsWith('### ')) { html += '<h3>' + esc(line.slice(4)) + '</h3>'; continue; }
   if (line.startsWith('---')) { html += '<hr>'; continue; }
   if (line.startsWith('|')) {
     if (!inTable) { html += '<table>'; inTable = true; }
     const cells = line.split('|').slice(1,-1).map(c => c.trim());
     if (cells.every(c => /^[-:]+$/.test(c))) continue;
     const tag = !inTable || (html.endsWith('<table>')) ? 'th' : 'td';
-    html += '<tr>' + cells.map(c => '<' + tag + '>' + c + '</' + tag + '>').join('') + '</tr>';
+    html += '<tr>' + cells.map(c => '<' + tag + '>' + esc(c) + '</' + tag + '>').join('') + '</tr>';
     continue;
   }
   if (inTable) { html += '</table>'; inTable = false; }
   if (line.startsWith('- **')) {
-    html += '<p>' + line.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>').replace(/\`([^\`]+)\`/g, '<code>$1</code>') + '</p>';
+    html += '<p>' + esc(line).replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>').replace(/\`([^\`]+)\`/g, '<code>$1</code>') + '</p>';
     continue;
   }
   if (line.startsWith('**')) {
-    html += '<p class="header-meta">' + line.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>') + '</p>';
+    html += '<p class="header-meta">' + esc(line).replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>') + '</p>';
     continue;
   }
   if (line.trim() === '') { html += '<br>'; continue; }
-  html += '<p>' + line + '</p>';
+  html += '<p>' + esc(line) + '</p>';
 }
 if (inTable) html += '</table>';
 document.getElementById('content').innerHTML = html;
