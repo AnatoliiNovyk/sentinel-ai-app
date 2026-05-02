@@ -32,6 +32,10 @@ export default defineConfig({
         'scratch/**',
         'sentinel-agent/**',
         'supabase/**',
+        'e2e/**',
+        'playwright.config.ts',
+        'src/lib/__benchmarks__/**',
+        'src/lib/passiveRecon.ts',
       ],
       thresholds: {
         statements: 60,
