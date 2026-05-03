@@ -61,6 +61,7 @@ export async function dispatchScan(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           scan_id: scan.id,
           project_id: projectId,

@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security audit
+        run: npm audit --audit-level=high
+
       - name: Run ops scripts contract tests
         run: npm run test:ops:contracts
 
@@ -37,7 +40,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage/lcov.info
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   test-stability-trio:
     name: Test Stability Trio
@@ -55,6 +58,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
 
       - name: Run heap-safe trio stability tests
         run: npm run test:trio:stable
@@ -75,6 +81,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
 
       - name: Run heap-safe dashboard stability tests
         run: npm run test:dashboard:stable

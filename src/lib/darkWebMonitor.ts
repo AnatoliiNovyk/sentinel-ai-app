@@ -277,6 +277,7 @@ async function fetchHibpBreaches(email: string): Promise<BreachEntry[]> {
         'hibp-api-key': HIBP_API_KEY!,
         'user-agent': 'Sentinel-AI Security Platform',
       },
+      signal: AbortSignal.timeout(10_000),
     },
   );
 

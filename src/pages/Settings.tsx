@@ -473,6 +473,7 @@ export default function Settings() {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ priceId: selectedPlan.stripePriceId, planId: selectedPlan.id }),
       });
       /* c8 ignore next 4 */

@@ -232,6 +232,7 @@ export class OTelCollectorClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify(payload),
     });
 

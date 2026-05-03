@@ -816,7 +816,7 @@ function GenerateModal({
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS));
   const [templateName, setTemplateName] = useState('');
   const [templates, setTemplates] = useState<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>(
-    () => JSON.parse(localStorage.getItem('report_templates') ?? '[]')
+    () => { try { return JSON.parse(localStorage.getItem('report_templates') ?? '[]'); } catch { return []; } }
   );
   
   useEffect(() => {
