@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   ShieldAlert, ExternalLink, Activity, Zap, Timer, Clock,
-  ArrowRight, Search, ArrowUpDown, Users,
+  ArrowRight, Search, ArrowUpDown, Users, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scan, Vulnerability, Project, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
