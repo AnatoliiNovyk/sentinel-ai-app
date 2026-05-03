@@ -229,4 +229,46 @@ describe('probeAgentHealth — forced gateway (mixed content: https page → htt
     expect(result.via).toBe('gateway');
     expect(result.error).toBe('Edge function unreachable');
   });
+
+  it('handles data=null response from gateway (uses empty fallback)', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: null });
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.reachable).toBe(false);
+    expect(result.via).toBe('gateway');
+    expect(result.statusCode).toBeNull();
+    expect(result.error).toBeNull();
+  });
+
+  it('returns null statusCode when http_status is not a number', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { reachable: true, http_status: 'unknown', health: null, error: null },
+      error: null,
+    });
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.statusCode).toBeNull();
+  });
+
+  it('returns null error when body.error is not a string', async () => {
+    mockInvoke.mockResolvedValue({
+      data: { reachable: false, http_status: 503, health: null, error: 42 },
+      error: null,
+    });
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.error).toBeNull();
+  });
+
+  it('returns fallback error when gateway throws non-Error', async () => {
+    mockInvoke.mockRejectedValue('string error');
+
+    const result = await probeAgentHealth('http://192.168.1.100:8080/health');
+
+    expect(result.reachable).toBe(false);
+    expect(result.error).toBe('Gateway probe request failed.');
+  });
 });
