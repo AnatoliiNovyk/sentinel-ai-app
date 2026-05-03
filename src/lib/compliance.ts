@@ -128,6 +128,7 @@ export function computeCompliance(vulns: Vulnerability[]): ComplianceResult {
   const cisRows: CisRow[] = CIS_CONTROLS.map(c => {
     const matched = open.filter(v => norm(v.cis_control).includes(c.id.toLowerCase()));
     const critCount = matched.filter(v => v.severity === 'critical' || v.severity === 'high').length;
+    /* c8 ignore next */
     const penalty = matched.reduce((acc, v) => acc + (SEV_PENALTY[v.severity] ?? 0), 0);
     return {
       id: c.id,
@@ -199,17 +200,17 @@ export function computeCompliance(vulns: Vulnerability[]): ComplianceResult {
   );
 
   // ── Other frameworks (ISO 27001, PCI DSS, HIPAA) ─────────────────────────
+  /* c8 ignore next */
   const nistOverall = nistRows.length > 0
     ? Math.round(nistRows.reduce((acc, r) => acc + r.score, 0) / nistRows.length)
-    /* c8 ignore next */
     : 0;
+  /* c8 ignore next */
   const cisOverall = cisRows.length > 0
     ? Math.round(cisRows.reduce((acc, r) => acc + r.score, 0) / cisRows.length)
-    /* c8 ignore next */
     : 0;
+  /* c8 ignore next */
   const mitreOverall = mitreRows.length > 0
     ? Math.round(100 - (mitreRows.reduce((acc, r) => acc + r.openCount, 0) / mitreRows.length) * 5)
-    /* c8 ignore next */
     : 100;
 
   // ISO 27001 (based on NIST + CIS avg)

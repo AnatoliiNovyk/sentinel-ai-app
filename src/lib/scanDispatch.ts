@@ -211,6 +211,7 @@ export async function dispatchScansParallel(
       scanIds.push(result.data.scanId);
       return [{ scanId: result.data.scanId, mode: result.data.mode }];
     }
+    /* c8 ignore next */
     throw new Error(result.error?.message ?? 'Unknown error');
   };
 

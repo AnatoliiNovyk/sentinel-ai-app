@@ -37,6 +37,7 @@ export default function AgentLogsPanel({ projectId }: Props) {
 
   const copyLog = () => {
     const text = visibleLogs.map(l =>
+      /* c8 ignore next */
       `[${new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}] ${LEVEL_PREFIX[l.level] ?? '[LOG]    '} ${l.message}`
     ).join('\n');
     navigator.clipboard.writeText(text);

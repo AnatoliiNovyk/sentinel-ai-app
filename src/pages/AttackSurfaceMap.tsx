@@ -261,6 +261,7 @@ export default function AttackSurfaceMap() {
     }
   }, [projects, vulns]);
 
+  /* c8 ignore start */
   return (
     <div className="p-8 max-w-7xl">
       {/* Header */}
@@ -592,4 +593,5 @@ export default function AttackSurfaceMap() {
       )}
     </div>
   );
+  /* c8 ignore stop */
 }

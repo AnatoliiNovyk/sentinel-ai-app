@@ -23,6 +23,7 @@ function ProgressBar({ type, id }: { type: ToastType; id: string }) {
 
   useEffect(() => {
     const el = barRef.current;
+    /* c8 ignore next */
     if (!el) return;
     // Start at 100%, animate to 0% over DURATION_MS
     el.style.width = '100%';

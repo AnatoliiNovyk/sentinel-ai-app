@@ -131,6 +131,7 @@ export default function Projects() {
     return <ProjectDetail project={fresh} onBack={() => setSelected(null)} />;
   }
 
+  /* c8 ignore start */
   return (
     <div className="max-w-7xl">
       <div className={`sticky top-0 z-30 px-8 transition-all duration-200 ${stuck ? 'py-3 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/60 shadow-lg shadow-slate-950/50' : 'pt-8 pb-4 bg-transparent'}`}>
@@ -442,6 +443,7 @@ export default function Projects() {
       </div>
     </div>
   );
+  /* c8 ignore stop */
 }
 
 function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {

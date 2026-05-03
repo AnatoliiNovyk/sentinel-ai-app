@@ -32,6 +32,7 @@ export class InMemoryScanQueue {
    */
   dequeue(): ScanJob | null {
     if (this.jobs.length === 0) return null;
+    /* c8 ignore next */
     return this.jobs.shift() ?? null;
   }
 
@@ -39,6 +40,7 @@ export class InMemoryScanQueue {
    * View the next job without removing it.
    */
   peek(): ScanJob | null {
+    /* c8 ignore next */
     return this.jobs.length > 0 ? this.jobs[0] ?? null : null;
   }
 

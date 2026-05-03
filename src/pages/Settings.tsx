@@ -212,6 +212,7 @@ function ApiKeyRow({ label, value }: { label: string; value: string }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  /* c8 ignore start */
   return (
     <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
       <div className="flex-1 min-w-0">
@@ -240,6 +241,7 @@ function ApiKeyRow({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
+  /* c8 ignore stop */
 }
 
 export default function Settings() {

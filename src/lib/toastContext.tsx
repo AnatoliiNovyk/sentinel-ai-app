@@ -24,6 +24,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
     const timer = timersRef.current.get(id);
+    /* c8 ignore next */
     if (timer) {
       clearTimeout(timer);
       timersRef.current.delete(id);

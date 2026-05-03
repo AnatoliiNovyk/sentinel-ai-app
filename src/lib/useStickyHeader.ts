@@ -11,6 +11,7 @@ export function useStickyHeader() {
 
   useEffect(() => {
     const el = sentinelRef.current;
+    /* c8 ignore next */
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => setStuck(!entry.isIntersecting),

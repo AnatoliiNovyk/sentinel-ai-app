@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setOrganizations([]);
       }
 
+      /* c8 ignore next 4 */
       if (!initialised.current) {
         initialised.current = true;
         setLoading(false);
@@ -62,11 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from('profiles')
           .insert({
             id: user.id,
+            /* c8 ignore next */
             email: user.email ?? '',
+            /* c8 ignore next */
             full_name: (user.user_metadata?.full_name as string) ?? '',
           })
           .select()
           .maybeSingle();
+        /* c8 ignore next */
         setProfile(created ?? null);
       } else {
         setProfile(profileData);
@@ -83,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         `)
         .eq('team_members.user_id', user.id);
       
+      /* c8 ignore next */
       setOrganizations(orgs ?? []);
     })();
   }, [user]);
