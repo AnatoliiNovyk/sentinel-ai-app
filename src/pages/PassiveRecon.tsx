@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { loadVersioned, saveVersioned } from '../lib/storage';
 import { Search, Globe, AlertTriangle, Loader2, Info, Terminal, Copy, Check, Download, ArrowUpDown, Clock, History, ShieldAlert, X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { downloadFile } from '../lib/exporters';
@@ -48,13 +49,13 @@ export default function ActiveRecon() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [history, setHistory] = useState<ReconHistoryEntry[]>(() => {
-    try { return JSON.parse(localStorage.getItem('reconHistory') ?? '[]'); } catch { return []; }
-  });
+  const [history, setHistory] = useState<ReconHistoryEntry[]>(() =>
+    loadVersioned<ReconHistoryEntry[]>('reconHistory', 'v1', [])
+  );
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('reconHistory', JSON.stringify(history));
+    saveVersioned('reconHistory', 'v1', history);
   }, [history]);
 
   const displayedPorts = useMemo(() => {

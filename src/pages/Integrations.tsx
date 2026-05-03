@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { loadVersioned, saveVersioned } from '../lib/storage';
 import {
   Activity, AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight,
   Copy, ExternalLink, Github, Gitlab, Globe, Info, Layers, Link2, Pencil,
@@ -64,25 +65,23 @@ const WEBHOOK_EVENTS: { id: WebhookEvent; label: string; description: string }[]
 
 const STORAGE_KEY_SERVICES = 'sentinel_service_configs';
 const STORAGE_KEY_WEBHOOKS = 'sentinel_webhooks';
+const STORAGE_V_SERVICES = 'v1';
+const STORAGE_V_WEBHOOKS = 'v1';
 
 function loadServices(): Record<ServiceId, ServiceConfig> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_SERVICES) ?? '{}') as Record<ServiceId, ServiceConfig>;
-  } catch { return {} as Record<ServiceId, ServiceConfig>; }
+  return loadVersioned<Record<ServiceId, ServiceConfig>>(STORAGE_KEY_SERVICES, STORAGE_V_SERVICES, {} as Record<ServiceId, ServiceConfig>);
 }
 
 function saveServices(s: Record<string, ServiceConfig>) {
-  localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(s));
+  saveVersioned(STORAGE_KEY_SERVICES, STORAGE_V_SERVICES, s);
 }
 
 function loadWebhooks(): Webhook[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_WEBHOOKS) ?? '[]');
-  } catch { return []; }
+  return loadVersioned<Webhook[]>(STORAGE_KEY_WEBHOOKS, STORAGE_V_WEBHOOKS, []);
 }
 
 function saveWebhooks(w: Webhook[]) {
-  localStorage.setItem(STORAGE_KEY_WEBHOOKS, JSON.stringify(w));
+  saveVersioned(STORAGE_KEY_WEBHOOKS, STORAGE_V_WEBHOOKS, w);
 }
 
 // ─── Service definitions ──────────────────────────────────────────────────────

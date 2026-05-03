@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { loadVersioned, saveVersioned } from '../lib/storage';
 import { FileText, X, Download, Sparkles, Printer, Link2, Copy, Check, Globe, Lock, Search, Trash2, ArrowUpDown, ChevronRight, Save, CheckSquare, Square, Clock } from 'lucide-react';
 import { supabase, Report, Project, Scan, Vulnerability } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
@@ -817,7 +818,7 @@ function GenerateModal({
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(kind === 'executive' ? EXEC_FIELDS : TECH_FIELDS));
   const [templateName, setTemplateName] = useState('');
   const [templates, setTemplates] = useState<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>(
-    () => { try { return JSON.parse(localStorage.getItem('report_templates') ?? '[]'); } catch { return []; } }
+    () => loadVersioned<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>('report_templates', 'v1', [])
   );
   
   useEffect(() => {
@@ -841,7 +842,7 @@ function GenerateModal({
       { name: templateName, kind, fields: Array.from(selectedFields) }
     ];
     setTemplates(newTemplates);
-    localStorage.setItem('report_templates', JSON.stringify(newTemplates));
+    saveVersioned('report_templates', 'v1', newTemplates);
     setTemplateName('');
   };
   

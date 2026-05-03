@@ -4,6 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Reports from '../Reports';
 import type { Project, Report } from '../../lib/supabase';
 
+/** Seed versioned storage (matches src/lib/storage.ts envelope format). */
+function seedVersioned<T>(key: string, data: T) {
+  localStorage.setItem(key, JSON.stringify({ _v: 'v1', data }));
+}
+
+/** Read the inner data from a versioned storage key. */
+function readVersioned<T>(key: string, fallback: T): T {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return (raw?._v === 'v1' ? raw.data : fallback) as T;
+  } catch { return fallback; }
+}
+
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
 const { mockReportsOrder, mockProjectsEq, mockDeleteIn, mockMaybeSingle, mockGetSession, mockScansOrder } = vi.hoisted(() => ({
@@ -769,17 +782,14 @@ describe('Reports — GenerateModal template management', () => {
     await waitFor(() =>
       expect(screen.getByText(/my template/i)).toBeInTheDocument(),
     );
-    const stored = JSON.parse(localStorage.getItem('report_templates') ?? '[]');
+    const stored = readVersioned<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>('report_templates', []);
     expect(stored).toHaveLength(1);
     expect(stored[0].name).toBe('My Template');
   });
 
   it('loads template when template button clicked', async () => {
     // Pre-populate localStorage with a template
-    localStorage.setItem(
-      'report_templates',
-      JSON.stringify([{ name: 'Saved Template', kind: 'technical', fields: ['vulnerabilities'] }]),
-    );
+    seedVersioned('report_templates', [{ name: 'Saved Template', kind: 'technical' as const, fields: ['vulnerabilities'] }]);
     await openModal();
     // Template button should be visible
     await waitFor(() =>

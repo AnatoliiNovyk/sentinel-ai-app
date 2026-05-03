@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { loadVersioned, saveVersioned } from '../lib/storage';
 import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X, BarChart2, ShieldOff, ShieldCheck, Clock, Copy, Check } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
@@ -45,16 +46,12 @@ export default function OsintAnalyzer() {
 
   // Session persistence
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('osintScanHistory');
-      if (saved) setResults(JSON.parse(saved) as ScanHistory[]);
-    } catch { /* ignore */ }
+    const saved = loadVersioned<ScanHistory[]>('osintScanHistory', 'v1', []);
+    if (saved.length) setResults(saved);
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('osintScanHistory', JSON.stringify(results.slice(0, 50)));
-    } catch { /* ignore */ }
+    saveVersioned('osintScanHistory', 'v1', results.slice(0, 50));
   }, [results]);
 
   // Summary stats

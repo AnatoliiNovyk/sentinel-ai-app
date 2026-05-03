@@ -1,0 +1,35 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+
+ [31mтЭп[39m src/pages/__tests__/Integrations.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+
+тОптОптОптОптОптОп Failed Suites 1 тОптОптОптОптОптОптОп
+
+ FAIL  src/pages/__tests__/Integrations.test.tsx [ src/pages/__tests__/Integrations.test.tsx ]
+Error: Transform failed with 1 error:
+
+[PARSE_ERROR] Error: Expected a semicolon or an implicit semicolon after a statement, but found none
+     тХнтФА[ src/pages/__tests__/Integrations.test.tsx:767:7 ]
+     тФВ
+ 767 тФВ     }));
+     тФВ       тФВ 
+     тФВ       тХ░тФА 
+     тФВ 
+     тФВ Help: Try inserting a semicolon here
+тФАтФАтФАтФАтФАтХп
+
+  Plugin: vite:oxc
+  File: D:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app/src/pages/__tests__/Integrations.test.tsx
+ тЭп transformWithOxc node_modules/vite/dist/node/chunks/node.js:3343:19
+ тЭп TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:3411:26
+ тЭп EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:30164:51
+ тЭп loadAndTransform node_modules/vite/dist/node/chunks/node.js:24512:26
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[1/1]тОп
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [2mno tests[22m
+[2m   Start at [22m 12:43:34
+[2m   Duration [22m 1.25s[2m (transform 30ms, setup 166ms, import 0ms, tests 0ms, environment 813ms)[22m
+

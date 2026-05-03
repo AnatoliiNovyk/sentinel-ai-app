@@ -3,6 +3,19 @@ import '@testing-library/jest-dom';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import Integrations, { IntegrationsLegacy } from '../Integrations';
 
+/** Seed versioned storage (matches src/lib/storage.ts envelope format). */
+function seedVersioned(key: string, data: unknown) {
+  localStorage.setItem(key, JSON.stringify({ _v: 'v1', data }));
+}
+
+/** Read the inner data from a versioned storage key. */
+function readVersioned<T>(key: string, fallback: T): T {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return (raw?._v === 'v1' ? raw.data : fallback) as T;
+  } catch { return fallback; }
+}
+
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const { mockClipboardWriteText } = vi.hoisted(() => ({
@@ -305,7 +318,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 5,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     // Component renders successfully with webhook data
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
@@ -334,7 +347,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 0,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -354,7 +367,7 @@ describe('Integrations — localStorage webhook loading', () => {
         last_status: 'ok',
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     // Should display webhook info
     const content = screen.getByText('CI/CD Integrations').closest('div')?.textContent || '';
@@ -374,7 +387,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 0,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -392,7 +405,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 42,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -420,7 +433,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 0,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -440,7 +453,7 @@ describe('Integrations — localStorage webhook loading', () => {
         last_status: 'ok',
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -460,7 +473,7 @@ describe('Integrations — localStorage webhook loading', () => {
         last_status: 'error',
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -481,7 +494,7 @@ describe('Integrations — localStorage webhook loading', () => {
         last_status: 'ok',
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -499,7 +512,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 8,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -517,7 +530,7 @@ describe('Integrations — localStorage webhook loading', () => {
         delivery_count: 0,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -536,7 +549,7 @@ describe('Integrations — localStorage webhook loading', () => {
         // no last_triggered field
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<Integrations />);
     expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
   });
@@ -680,7 +693,7 @@ describe('IntegrationsLegacy — ServiceCard expand/collapse', () => {
     fireEvent.click(connectBtns[0]);
     fireEvent.change(screen.getByPlaceholderText('https://yourcompany.atlassian.net'), { target: { value: 'https://test.atlassian.net' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    const saved = JSON.parse(localStorage.getItem('sentinel_service_configs') ?? '{}');
+    const saved = readVersioned('sentinel_service_configs', {});
     expect(saved).toHaveProperty('jira');
   });
 
@@ -691,7 +704,7 @@ describe('IntegrationsLegacy — ServiceCard expand/collapse', () => {
     // Only fill one field
     fireEvent.change(screen.getByPlaceholderText('https://yourcompany.atlassian.net'), { target: { value: 'https://test.atlassian.net' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    const saved = JSON.parse(localStorage.getItem('sentinel_service_configs') ?? '{}');
+    const saved = readVersioned('sentinel_service_configs', {});
     expect(saved.jira.connected).toBe(false);
   });
 });
@@ -744,14 +757,14 @@ describe('IntegrationsLegacy — ServiceCard test connection', () => {
 
 describe('IntegrationsLegacy — loaded connected service from localStorage', () => {
   beforeEach(() => {
-    localStorage.setItem('sentinel_service_configs', JSON.stringify({
+    seedVersioned('sentinel_service_configs', {
       slack: {
         connected: true,
         fields: { webhook_url: 'https://hooks.slack.com/services/T123', channel: '#security' },
         testStatus: 'ok',
         lastTested: new Date().toISOString(),
       },
-    }));
+    });
   });
   afterEach(() => { localStorage.clear(); });
 
@@ -783,7 +796,7 @@ describe('IntegrationsLegacy — loaded connected service from localStorage', ()
     render(<IntegrationsLegacy />);
     const disconnectBtn = screen.getByTitle('Disconnect integration');
     fireEvent.click(disconnectBtn);
-    const saved = JSON.parse(localStorage.getItem('sentinel_service_configs') ?? '{}');
+    const saved = readVersioned('sentinel_service_configs', {});
     expect(saved.slack?.connected).toBe(false);
   });
 });
@@ -864,7 +877,7 @@ describe('IntegrationsLegacy — WebhookCreator open/close', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. Slack Security Alerts'), { target: { value: 'localStorage Hook' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-server.com/webhook'), { target: { value: 'https://example.com/wh' } });
     fireEvent.click(screen.getByRole('button', { name: /create webhook/i }));
-    const saved = JSON.parse(localStorage.getItem('sentinel_webhooks') ?? '[]');
+    const saved = readVersioned('sentinel_webhooks', []);
     expect(saved.length).toBeGreaterThan(0);
     expect(saved[0].name).toBe('localStorage Hook');
   });
@@ -883,7 +896,7 @@ describe('IntegrationsLegacy — WebhookCreator open/close', () => {
 
 describe('IntegrationsLegacy — WebhookRow interactions', () => {
   beforeEach(() => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh1',
         name: 'Test Hook',
@@ -896,7 +909,7 @@ describe('IntegrationsLegacy — WebhookRow interactions', () => {
         last_triggered: new Date(Date.now() - 3600000).toISOString(),
         last_status: 'ok',
       },
-    ]));
+    ]);
   });
   afterEach(() => { localStorage.clear(); });
 
@@ -943,7 +956,7 @@ describe('IntegrationsLegacy — WebhookRow interactions', () => {
     render(<IntegrationsLegacy />);
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
     fireEvent.click(screen.getByTitle('Disable webhook'));
-    const saved = JSON.parse(localStorage.getItem('sentinel_webhooks') ?? '[]');
+    const saved = readVersioned('sentinel_webhooks', []);
     expect(saved[0].enabled).toBe(false);
   });
 
@@ -958,7 +971,7 @@ describe('IntegrationsLegacy — WebhookRow interactions', () => {
     render(<IntegrationsLegacy />);
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
     fireEvent.click(screen.getByTitle('Delete webhook'));
-    const saved = JSON.parse(localStorage.getItem('sentinel_webhooks') ?? '[]');
+    const saved = readVersioned('sentinel_webhooks', []);
     expect(saved.length).toBe(0);
   });
 
@@ -998,7 +1011,7 @@ describe('IntegrationsLegacy — WebhookRow interactions', () => {
 
 describe('IntegrationsLegacy — WebhookRow disabled webhook', () => {
   beforeEach(() => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh-disabled',
         name: 'Disabled Hook',
@@ -1010,7 +1023,7 @@ describe('IntegrationsLegacy — WebhookRow disabled webhook', () => {
         delivery_count: 0,
         last_status: 'error',
       },
-    ]));
+    ]);
   });
   afterEach(() => { localStorage.clear(); });
 
@@ -1043,7 +1056,7 @@ describe('IntegrationsLegacy — WebhookRow disabled webhook', () => {
 
 describe('IntegrationsLegacy — WebhookRow event filter', () => {
   beforeEach(() => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh-filter1',
         name: 'Hook A',
@@ -1064,7 +1077,7 @@ describe('IntegrationsLegacy — WebhookRow event filter', () => {
         created_at: new Date().toISOString(),
         delivery_count: 3,
       },
-    ]));
+    ]);
   });
   afterEach(() => { localStorage.clear(); });
 
@@ -1118,16 +1131,16 @@ describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
   });
 
   it('shows correct connected count after connecting service', () => {
-    localStorage.setItem('sentinel_service_configs', JSON.stringify({
+    seedVersioned('sentinel_service_configs', {
       jira: { connected: true, fields: {}, testStatus: 'ok' },
       slack: { connected: true, fields: {}, testStatus: 'ok' },
-    }));
+    });
     render(<IntegrationsLegacy />);
     expect(screen.getByText('2 / 6')).toBeInTheDocument();
   });
 
   it('shows delivery success rate with successful webhooks', () => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh-s1',
         name: 'Hook S',
@@ -1140,7 +1153,7 @@ describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
         last_triggered: new Date().toISOString(),
         last_status: 'ok',
       },
-    ]));
+    ]);
     render(<IntegrationsLegacy />);
     expect(screen.getByText('100%')).toBeInTheDocument();
   });
@@ -1151,7 +1164,7 @@ describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
   });
 
   it('shows failed webhook count in stats', () => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh-err1',
         name: 'Err Hook',
@@ -1164,7 +1177,7 @@ describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
         last_triggered: new Date().toISOString(),
         last_status: 'error',
       },
-    ]));
+    ]);
     render(<IntegrationsLegacy />);
     expect(screen.getByText('Failed Webhooks')).toBeInTheDocument();
   });
@@ -1172,7 +1185,7 @@ describe('IntegregrationsLegacy — HealthDashboard calculations', () => {
 
 describe('IntegrationsLegacy — webhook example payload', () => {
   beforeEach(() => {
-    localStorage.setItem('sentinel_webhooks', JSON.stringify([
+    seedVersioned('sentinel_webhooks', [
       {
         id: 'wh-ex',
         name: 'Example Hook',
@@ -1183,7 +1196,7 @@ describe('IntegrationsLegacy — webhook example payload', () => {
         created_at: new Date().toISOString(),
         delivery_count: 1,
       },
-    ]));
+    ]);
   });
   afterEach(() => { localStorage.clear(); });
 
@@ -1213,7 +1226,7 @@ describe('IntegrationsLegacy — empty webhooks filter (lines 962-964)', () => {
         delivery_count: 5,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<IntegrationsLegacy />);
     // Click on a filter that doesn't match any webhook (e.g., 'vulnerability.critical')
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
@@ -1241,7 +1254,7 @@ describe('IntegrationsLegacy — empty webhooks filter (lines 962-964)', () => {
         delivery_count: 5,
       },
     ];
-    localStorage.setItem('sentinel_webhooks', JSON.stringify(mockWebhooks));
+    seedVersioned('sentinel_webhooks', mockWebhooks);
     render(<IntegrationsLegacy />);
     // Click on a filter that doesn't match any webhook (e.g., 'vulnerability.critical')
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
@@ -1249,3 +1262,6 @@ describe('IntegrationsLegacy — empty webhooks filter (lines 962-964)', () => {
     expect(screen.getByText(/Send HTTP POST payloads/i)).toBeInTheDocument();
   });
 });
+
+
+
