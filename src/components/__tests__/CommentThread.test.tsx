@@ -288,7 +288,6 @@ describe('CommentThread — deleting a comment', () => {
     mockGetComments.mockResolvedValue([comment]);
     mockSubscribeToComments.mockReturnValue(vi.fn());
     mockDeleteComment.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -296,6 +295,7 @@ describe('CommentThread — deleting a comment', () => {
   });
 
   it('calls deleteComment when delete button clicked and confirmed', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<CommentThread {...DEFAULT_PROPS} />);
     fireEvent.click(screen.getByTitle('Open comments'));
     await waitFor(() => screen.getByTitle('Delete comment'));
@@ -306,7 +306,11 @@ describe('CommentThread — deleting a comment', () => {
   });
 
   it('does not call deleteComment when confirm returns false', async () => {
+    vi.clearAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mockGetComments.mockResolvedValue([comment]);
+    mockSubscribeToComments.mockReturnValue(vi.fn());
+    mockDeleteComment.mockResolvedValue(undefined);
     render(<CommentThread {...DEFAULT_PROPS} />);
     fireEvent.click(screen.getByTitle('Open comments'));
     await waitFor(() => screen.getByTitle('Delete comment'));
@@ -343,7 +347,6 @@ describe('CommentThread — replies', () => {
     mockSubscribeToComments.mockReturnValue(vi.fn());
     mockAddComment.mockResolvedValue(undefined);
     mockDeleteComment.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {

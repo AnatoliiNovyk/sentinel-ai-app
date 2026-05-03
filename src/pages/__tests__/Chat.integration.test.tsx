@@ -160,7 +160,7 @@ describe('Chat integration flow', () => {
     await waitFor(() => expect(screen.getByText('Agent response ready')).toBeInTheDocument(), { timeout: 3000 });
 
     expect(screen.getAllByText('List my open findings').length).toBeGreaterThan(0);
-  }, { timeout: 5000 });
+  });
 
   it('renders assistant response from gateway when agent returns null', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -176,7 +176,7 @@ describe('Chat integration flow', () => {
 
     await waitFor(() => expect(mockCallAiGateway).toHaveBeenCalledTimes(1), { timeout: 3000 });
     await waitFor(() => expect(screen.getByText('Recovered answer after retry')).toBeInTheDocument(), { timeout: 3000 });
-  }, { timeout: 5000 });
+  });
 
   it('renders error message when gateway throws', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -190,7 +190,7 @@ describe('Chat integration flow', () => {
       () => expect(screen.getByText('Error: AI processing timed out. Please try again.')).toBeInTheDocument(),
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 
   it('shows thinking label while gateway is processing', async () => {
     mockRunAgent.mockResolvedValueOnce(null);
@@ -212,7 +212,7 @@ describe('Chat integration flow', () => {
 
     releaseGateway();
     await waitFor(() => expect(screen.getByText('Recovered after wait')).toBeInTheDocument(), { timeout: 3000 });
-  }, { timeout: 6000 });
+  });
 });
 
   describe('Chat — sidebar conversation switching', () => {

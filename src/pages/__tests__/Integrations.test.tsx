@@ -723,7 +723,7 @@ describe('IntegrationsLegacy — ServiceCard test connection', () => {
     fireEvent.click(testBtn);
     await waitFor(() => {
       expect(screen.getByText(/Connection successful|Connection failed/i)).toBeInTheDocument();
-    }, { timeout: 3000 });
+    });
   });
 
   it('test connection shows failure when fields not filled', async () => {
@@ -734,7 +734,7 @@ describe('IntegrationsLegacy — ServiceCard test connection', () => {
     fireEvent.click(testBtn);
     await waitFor(() => {
       expect(screen.getByText(/Connection failed/i)).toBeInTheDocument();
-    }, { timeout: 3000 });
+    });
   });
 });
 

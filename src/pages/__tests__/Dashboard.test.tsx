@@ -141,7 +141,7 @@ describe('Dashboard — layout', () => {
 
   it('navigates to /chat when "Launch AI audit" clicked', async () => {
     renderDashboard();
-    const launchButton = await screen.findByRole('button', { name: /launch ai audit/i }, { timeout: 5000 });
+    const launchButton = await screen.findByRole('button', { name: /launch ai audit/i });
     fireEvent.click(launchButton);
     expect(mockNavigate).toHaveBeenCalledWith('/chat');
   });
@@ -504,19 +504,19 @@ describe('Dashboard — top open findings controls', () => {
 
     renderDashboard();
 
-    const searchInput = await screen.findByPlaceholderText(/search findings/i, {}, { timeout: 5000 });
+    const searchInput = await screen.findByPlaceholderText(/search findings/i, {});
     fireEvent.change(searchInput, { target: { value: 'does-not-match' } });
 
     await waitFor(() => {
       expect(screen.getByText('No findings match the search.')).toBeInTheDocument();
-    }, { timeout: 5000 });
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /clear/i }));
 
     await waitFor(() => {
       expect((searchInput as HTMLInputElement).value).toBe('');
       expect(screen.getAllByText('SQL Injection').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
   });
 
   it('renders project name and CVE link in top open findings', async () => {
@@ -553,7 +553,7 @@ describe('Dashboard — top open findings controls', () => {
     await waitFor(() => {
       expect(screen.getByText('Top open findings')).toBeInTheDocument();
       expect(screen.getAllByText('Risky Service').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
 
     const cveLinks = screen.getAllByRole('link', { name: 'CVE-2026-9999' });
     expect(cveLinks.length).toBeGreaterThan(0);
@@ -565,7 +565,7 @@ describe('Dashboard — top open findings controls', () => {
       expect(screen.getByRole('button', { name: /clear/i })).toBeInTheDocument();
       expect(screen.getAllByText('Auth Bypass').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Broken Access Control').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
   });
 });
 
@@ -599,7 +599,7 @@ describe('Dashboard — additional coverage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Alpha Finding').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Zebra Finding').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
   });
 });
 
@@ -617,7 +617,7 @@ describe('Dashboard — live scan jobs panel', () => {
       expect(screen.getByText(/Live scans/i)).toBeInTheDocument();
       expect(screen.getByText('Nmap')).toBeInTheDocument();
       expect(screen.getByText('Tfsec')).toBeInTheDocument();
-    }, { timeout: 5000 });
+    });
   });
 });
 
@@ -635,7 +635,7 @@ describe('Dashboard — team members panel', () => {
       expect(screen.getByText('Active members')).toBeInTheDocument();
       expect(screen.getByText('alice')).toBeInTheDocument();
       expect(screen.getByText('owner')).toBeInTheDocument();
-    }, { timeout: 5000 });
+    });
   });
 
   it('shows "+N more" overflow when team has more than 5 members', async () => {
@@ -647,7 +647,7 @@ describe('Dashboard — team members panel', () => {
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('+2')).toBeInTheDocument();
-    }, { timeout: 5000 });
+    });
   });
 });
 
@@ -673,7 +673,7 @@ describe('Dashboard — probe smoke error state', () => {
       expect(screen.getByText('Fail')).toBeInTheDocument();
       expect(screen.getByText('no')).toBeInTheDocument();
       expect(screen.getByText('503')).toBeInTheDocument();
-    }, { timeout: 5000 });
+    });
   });
 });
 
@@ -768,7 +768,7 @@ describe('Dashboard — findings newest sort', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Newer Finding').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Older Finding').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
   });
 
   it('sorts findings by oldest date', async () => {
@@ -785,7 +785,7 @@ describe('Dashboard — findings newest sort', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
     await waitFor(() => {
       expect(screen.getAllByText('Oldest Finding').length).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    });
   });
 });
 

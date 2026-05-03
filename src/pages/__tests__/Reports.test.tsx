@@ -853,7 +853,7 @@ describe('Reports — GenerateModal generate flow', () => {
     await waitFor(() => {
       // Modal closes after generation completes
       expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
-    }, { timeout: 5000 });
+    });
     vi.unstubAllGlobals();
   });
 
@@ -920,7 +920,7 @@ describe('Reports — GenerateModal generate flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
-    }, { timeout: 5000 });
+    });
     vi.unstubAllGlobals();
     mockScansOrder.mockResolvedValue({ data: [], error: null });
   });

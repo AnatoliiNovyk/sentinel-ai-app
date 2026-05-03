@@ -1079,7 +1079,7 @@ describe('ProjectDetail — additional coverage', () => {
     await waitFor(() => {
       const el = document.body.textContent;
       expect(el).toMatch(/fewer findings vs previous scan|No change vs previous scan|findings vs previous scan/);
-    }, { timeout: 5000 });
+    });
   });
 
   it('ScanProgressBanner pending status renders pending job style', async () => {
@@ -1152,7 +1152,7 @@ describe('ProjectDetail — remaining uncovered lines', () => {
     await waitFor(() => {
       const text = document.body.textContent;
       expect(text).toMatch(/No change vs previous scan/);
-    }, { timeout: 5000 });
+    });
   });
 });
 

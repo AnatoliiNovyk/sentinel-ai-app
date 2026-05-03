@@ -141,7 +141,7 @@ describe('Scans integration flow', () => {
 
     expect(screen.getByTestId('mode').textContent).toBe('MOCK');
     expect(screen.getByTestId('vuln-count').textContent).toBe('1');
-  }, { timeout: 5000 });
+  });
 
   it('dispatches new scan from modal with project fallback target', async () => {
     render(<Scans />);
@@ -157,7 +157,7 @@ describe('Scans integration flow', () => {
       },
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 
   it('runs AI generation flow and refreshes vulnerabilities', async () => {
     render(<Scans />);
@@ -180,7 +180,7 @@ describe('Scans integration flow', () => {
       },
       { timeout: 3000 },
     );
-  }, { timeout: 6000 });
+  });
 
   it('opens and closes vulnerability detail modal', async () => {
     render(<Scans />);
@@ -192,15 +192,15 @@ describe('Scans integration flow', () => {
     // Detail modal should be visible with vuln title
     await waitFor(() => {
       expect(screen.getByText('Outdated package')).toBeDefined();
-    }, { timeout: 3000 });
+    });
 
     // Close the modal
     fireEvent.click(screen.getByRole('button', { name: 'Close vulnerability details' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Close vulnerability details' })).toBeNull();
-    }, { timeout: 3000 });
-  }, { timeout: 6000 });
+    });
+  });
 
   it('renders detail modal with critical severity and remediation code', async () => {
     mockGetScanVulnerabilities.mockResolvedValue([
@@ -229,8 +229,8 @@ describe('Scans integration flow', () => {
       expect(screen.getByText('CRITICAL')).toBeDefined();
       // remediation_code block should be rendered
       expect(screen.getByText('apt-get update && apt-get upgrade -y')).toBeDefined();
-    }, { timeout: 3000 });
-  }, { timeout: 6000 });
+    });
+  });
 
   it('shows DEMO badge when scan has is_mock = true', async () => {
     mockGetProjectScans.mockResolvedValue([
@@ -248,7 +248,7 @@ describe('Scans integration flow', () => {
 
     await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
     expect(screen.getByText('DEMO')).toBeDefined();
-  }, { timeout: 5000 });
+  });
 
   it('shows running progress bar when scan status is running', async () => {
     mockGetProjectScans.mockResolvedValue([
@@ -267,7 +267,7 @@ describe('Scans integration flow', () => {
     await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
     // RunningProgressBar component renders when status is 'running'
     expect(screen.getByText('nmap')).toBeDefined();
-  }, { timeout: 5000 });
+  });
 
   it('renders detail modal with medium severity', async () => {
     mockGetScanVulnerabilities.mockResolvedValue([
@@ -292,8 +292,8 @@ describe('Scans integration flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Medium Priority Issue')).toBeDefined();
       expect(screen.getByText('MEDIUM')).toBeDefined();
-    }, { timeout: 3000 });
-  }, { timeout: 6000 });
+    });
+  });
 
   it('renders detail modal with low severity', async () => {
     mockGetScanVulnerabilities.mockResolvedValue([
@@ -318,8 +318,8 @@ describe('Scans integration flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Low Priority Issue')).toBeDefined();
       expect(screen.getByText('LOW')).toBeDefined();
-    }, { timeout: 3000 });
-  }, { timeout: 6000 });
+    });
+  });
 
   it('shows status filter when multiple status values exist', async () => {
     mockGetProjectScans.mockResolvedValue([
@@ -367,7 +367,7 @@ describe('Scans integration flow', () => {
     await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
     // Status filter should be visible (uniqueStatuses > 2)
     expect(screen.getByLabelText('Filter by status')).toBeDefined();
-  }, { timeout: 5000 });
+  });
 
   it('can click to select a specific scan from list', async () => {
     mockGetProjectScans.mockResolvedValue([
@@ -387,7 +387,7 @@ describe('Scans integration flow', () => {
     // Click the scan to select it
     fireEvent.click(screen.getByText('nmap'));
     expect(screen.getByText('nmap')).toBeDefined();
-  }, { timeout: 5000 });
+  });
 
   it('shows "No scans match filters" when search returns no results', async () => {
     render(<Scans />);
@@ -400,7 +400,7 @@ describe('Scans integration flow', () => {
       () => expect(screen.getByText('No scans match filters')).toBeInTheDocument(),
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 
   it('shows scanner filter when multiple scanners exist', async () => {
     mockGetProjectScans.mockResolvedValue([
@@ -414,7 +414,7 @@ describe('Scans integration flow', () => {
 
     await waitFor(() => expect(mockGetProjectScans).toHaveBeenCalled(), { timeout: 3000 });
     expect(screen.getByLabelText('Filter by scanner')).toBeInTheDocument();
-  }, { timeout: 5000 });
+  });
 
   it('shows clear-filters button when search is active and clears on click', async () => {
     render(<Scans />);
@@ -426,7 +426,7 @@ describe('Scans integration flow', () => {
     await waitFor(() => expect(screen.getByTitle('Clear all filters')).toBeInTheDocument(), { timeout: 3000 });
     fireEvent.click(screen.getByTitle('Clear all filters'));
     await waitFor(() => expect(screen.queryByTitle('Clear all filters')).toBeNull(), { timeout: 3000 });
-  }, { timeout: 5000 });
+  });
 
   it('triggers refresh when Refresh button is clicked', async () => {
     render(<Scans />);
@@ -438,7 +438,7 @@ describe('Scans integration flow', () => {
       () => expect(mockGetProjectScans.mock.calls.length).toBeGreaterThan(callsBefore),
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 
   it('renders CSV button and calls URL.createObjectURL on click', async () => {
     const createObjectURL = vi.fn().mockReturnValue('blob:url');
@@ -449,10 +449,10 @@ describe('Scans integration flow', () => {
     render(<Scans />);
 
     await waitFor(() => expect(mockGetScanVulnerabilities).toHaveBeenCalled(), { timeout: 3000 });
-    const csvBtn = await screen.findByTitle('Export vulnerabilities CSV', {}, { timeout: 3000 });
+    const csvBtn = await screen.findByTitle('Export vulnerabilities CSV', {});
     fireEvent.click(csvBtn);
     expect(createObjectURL).toHaveBeenCalled();
-  }, { timeout: 5000 });
+  });
 
   it('shows dispatch error from toReadableErrorMessage when scan fails', async () => {
     mockDispatchScan.mockRejectedValue(new Error('Network timeout'));
@@ -466,7 +466,7 @@ describe('Scans integration flow', () => {
       () => expect(screen.getByText(/Network timeout/i)).toBeInTheDocument(),
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 
   it('dismisses AI generation error on close click', async () => {
     mockDispatchScan.mockRejectedValue(new Error('Dispatch failed'));
@@ -482,5 +482,5 @@ describe('Scans integration flow', () => {
       () => expect(screen.queryByText(/Dispatch failed/i)).toBeNull(),
       { timeout: 3000 },
     );
-  }, { timeout: 5000 });
+  });
 });

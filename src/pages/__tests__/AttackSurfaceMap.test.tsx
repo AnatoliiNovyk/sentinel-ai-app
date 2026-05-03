@@ -336,7 +336,7 @@ describe('AttackSurfaceMap — SVG node interactions', () => {
     const svg = await waitFor(() => {
       const el = document.querySelector('svg[height="600"]');
       return el;
-    }, { timeout: 3000 });
+    });
     expect(svg).toBeInTheDocument();
     expect(svg).toHaveAttribute('viewBox', '0 0 900 600');
   });
