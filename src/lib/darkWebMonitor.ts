@@ -8,6 +8,7 @@
  */
 
 import { type Result, success, failure, ErrorCode } from './errors';
+import { httpFetch, HttpError } from './httpClient';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -270,22 +271,22 @@ function hibpBreachToEntry(b: HibpBreach): BreachEntry {
 }
 
 async function fetchHibpBreaches(email: string): Promise<BreachEntry[]> {
-  const resp = await fetch(
-    `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`,
-    {
-      headers: {
-        'hibp-api-key': HIBP_API_KEY!,
-        'user-agent': 'Sentinel-AI Security Platform',
+  let resp: Response;
+  try {
+    resp = await httpFetch(
+      `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`,
+      {
+        headers: {
+          'hibp-api-key': HIBP_API_KEY!,
+          'user-agent': 'Sentinel-AI Security Platform',
+        },
+        timeoutMs: 10_000,
       },
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
-
-  // 404 = clean (no breaches)
-  if (resp.status === 404) return [];
-
-  if (!resp.ok) {
-    throw new Error(`HIBP API error: ${resp.status} ${resp.statusText}`);
+    );
+  } catch (err) {
+    // 404 = clean (no breaches)
+    if (err instanceof HttpError && err.status === 404) return [];
+    throw err;
   }
 
   const data = (await resp.json()) as HibpBreach[];

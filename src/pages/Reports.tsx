@@ -9,6 +9,7 @@ import { useToast } from '../lib/toastContext';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { SkeletonCardGrid } from '../components/Skeleton';
 import { useStickyHeader } from '../lib/useStickyHeader';
+import { httpPost } from '../lib/httpClient';
 
 const EXEC_FIELDS = ['summary', 'risk_assessment', 'top_findings', 'recommendations'] as const;
 const TECH_FIELDS = ['vulnerabilities', 'assets_scanned', 'severity_distribution', 'remediation_guidance'] as const;
@@ -856,16 +857,10 @@ function GenerateModal({
       const token = sessionData.session?.access_token;
       if (!token) return false;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-generate`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ project_id: projectId, kind, use_ai: useAi }),
-      });
-      return res.ok;
+      const result = await httpPost<{ ok?: boolean }>(url, {
+        project_id: projectId, kind, use_ai: useAi,
+      }, { token, headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY } });
+      return !!result.ok;
     } catch {
       return false;
     }

@@ -1,3 +1,4 @@
+import { httpPost } from './httpClient';
 import { supabase } from './supabase';
 import { runMockScan } from './scanMock';
 import { ErrorCode, failure, Result, success } from './errors';
@@ -55,35 +56,19 @@ export async function dispatchScan(
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      const res = await fetch(`${EDGE_BASE}/scan-dispatch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        signal: AbortSignal.timeout(30_000),
-        body: JSON.stringify({
-          scan_id: scan.id,
-          project_id: projectId,
-          scanner,
-          target,
-        }),
-      });
+      const json = await httpPost<{ job_id?: string }>(`${EDGE_BASE}/scan-dispatch`, {
+        scan_id: scan.id,
+        project_id: projectId,
+        scanner,
+        target,
+      }, { token: token ?? undefined, timeoutMs: 30_000 });
 
-      if (res.ok) {
-        const json = await res.json();
-        await supabase
-          .from('scans')
-          .update({ status: 'running', is_mock: false, detected_mode: 'REAL' })
-          .eq('id', scan.id);
-        console.info(`[scanDispatch] Job queued via edge fn: job_id=${json.job_id}`);
-        return success({ scanId: scan.id, mode: 'REAL' });
-      }
-
-      const errBody = await res.text();
-      console.warn(
-        `[scanDispatch] Edge fn returned ${res.status}: ${errBody}. Falling back to mock.`,
-      );
+      await supabase
+        .from('scans')
+        .update({ status: 'running', is_mock: false, detected_mode: 'REAL' })
+        .eq('id', scan.id);
+      console.info(`[scanDispatch] Job queued via edge fn: job_id=${json.job_id}`);
+      return success({ scanId: scan.id, mode: 'REAL' });
     } catch (netErr) {
       console.warn('[scanDispatch] Edge fn unreachable, falling back to mock:', netErr);
     }

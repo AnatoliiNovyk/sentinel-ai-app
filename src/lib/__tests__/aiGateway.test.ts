@@ -68,7 +68,10 @@ describe('callAiGateway', () => {
       const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(url).toContain('/functions/v1/ai-gateway');
       expect(options.method).toBe('POST');
-      expect((options.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+      const headers = options.headers instanceof Headers
+        ? options.headers
+        : new Headers(options.headers as Record<string, string>);
+      expect(headers.get('Content-Type')).toBe('application/json');
     });
 
     it('sends messages in request body', async () => {

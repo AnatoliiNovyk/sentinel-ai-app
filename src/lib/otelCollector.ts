@@ -2,6 +2,7 @@
  * OpenTelemetry Collector Client
  * Batches metrics and traces for export to centralized collector (Jaeger, Datadog, Zipkin)
  */
+import { httpFetch } from './httpClient';
 
 export interface OTelMetric {
   name: string;
@@ -227,20 +228,11 @@ export class OTelCollectorClient {
       })),
     };
 
-    const response = await fetch(this.collectorEndpoint, {
+    await httpFetch(this.collectorEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify(payload),
+      timeoutMs: 30_000,
     });
-
-    if (!response.ok) {
-      throw new Error(
-        `OTEL export failed: ${response.status} ${response.statusText}`,
-      );
-    }
   }
 }
 

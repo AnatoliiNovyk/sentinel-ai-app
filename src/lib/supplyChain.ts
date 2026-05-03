@@ -11,6 +11,7 @@
  */
 
 import { type Result, success, failure, ErrorCode } from './errors';
+import { httpPost } from './httpClient';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -490,17 +491,10 @@ export class ScaAnalyzer {
 
   private async fetchVulnerabilities(dep: Dependency): Promise<ScaVulnerability[]> {
     try {
-      const res = await fetch('https://api.osv.dev/v1/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          version: dep.version,
-          package: { name: dep.name, ecosystem: dep.ecosystem === 'npm' ? 'npm' : 'PyPI' },
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) return [];
-      const data = (await res.json()) as OsvResponse;
+      const data = await httpPost<OsvResponse>('https://api.osv.dev/v1/query', {
+        version: dep.version,
+        package: { name: dep.name, ecosystem: dep.ecosystem === 'npm' ? 'npm' : 'PyPI' },
+      }, { timeoutMs: 8000 });
       return (data.vulns ?? []).map(mapOsvVuln);
     } catch {
       return [];

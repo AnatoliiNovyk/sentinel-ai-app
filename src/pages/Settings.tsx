@@ -11,6 +11,7 @@ import { useAuth } from '../context/useAuth';
 import { AuditService, AuditAction } from '../api/audit.service';
 import { ApiRateLimitsPanel } from '../components/ApiRateLimitsPanel';
 import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../lib/agentHealth';
+import { httpPost } from '../lib/httpClient';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
 
@@ -470,17 +471,13 @@ export default function Settings() {
       // Call Supabase edge function to create Stripe Checkout session
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({ priceId: selectedPlan.stripePriceId, planId: selectedPlan.id }),
-      });
-      /* c8 ignore next 4 */
-      if (res.ok) {
-        const { url } = await res.json();
-        if (url) { window.location.href = url; return; }
-      }
+      const result = await httpPost<{ url?: string }>(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
+        { priceId: selectedPlan.stripePriceId, planId: selectedPlan.id },
+        { token, timeoutMs: 15_000 },
+      );
+      /* c8 ignore next 2 */
+      if (result.url) { window.location.href = result.url; return; }
     } catch (err) {
       /* c8 ignore next */
       console.warn('[Settings] Stripe checkout error:', err);

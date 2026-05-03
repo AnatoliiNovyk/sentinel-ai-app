@@ -16,6 +16,8 @@ export type CveDetail = {
   cweIds: string[];
 };
 
+import { httpFetch } from './httpClient';
+
 const NVD_BASE = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 const CACHE = new Map<string, CveDetail | null>();
 
@@ -30,14 +32,9 @@ export async function fetchCveDetail(cveId: string): Promise<CveDetail | null> {
   if (CACHE.has(normalized)) return CACHE.get(normalized)!;
 
   try {
-    const res = await fetch(`${NVD_BASE}?cveId=${encodeURIComponent(normalized)}`, {
-      signal: AbortSignal.timeout(8000),
+    const res = await httpFetch(`${NVD_BASE}?cveId=${encodeURIComponent(normalized)}`, {
+      timeoutMs: 8000,
     });
-
-    if (!res.ok) {
-      CACHE.set(normalized, null);
-      return null;
-    }
 
     const json = await res.json();
     const vuln = json?.vulnerabilities?.[0]?.cve;

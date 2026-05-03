@@ -1,4 +1,5 @@
 import { generateAIResponse } from './aiMock';
+import { httpPost, HttpError } from './httpClient';
 
 export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -20,22 +21,10 @@ export async function callAiGateway(messages: ChatMessage[]): Promise<GatewayRes
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-gateway`;
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ messages }),
-      signal: AbortSignal.timeout(30_000),
+    const json = await httpPost<{ provider?: string; content?: string }>(url, { messages }, {
+      token: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      timeoutMs: 30_000,
     });
-
-    if (!res.ok) {
-      console.warn(`[aiGateway] Edge fn returned ${res.status} — using local mock`);
-      throw new Error(`Gateway ${res.status}`);
-    }
-
-    const json = await res.json();
     const provider = (json.provider ?? 'mock') as GatewayResponse['provider'];
     return {
       content: json.content ?? '',
@@ -43,6 +32,9 @@ export async function callAiGateway(messages: ChatMessage[]): Promise<GatewayRes
       isMock: provider === 'mock',
     };
   } catch (err) {
+    if (err instanceof HttpError) {
+      console.warn(`[aiGateway] Edge fn returned ${err.status} — using local mock`);
+    }
     console.warn('[aiGateway] Falling back to local mock:', err);
     const last = [...messages].reverse().find((m) => m.role === 'user');
     return {
