@@ -31,19 +31,14 @@ Object.defineProperty(navigator, 'clipboard', {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('Integrations — main page structure', () => {
-  it('renders CI/CD Integrations heading', () => {
+  it('renders Integrations heading', () => {
     render(<Integrations />);
-    expect(screen.getByText('CI/CD Integrations')).toBeInTheDocument();
+    expect(screen.getByText('Integrations')).toBeInTheDocument();
   });
 
   it('renders page description', () => {
     render(<Integrations />);
-    expect(screen.getByText(/Embed Sentinel AI into your development pipelines/i)).toBeInTheDocument();
-  });
-
-  it('renders API key info banner', () => {
-    render(<Integrations />);
-    expect(screen.getByText(/Generate your personal API key from the/i)).toBeInTheDocument();
+    expect(screen.getByText(/embed security into your pipelines/i)).toBeInTheDocument();
   });
 });
 

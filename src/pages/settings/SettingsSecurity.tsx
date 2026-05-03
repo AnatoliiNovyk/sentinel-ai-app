@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Timer, Database, Loader2, RefreshCw, WifiOff, Server, Eye, EyeOff,
-  Check, Shield, Rocket, Package, ArrowRight, Crown, CreditCard,
+  Check, Shield, Rocket, Package, ArrowRight, Crown, CreditCard, Lock, Sun, Moon,
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../../lib/supabase';
 import { useAuth } from '../../context/useAuth';

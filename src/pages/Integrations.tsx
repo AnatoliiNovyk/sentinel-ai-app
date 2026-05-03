@@ -247,4 +247,6 @@ export function IntegrationsLegacy() {
   );
 }
 
+// exported for test coverage
+export { IntegrationsLegacy as Integrations };
 export default IntegrationsLegacy;

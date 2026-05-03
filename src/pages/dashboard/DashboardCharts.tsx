@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { Vulnerability, Project } from '../lib/supabase';
+import { Vulnerability, Project } from '../../lib/supabase';
 
 // ─── Build functions ───────────────────────────────────────────────────────
 
