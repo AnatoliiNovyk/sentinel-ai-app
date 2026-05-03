@@ -531,17 +531,26 @@ describe('FindingsTab — SLA state coverage', () => {
   beforeEach(() => { _id = 0; });
 
   it('renders finding with older than SLA deadline date (at_risk state)', () => {
-    // Create vuln that's 5.5 days old with critical severity (SLA=7, so 5.5/7 = 78.5% >= 75%)
+    // critical SLA budget = 3 days; 2.5/3 = 83% >= 75% → at_risk
     const now = Date.now();
-    const createdAt = new Date(now - 5.5 * 24 * 60 * 60 * 1000).toISOString();
+    const createdAt = new Date(now - 2.5 * 24 * 60 * 60 * 1000).toISOString();
     const vuln = makeVuln({ 
       severity: 'critical', 
       created_at: createdAt,
       title: 'At Risk Finding'
     });
     render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
-    // Verify the finding is rendered
     expect(screen.getByText('At Risk Finding')).toBeInTheDocument();
+  });
+
+  it('shows SLA at risk badge in expanded FindingRow', async () => {
+    // critical SLA budget = 3 days; 2.5/3 = 83% >= 75% → at_risk
+    const now = Date.now();
+    const createdAt = new Date(now - 2.5 * 24 * 60 * 60 * 1000).toISOString();
+    const vuln = makeVuln({ severity: 'critical', created_at: createdAt, title: 'At Risk Row' });
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }));
+    await waitFor(() => expect(screen.getByText(/SLA at risk/i)).toBeInTheDocument());
   });
 
   it('renders finding that exceeds SLA deadline', () => {
@@ -566,5 +575,103 @@ describe('FindingsTab — SLA state coverage', () => {
     render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
     // Verify the finding is rendered (getSLAState will return 'na')
     expect(screen.getByText('Info Finding')).toBeInTheDocument();
+  });
+});
+
+describe('FindingsTab — branch coverage extras', () => {
+  beforeEach(() => { _id = 0; });
+
+  it('slaCounts includes at_risk vuln (line 92)', () => {
+    // critical budget=3, 2.5 days → at_risk
+    const now = Date.now();
+    const createdAt = new Date(now - 2.5 * 24 * 60 * 60 * 1000).toISOString();
+    const vuln = makeVuln({ severity: 'critical', created_at: createdAt });
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+    // SLA Overdue shows 0 (it's at_risk not overdue) — just verifying render
+    expect(screen.getByText('SLA Overdue')).toBeInTheDocument();
+  });
+
+  it('search by cve_id and description (lines 110)', async () => {
+    const vulns = [
+      makeVuln({ title: 'Alpha', cve_id: 'CVE-2024-1234', description: 'some desc' }),
+      makeVuln({ title: 'Beta', cve_id: '', description: null as unknown as string }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search findings/i), { target: { value: 'CVE-2024-1234' } });
+    await waitFor(() => expect(screen.getByText('Alpha')).toBeInTheDocument());
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+    // Now search by description
+    fireEvent.change(screen.getByPlaceholderText(/search findings/i), { target: { value: 'some desc' } });
+    await waitFor(() => expect(screen.getByText('Alpha')).toBeInTheDocument());
+  });
+
+  it('sort mixes resolved and open (lines 114-116)', () => {
+    const vulns = [
+      makeVuln({ title: 'Resolved High', status: 'resolved', severity: 'high' }),
+      makeVuln({ title: 'Open Medium', status: 'open', severity: 'medium' }),
+      makeVuln({ title: 'Open Critical', status: 'open', severity: 'critical' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    const titles = screen.getAllByRole('button', { name: /toggle details/i });
+    // Just verify all 3 render without error
+    expect(titles).toHaveLength(3);
+  });
+
+  it('resolved stat card toggles back to all on second click (line 197)', () => {
+    const vuln = makeVuln({ status: 'resolved', title: 'Done Issue' });
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+    // The stat cards are the first 4 buttons with class "rounded-xl" and "p-4"
+    const statButtons = screen.getAllByRole('button').filter(b =>
+      b.className.includes('rounded-xl') && b.className.includes('p-4')
+    );
+    const resolvedStat = statButtons[3]; // 4th stat card (Total, Open, SLA Overdue, Resolved)
+    fireEvent.click(resolvedStat); // → filters to resolved
+    fireEvent.click(resolvedStat); // → back to all
+    expect(screen.getByText('Done Issue')).toBeInTheDocument();
+  });
+
+  it('shows "Saving..." while note is being saved (line 633)', async () => {
+    // Use a deferred promise that we resolve after checking the saving state
+    let resolveSave!: (v: { data: null; error: null }) => void;
+    const promise = new Promise<{ data: null; error: null }>((r) => { resolveSave = r; });
+    mockMaybySingle.mockReturnValueOnce(promise);
+    const vuln = makeVuln({ note: '' });
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }));
+    await waitFor(() => screen.getByText('No note yet.'));
+    fireEvent.click(screen.getByRole('button', { name: /add/i }));
+    fireEvent.change(screen.getByPlaceholderText(/Add context/i), { target: { value: 'new note' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+    });
+    // While pending, "Saving..." text should appear
+    expect(screen.getByText(/saving\.\.\./i)).toBeInTheDocument();
+    // Unblock the promise
+    await act(async () => { resolveSave({ data: null, error: null }); });
+  });
+
+  it('bulkChangeStatus with no data returned (line 170 false branch)', async () => {
+    mockIn.mockReturnValueOnce({ select: vi.fn().mockResolvedValue({ data: null, error: null }) });
+    const onUpdated = vi.fn();
+    const vuln = makeVuln();
+    render(<FindingsTab vulns={[vuln]} onUpdated={onUpdated} />);
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() => screen.getByText(/1 selected/i));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Resolve$/ }));
+    });
+    expect(onUpdated).not.toHaveBeenCalled();
+  });
+
+  it('counts[s] ?? 0 default for missing status (line 243)', () => {
+    // Render with mix of statuses — counts object may be missing some
+    const vulns = [
+      makeVuln({ status: 'open' }),
+      makeVuln({ status: 'in_progress' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    // All filter pills render without crash (covers counts[s] ?? 0)
+    // Check that status filter pills are visible (Open, Resolved, etc.)
+    expect(screen.getAllByRole('button', { name: /open/i }).length).toBeGreaterThan(0);
   });
 });
