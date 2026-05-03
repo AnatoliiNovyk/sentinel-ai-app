@@ -152,12 +152,12 @@ describe('commentService — deleteComment', () => {
 
 describe('commentService — subscribeToComments', () => {
   it('returns an unsubscribe function', async () => {
-    const unsubscribeMock = vi.fn();
-    // Patch the supabase mock to handle .on().subscribe() for subscribe calls
+    const unsubscribeMock = vi.fn().mockResolvedValue(undefined);
     const supabaseMod = vi.mocked(
       (await import('../supabase')).supabase
     );
-    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    // New API: supabase.channel(name).on(...).subscribe()
+    (supabaseMod as unknown as Record<string, unknown>).channel = vi.fn().mockReturnValue({
       on: vi.fn().mockReturnThis(),
       subscribe: vi.fn().mockReturnValue({ unsubscribe: unsubscribeMock }),
     });
@@ -167,11 +167,11 @@ describe('commentService — subscribeToComments', () => {
   });
 
   it('calls unsubscribe when the returned function is invoked', async () => {
-    const unsubscribeMock = vi.fn();
+    const unsubscribeMock = vi.fn().mockResolvedValue(undefined);
     const supabaseMod = vi.mocked(
       (await import('../supabase')).supabase
     );
-    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+    (supabaseMod as unknown as Record<string, unknown>).channel = vi.fn().mockReturnValue({
       on: vi.fn().mockReturnThis(),
       subscribe: vi.fn().mockReturnValue({ unsubscribe: unsubscribeMock }),
     });
@@ -187,19 +187,20 @@ describe('commentService — subscribeToComments', () => {
       (await import('../supabase')).supabase
     );
 
-    let capturedHandler: (() => void) | null = null;
-    (supabaseMod.from as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-      on: vi.fn().mockImplementation((_event: string, handler: () => void) => {
+    let capturedHandler: ((_payload: unknown) => void) | null = null;
+    (supabaseMod as unknown as Record<string, unknown>).channel = vi.fn().mockReturnValue({
+      on: vi.fn().mockImplementation((_eventType: string, _filter: unknown, handler: (_payload: unknown) => void) => {
         capturedHandler = handler;
-        return { subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) };
+        return { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) };
       }),
+      subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }),
     });
 
     subscribeToComments('vuln-1', callbackMock);
 
     expect(capturedHandler).not.toBeNull();
     // Trigger the real-time event handler
-    capturedHandler!();
+    capturedHandler!({});
     // Wait for async getComments().then(callback)
     await Promise.resolve();
     await Promise.resolve();

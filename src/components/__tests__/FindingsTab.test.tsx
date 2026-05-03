@@ -26,7 +26,7 @@ vi.mock('../RemediationAssistant', () => ({
   RemediationAssistant: () => <div data-testid="remediation-assistant" />,
 }));
 
-const { mockEq, mockIn, mockMaybySingle, mockUpdate } = vi.hoisted(() => {
+const { mockIn, mockMaybySingle, mockUpdate } = vi.hoisted(() => {
   const mockMaybySingle = vi.fn().mockResolvedValue({ data: null, error: null });
   const mockSelectSingle = vi.fn(() => ({ maybeSingle: mockMaybySingle }));
   const mockSelectMulti = vi.fn().mockResolvedValue({ data: null, error: null });

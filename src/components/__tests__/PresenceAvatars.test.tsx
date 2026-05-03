@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { PresenceAvatars } from '../PresenceAvatars';
 
 // Override global PresenceContext mock to add getMembersViewing

@@ -61,6 +61,7 @@ export type Scan = {
   user_id: string;
   org_id?: string;
   scanner: string;
+  target?: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
   is_mock?: boolean;
   detected_mode?: 'REAL' | 'MOCK' | 'UNKNOWN';
@@ -79,16 +80,19 @@ export type Scan = {
 export type Vulnerability = {
   id: string;
   scan_id: string;
+  project_id?: string;
   user_id: string;
   title: string;
   description: string;
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   cve_id: string;
+  cve?: string;
+  cvss?: number;
   mitre_tactic: string;
   cis_control: string;
   asset: string;
   remediation: string;
-  remediation_code: string;
+  remediation_code: string | null;
   remediation_type: string;
   created_at: string;
   status: 'open' | 'in_progress' | 'accepted' | 'resolved' | 'false_positive';

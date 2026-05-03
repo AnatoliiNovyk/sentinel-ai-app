@@ -315,7 +315,7 @@ describe('Agent Tools Integration', () => {
           data: [{ id: 'p-1', name: 'MyProject', environment: 'web', target: 'example.com', created_at: new Date().toISOString() }],
           error: null,
         }),
-      }) as ReturnType<typeof mod.supabase.from>);
+      }) as unknown as ReturnType<typeof mod.supabase.from>);
       const result = await runAgent('user-1', 'list my projects');
       expect(result).not.toBeNull();
       expect(result!.content).toContain('MyProject');
@@ -335,7 +335,7 @@ describe('Agent Tools Integration', () => {
             }),
           }),
         }),
-      }) as ReturnType<typeof mod.supabase.from>);
+      }) as unknown as ReturnType<typeof mod.supabase.from>);
       const result = await runAgent('user-1', 'show recent scans');
       expect(result).not.toBeNull();
       expect(result!.content).toContain('nmap');
@@ -351,7 +351,7 @@ describe('Agent Tools Integration', () => {
           data: [{ id: 'p-1', name: 'WebApp', environment: 'web', target: 'webapp.example.com', created_at: new Date().toISOString() }],
           error: null,
         }),
-      }) as ReturnType<typeof mod.supabase.from>);
+      }) as unknown as ReturnType<typeof mod.supabase.from>);
       const { ScansService } = await import('../../api/scans.service');
       vi.mocked(ScansService.dispatchScan).mockResolvedValueOnce({
         scan: { id: 'scan-abc', scanner: 'nmap', status: 'running', created_at: new Date().toISOString(), project_id: 'p-1', target: 'webapp.example.com', org_id: 'org-1', scan_metadata: null, summary: null },

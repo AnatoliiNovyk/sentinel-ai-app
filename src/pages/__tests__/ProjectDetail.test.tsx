@@ -274,7 +274,7 @@ describe('ProjectDetail — tab switching', () => {
 
 describe('ProjectDetail — quickScan', () => {
   const mockOnBack = vi.fn();
-  const { dispatchScan } = vi.hoisted(() => ({ dispatchScan: vi.fn() }));
+  const { dispatchScan: _dispatchScan } = vi.hoisted(() => ({ dispatchScan: vi.fn() }));
 
   beforeEach(() => {
     mockOnBack.mockReset();
@@ -741,14 +741,6 @@ describe('ProjectDetail — WebhookPanel', () => {
 
 describe('ProjectDetail — ScanProgressBanner', () => {
   const mockOnBack = vi.fn();
-  const runningJob = {
-    id: 'job-1',
-    scanner: 'nmap',
-    target: 'example.com',
-    status: 'running',
-    started_at: '2026-01-01T00:00:00Z',
-    created_at: '2026-01-01T00:00:00Z',
-  };
 
   beforeEach(() => {
     mockOnBack.mockReset();

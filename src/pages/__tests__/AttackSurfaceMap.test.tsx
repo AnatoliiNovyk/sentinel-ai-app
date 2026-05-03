@@ -854,7 +854,7 @@ describe('AttackSurfaceMap — project tooltip vuln breakdown', () => {
     await waitForLoaded();
     // Try clicking all SVG <g> elements looking for a vuln node
     const groups = document.querySelectorAll('svg g[class*="cursor"]');
-    let foundVuln = false;
+    let foundVuln = false; void foundVuln;
     for (const g of groups) {
       // Vuln nodes have small circles (r=8); try clicking each
       fireEvent.click(g as HTMLElement);

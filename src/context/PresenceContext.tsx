@@ -54,8 +54,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
 
     subscriptionRef.current = supabase
-      .from(`presence:org_id=eq.${org_id}`)
-      .on('*', (payload) => {
+      .channel(`presence:org_id=eq.${org_id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presence' }, (payload) => {
         const record = payload.new as Presence;
         if (record.context_type === contextType && record.context_id === contextId) {
           setActivePresence((prev) => {

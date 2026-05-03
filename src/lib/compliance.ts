@@ -77,6 +77,7 @@ export type MitreRow = {
   id: string;
   label: string;
   color: string;
+  score: number;
   openCount: number;
   criticalCount: number;
 };
@@ -144,12 +145,16 @@ export function computeCompliance(vulns: Vulnerability[]): ComplianceResult {
       norm(v.mitre_tactic).includes(t.label.toLowerCase()) ||
       norm(v.mitre_tactic).includes(t.id.toLowerCase())
     );
+    const openCount = matched.length;
+    const criticalCount = matched.filter(v => v.severity === 'critical').length;
+    const score = Math.max(0, Math.round(100 - openCount * 5 - criticalCount * 10));
     return {
       id: t.id,
       label: t.label,
       color: t.color,
-      openCount: matched.length,
-      criticalCount: matched.filter(v => v.severity === 'critical').length,
+      score,
+      openCount,
+      criticalCount,
     };
   });
 

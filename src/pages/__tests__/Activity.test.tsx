@@ -578,7 +578,7 @@ describe('Activity — loading and realtime callbacks', () => {
     expect(screen.getByText(/Analyzing anomalies/i)).toBeInTheDocument();
 
     // Resolve pending fetch to avoid leaving a hanging promise in test environment.
-    if (resolveLogs) resolveLogs({ data: [], error: null });
+    resolveLogs!({ data: [], error: null });
   });
 
   it('prepends new log from realtime INSERT channel callback', async () => {

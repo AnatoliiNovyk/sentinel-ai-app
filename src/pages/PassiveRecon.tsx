@@ -189,14 +189,12 @@ export default function ActiveRecon() {
                 <Terminal className="w-3.5 h-3.5 text-emerald-500" />
                 <span className="text-slate-400">sentinel-agent@node-1:~$</span>
               </div>
-              {status !== 'idle' && (
-                <span className="text-[10px] font-mono text-slate-500">
-                  {status === 'done'
-                    ? `${(elapsedMs / 1000).toFixed(1)}s`
-                    : <span className="animate-pulse">{(elapsedMs / 1000).toFixed(1)}s…</span>
-                  }
-                </span>
-              )}
+              <span className="text-[10px] font-mono text-slate-500">
+                {status === 'done'
+                  ? `${(elapsedMs / 1000).toFixed(1)}s`
+                  : <span className="animate-pulse">{(elapsedMs / 1000).toFixed(1)}s…</span>
+                }
+              </span>
               {status === 'done' && (
                 <div className="flex items-center gap-1.5">
                   <button

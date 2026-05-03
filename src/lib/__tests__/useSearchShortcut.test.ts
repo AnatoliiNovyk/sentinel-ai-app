@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRef } from 'react';
 import { useSearchShortcut } from '../useSearchShortcut';
@@ -23,7 +23,7 @@ function makeInputRef() {
 
 describe('useSearchShortcut — "/" key', () => {
   let input: HTMLInputElement;
-  let onClear: ReturnType<typeof vi.fn>;
+  let onClear: () => void;
 
   beforeEach(() => {
     input = makeInputRef();
@@ -71,7 +71,7 @@ describe('useSearchShortcut — "/" key', () => {
 
 describe('useSearchShortcut — "Escape" key', () => {
   let input: HTMLInputElement;
-  let onClear: ReturnType<typeof vi.fn>;
+  let onClear: () => void;
 
   beforeEach(() => {
     input = makeInputRef();

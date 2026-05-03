@@ -551,8 +551,7 @@ export async function generateRemediation(
       },
       { onConflict: 'vulnerability_id' },
     )
-    .then(() => {})
-    .catch(() => {});
+    .then(() => { /* noop */ }, () => { /* ignore errors */ });
 
   // Update cache
   cache[vuln.id] = suggestion;

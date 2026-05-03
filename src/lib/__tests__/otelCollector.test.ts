@@ -17,7 +17,7 @@ describe('OTelCollectorClient', () => {
       status: 200,
       statusText: 'OK',
     });
-    global.fetch = fetchMock;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     client = new OTelCollectorClient({
       collectorEndpoint: 'http://localhost:4318/v1/traces',

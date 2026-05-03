@@ -78,7 +78,7 @@ export default function Projects() {
 
   const stats = useMemo(() => {
     const total = projects.length;
-    const highRisk = projects.filter(p => { const b = riskBand(p.risk_score ?? 0); return b === 'critical' || b === 'high'; }).length;
+    const highRisk = projects.filter(p => { const b = riskBand(p.risk_score ?? 0); return b.label === 'Critical' || b.label === 'High'; }).length;
     const avgRisk = total > 0 ? Math.round(projects.reduce((s, p) => s + (p.risk_score ?? 0), 0) / total) : 0;
     const envCounts = projects.reduce<Record<string, number>>((acc, p) => { acc[p.environment] = (acc[p.environment] ?? 0) + 1; return acc; }, {});
     return { total, highRisk, avgRisk, envCounts };
@@ -109,7 +109,7 @@ export default function Projects() {
       .filter(p => {
         if (riskFilter === 'all') return true;
         const band = riskBand(p.risk_score ?? 0);
-        return band === riskFilter;
+        return band.label.toLowerCase() === riskFilter;
       })
       .filter(p => !tagFilter || (p.tags ?? []).includes(tagFilter))
       .filter(p => !q || p.name.toLowerCase().includes(q) || (p.target ?? '').toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q))

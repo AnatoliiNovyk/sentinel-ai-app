@@ -97,8 +97,8 @@ export function subscribeToComments(
   callback: (comments: FindingComment[]) => void
 ) {
   const subscription = supabase
-    .from(`finding_comments:vulnerability_id=eq.${vulnerabilityId}`)
-    .on('*', () => {
+    .channel(`finding_comments:vulnerability_id=eq.${vulnerabilityId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'finding_comments' }, () => {
       // Refetch comments when any change occurs
       getComments(vulnerabilityId).then(callback);
     })

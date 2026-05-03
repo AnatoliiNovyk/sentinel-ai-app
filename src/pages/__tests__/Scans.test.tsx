@@ -5,23 +5,23 @@ import type { Project, Scan, Vulnerability } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-const mockProjects: Project[] = [
+const mockProjects = [
   { id: 'proj-1', name: 'Alpha', target: 'https://alpha.example.com', risk_score: 45, org_id: 'org-1', user_id: 'user-1', created_at: '2026-01-01' },
   { id: 'proj-2', name: 'Beta', target: 'https://beta.example.com', risk_score: 72, org_id: 'org-1', user_id: 'user-1', created_at: '2026-01-02' },
-];
+] as unknown as Project[];
 
-const mockScans: Scan[] = [
+const mockScans = [
   { id: 'scan-1', project_id: 'proj-1', scanner: 'Nmap:Intense', status: 'completed', is_mock: false, detected_mode: 'REAL', created_at: '2026-04-01T10:00:00Z', finished_at: '2026-04-01T10:30:00Z', user_id: 'user-1' },
   { id: 'scan-2', project_id: 'proj-1', scanner: 'Nmap:Vuln', status: 'running', is_mock: false, detected_mode: 'REAL', created_at: '2026-04-01T11:00:00Z', user_id: 'user-1' },
   { id: 'scan-3', project_id: 'proj-1', scanner: 'Tfsec', status: 'failed', is_mock: true, detected_mode: 'MOCK', created_at: '2026-04-01T12:00:00Z', user_id: 'user-1' },
-  { id: 'scan-4', project_id: 'proj-2', scanner: 'Amass', status: 'pending', is_mock: false, detected_mode: 'REAL', created_at: '2026-04-01T13:00:00Z', user_id: 'user-1' },
-];
+  { id: 'scan-4', project_id: 'proj-2', scanner: 'Amass', status: 'queued', is_mock: false, detected_mode: 'REAL', created_at: '2026-04-01T13:00:00Z', user_id: 'user-1' },
+] as unknown as Scan[];
 
-const mockVulns: Vulnerability[] = [
+const mockVulns = [
   { id: 'v-1', scan_id: 'scan-1', project_id: 'proj-1', title: 'SQL Injection', severity: 'critical', status: 'open', asset: 'api.example.com', user_id: 'user-1', created_at: '2026-04-01T10:30:00Z', description: 'SQL injection vulnerability', remediation: 'Use parameterized queries' },
   { id: 'v-2', scan_id: 'scan-1', project_id: 'proj-1', title: 'XSS', severity: 'high', status: 'open', asset: 'web.example.com', user_id: 'user-1', created_at: '2026-04-01T10:30:00Z', description: 'Cross-site scripting', remediation: 'Escape user input' },
   { id: 'v-3', scan_id: 'scan-1', project_id: 'proj-1', title: 'Info Disclosure', severity: 'info', status: 'resolved', asset: 'docs.example.com', user_id: 'user-1', created_at: '2026-04-01T10:30:00Z', description: 'Information disclosure', remediation: 'Restrict access' },
-];
+] as unknown as Vulnerability[];
 
 const { mockGetProjects, mockGetScans, mockGetVulns, mockDispatchScan, mockCallAiGateway, mockUpdateVuln } = vi.hoisted(() => ({
   mockGetProjects: vi.fn().mockResolvedValue([]),
@@ -227,7 +227,7 @@ describe('Scans — AI generation', () => {
       remediation_code: null,
       user_id: 'user-1',
       created_at: '2026-04-01T10:30:00Z',
-    }] });
+    } as unknown as Vulnerability] });
   });
 
   it('calls callAiGateway when generate ai fix is clicked', async () => {

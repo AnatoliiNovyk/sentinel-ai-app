@@ -2,8 +2,7 @@
  * Unit tests for src/context/PresenceContext.tsx
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
-import React from 'react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 
 // Override the global setup.ts mock so we can test the real implementation
 vi.unmock('../PresenceContext');
@@ -27,14 +26,14 @@ vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
       if (table.startsWith('presence')) {
-        return {
-          upsert: mockUpsert,
-          on: mockOn,
-          subscribe: mockSubscribe,
-        };
+        return { upsert: mockUpsert };
       }
       return {};
     },
+    channel: (..._args: unknown[]) => ({
+      on: mockOn,
+      subscribe: mockSubscribe,
+    }),
   },
 }));
 
@@ -176,7 +175,7 @@ describe('PresenceProvider', () => {
   it('updates activePresence when on("*") callback fires for matching context', async () => {
     let capturedOnCallback: ((payload: { new: unknown }) => void) | null = null;
 
-    mockOn.mockImplementation(function (this: unknown, _event: string, cb: (payload: { new: unknown }) => void) {
+    mockOn.mockImplementation(function (this: unknown, _eventType: string, _filter: unknown, cb: (payload: { new: unknown }) => void) {
       capturedOnCallback = cb;
       return this;
     });
@@ -220,7 +219,7 @@ describe('PresenceProvider', () => {
   it('on("*") callback does not update state for non-matching context', async () => {
     let capturedOnCallback: ((payload: { new: unknown }) => void) | null = null;
 
-    mockOn.mockImplementation(function (this: unknown, _event: string, cb: (payload: { new: unknown }) => void) {
+    mockOn.mockImplementation(function (this: unknown, _eventType: string, _filter: unknown, cb: (payload: { new: unknown }) => void) {
       capturedOnCallback = cb;
       return this;
     });

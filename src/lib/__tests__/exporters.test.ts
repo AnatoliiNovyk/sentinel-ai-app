@@ -2,7 +2,7 @@
  * Unit tests for src/lib/exporters.ts
  * Tests toSarif() (generation) and fromSarif() (parsing) — pure functions, no DOM/Supabase.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { toSarif, fromSarif, summarize, toCsvExport, toJsonExport, downloadFile } from '../exporters';
 import type { Project, Scan, Vulnerability } from '../supabase';
 

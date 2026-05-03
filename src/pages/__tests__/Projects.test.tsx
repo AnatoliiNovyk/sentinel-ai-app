@@ -733,7 +733,7 @@ describe('Projects — ProjectModal warns when user is null', () => {
   });
 
   it('shows warning toast and does not insert when user is null at submit', async () => {
-    mockAuthUser.mockImplementation(() => ({ user: null, organizations: [] }));
+    mockAuthUser.mockImplementation(() => ({ user: null as unknown as { id: string }, organizations: [] }));
     mockOrder.mockResolvedValue({ data: [], error: null });
     render(<Projects />);
     // Header "New project" button is always visible regardless of loading state

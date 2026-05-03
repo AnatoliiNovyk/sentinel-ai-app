@@ -14,7 +14,9 @@ describe('ai-gateway contract', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.action).toBe('chat');
-      expect(result.value.messages).toHaveLength(1);
+      if (result.value.action === 'chat') {
+        expect(result.value.messages).toHaveLength(1);
+      }
     }
   });
 
@@ -24,7 +26,7 @@ describe('ai-gateway contract', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) {
+    if (result.ok && result.value.action === 'chat') {
       expect(result.value.messages[0].content).toBe('test content');
     }
   });
@@ -49,11 +51,9 @@ describe('ai-gateway contract', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) {
+    if (result.ok && result.value.action === 'generate_kill_chain') {
       expect(result.value.action).toBe('generate_kill_chain');
-      if (result.value.action === 'generate_kill_chain') {
-        expect(result.value.project).toBe('Acme');
-      }
+      expect(result.value.project).toBe('Acme');
       expect(result.value.messages[0].content).toContain('project Acme');
       expect(result.value.messages[0].content).toContain('Open S3 bucket');
     }

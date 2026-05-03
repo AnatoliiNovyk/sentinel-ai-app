@@ -35,7 +35,7 @@ export function CommentThread({ vulnerabilityId, vulnerabilityTitle }: CommentTh
     getComments(vulnerabilityId).then(setComments).finally(() => setLoading(false));
 
     const unsubscribe = subscribeToComments(vulnerabilityId, setComments);
-    return unsubscribe;
+    return () => { unsubscribe(); };
   }, [vulnerabilityId]);
 
   const handleAddComment = async () => {

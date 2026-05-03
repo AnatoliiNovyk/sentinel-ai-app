@@ -81,7 +81,7 @@ export default function Dashboard() {
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
       setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
-      setTeamMembers((teamRes.data ?? []) as TeamMember[]);
+      setTeamMembers((teamRes.data ?? []) as unknown as TeamMember[]);
 
       const probeRow = (probeRes.data ?? [])[0] as { created_at?: string; status?: string; metadata?: unknown } | undefined;
       const probeMeta = (probeRow?.metadata && typeof probeRow.metadata === 'object')
@@ -1314,7 +1314,7 @@ function buildScanVelocity(scans: Scan[], days: number) {
   return buckets;
 }
 
-function buildRiskTrend(vulns: Vulnerability[], projects: Project[], days: number) {
+function buildRiskTrend(vulns: Vulnerability[], _projects: Project[], days: number) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const SEV_W: Record<string, number> = { critical: 10, high: 5, medium: 2, low: 1, info: 0 };

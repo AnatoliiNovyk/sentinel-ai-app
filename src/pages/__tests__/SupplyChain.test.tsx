@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SupplyChain from '../SupplyChain';
 
 const { mockScan, mockGetCircuitBreaker, mockGetGlobalScaAnalyzer, mockUseAuth } = vi.hoisted(() => {

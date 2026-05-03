@@ -67,8 +67,8 @@ const STORAGE_KEY_WEBHOOKS = 'sentinel_webhooks';
 
 function loadServices(): Record<ServiceId, ServiceConfig> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_SERVICES) ?? '{}');
-  } catch { return {}; }
+    return JSON.parse(localStorage.getItem(STORAGE_KEY_SERVICES) ?? '{}') as Record<ServiceId, ServiceConfig>;
+  } catch { return {} as Record<ServiceId, ServiceConfig>; }
 }
 
 function saveServices(s: Record<string, ServiceConfig>) {
