@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RemediationModal from '../RemediationModal';
@@ -225,5 +225,40 @@ describe('RemediationModal — toggle uncomplete step', () => {
     // Uncheck it
     fireEvent.click(firstStepToggle!);
     expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+});
+
+describe('RemediationModal — copy timer reset', () => {
+  beforeEach(() => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    vi.useFakeTimers();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('resets copy icon after 2 seconds', () => {
+    const vuln = makeVuln({ remediation_type: 'bash', remediation_code: 'sudo apt upgrade' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Copy'));
+    act(() => { vi.advanceTimersByTime(2100); });
+    // After timer, the copy button text goes back to 'Copy' (not 'Copied')
+    expect(screen.getByText('Copy')).toBeInTheDocument();
+  });
+
+  it('resets playbook copy icon after 2 seconds', () => {
+    const vuln = makeVuln({ asset: '10.0.0.1', cve_id: '' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+    const copyBtns = screen.getAllByText('Copy');
+    fireEvent.click(copyBtns[0]);
+    act(() => { vi.advanceTimersByTime(2100); });
+    expect(screen.getAllByText('Copy').length).toBeGreaterThan(0);
+  });
+});
+
+describe('RemediationModal — unknown remediation type', () => {
+  it('falls back to manual meta for unknown remediation_type', () => {
+    const vuln = makeVuln({ remediation_type: 'unknown-type' as never });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('Manual')).toBeInTheDocument();
   });
 });

@@ -366,6 +366,35 @@ describe('Activity — search and filter interactions', () => {
       expect(screen.getAllByText('Alpha Project').length).toBeGreaterThanOrEqual(1),
     );
   });
+
+  it('project filter dropdown onChange selects a project and resets page', async () => {
+    render(<ActivityPage />);
+    await screen.findByText('Activity Log');
+    fireEvent.click(screen.getByTitle('Toggle filters'));
+    await waitFor(() => screen.getByTitle('Filter by project'));
+    await waitFor(() =>
+      expect(screen.getAllByText('Alpha Project').length).toBeGreaterThanOrEqual(1),
+    );
+    const select = screen.getByTitle('Filter by project');
+    const callsBefore = mockRange.mock.calls.length;
+    fireEvent.change(select, { target: { value: 'proj-1' } });
+    await waitFor(() =>
+      expect(mockRange.mock.calls.length).toBeGreaterThan(callsBefore),
+    );
+  });
+
+  it('clicking Logs tab when on Anomalies tab switches back to logs view', async () => {
+    render(<ActivityPage />);
+    await screen.findByText('Activity Log');
+    fireEvent.click(screen.getByText('Anomalies'));
+    await waitFor(() =>
+      expect(screen.queryByText('Scan started for target example.com')).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText('Logs'));
+    await waitFor(() =>
+      expect(screen.getByText('Scan started for target example.com')).toBeInTheDocument(),
+    );
+  });
 });
 
 // ── Load more and navigation ──────────────────────────────────────────────────

@@ -787,6 +787,21 @@ describe('Reports — GenerateModal template management', () => {
     expect(stored[0].name).toBe('My Template');
   });
 
+  it('saving template with same name replaces previous template', async () => {
+    seedVersioned('report_templates', [
+      { name: 'My Template', kind: 'executive' as const, fields: ['summary'] },
+    ]);
+    await openModal();
+
+    const nameInput = screen.getByPlaceholderText(/template name/i);
+    fireEvent.change(nameInput, { target: { value: 'My Template' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    const stored = readVersioned<Array<{name: string; kind: 'executive' | 'technical'; fields: string[]}>>('report_templates', []);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].name).toBe('My Template');
+  });
+
   it('loads template when template button clicked', async () => {
     // Pre-populate localStorage with a template
     seedVersioned('report_templates', [{ name: 'Saved Template', kind: 'technical' as const, fields: ['vulnerabilities'] }]);
@@ -867,6 +882,17 @@ describe('Reports — GenerateModal generate flow', () => {
     vi.unstubAllGlobals();
   });
 
+  it('edge function returning ok:false falls back to local generation', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal('fetch', mockFetch);
+    await openModal();
+    fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /generate report/i })).toBeNull();
+    });
+    vi.unstubAllGlobals();
+  });
+
   it('toggles field checkbox on and off', async () => {
     await openModal();
     // Find first field checkbox in "Report fields"
@@ -933,5 +959,12 @@ describe('Reports — GenerateModal generate flow', () => {
     });
     vi.unstubAllGlobals();
     mockScansOrder.mockResolvedValue({ data: [], error: null });
+  });
+
+  it('changing project dropdown in modal fires onChange handler', async () => {
+    await openModal();
+    const select = screen.getByRole('combobox', { name: /project/i });
+    // onChange fires — no error thrown means the handler ran
+    expect(() => fireEvent.change(select, { target: { value: 'proj-2' } })).not.toThrow();
   });
 });

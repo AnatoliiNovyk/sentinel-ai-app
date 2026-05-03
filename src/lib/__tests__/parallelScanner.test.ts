@@ -130,6 +130,31 @@ describe('runScansParallel', () => {
     expect(results).toEqual([]);
     expect(workerFn).not.toHaveBeenCalled();
   });
+
+  it('handles non-Error thrown values (string throw) and marks as failed', async () => {
+    const jobs = [createMockScanJob('job-str-err')];
+    const workerFn = vi.fn(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-throw-literal
+      throw 'string error value';
+    });
+
+    const results = await runScansParallel(jobs, workerFn, 3);
+
+    expect(results[0].status).toBe('failed');
+    expect(results[0].error).toBe('string error value');
+  });
+
+  it('marks timed-out jobs with status "timeout" when error message includes Timeout', async () => {
+    const jobs = [createMockScanJob('job-timeout')];
+    const workerFn = vi.fn(async () => {
+      throw new Error('Timeout exceeded');
+    });
+
+    const results = await runScansParallel(jobs, workerFn, 3);
+
+    expect(results[0].status).toBe('timeout');
+    expect(results[0].error).toContain('Timeout');
+  });
 });
 
 describe('batchJobs', () => {

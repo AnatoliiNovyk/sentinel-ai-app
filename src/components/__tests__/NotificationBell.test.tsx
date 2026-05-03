@@ -407,4 +407,15 @@ describe('NotificationBell — realtime channel callbacks', () => {
       insertHandler?.({ new: notif });
     });
   });
+
+  it('"View all notifications" button closes popover and navigates to /notifications', async () => {
+    const notif = makeNotif({ title: 'Some notification' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    await waitFor(() => expect(mockLimit).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText('View all notifications')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('View all notifications'));
+    expect(mockNavigate).toHaveBeenCalledWith('/notifications');
+  });
 });

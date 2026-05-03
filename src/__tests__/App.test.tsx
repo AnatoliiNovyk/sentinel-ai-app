@@ -34,6 +34,9 @@ vi.mock('../pages/SupplyChain', () => ({ default: () => <div>Supply Chain Page</
 vi.mock('../pages/KillChain', () => ({ default: () => <div>Kill Chain Page</div> }));
 vi.mock('../pages/Integrations', () => ({ default: () => <div>Integrations Page</div> }));
 vi.mock('../pages/ApiDocs', () => ({ default: () => <div>Api Docs Page</div> }));
+vi.mock('../pages/Notifications', () => ({ default: () => <div>Notifications Page</div> }));
+vi.mock('../pages/Vulnerabilities', () => ({ default: () => <div>Vulnerabilities Page</div> }));
+vi.mock('../pages/Activity', () => ({ default: () => <div>Activity Page</div> }));
 vi.mock('../pages/PublicReport', () => ({
   default: ({ token }: { token: string }) => <div>Public Report: {token}</div>,
 }));
@@ -108,6 +111,13 @@ describe('App', () => {
       render(<App />);
       expect(screen.queryByTestId('app-layout')).not.toBeInTheDocument();
     });
+
+    it('redirects unknown unauthenticated route to landing', async () => {
+      window.history.pushState({}, '', '/unknown-public-path');
+      mockUseAuth.mockReturnValue({ user: null, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Landing Page')).toBeInTheDocument();
+    });
   });
 
   describe('authenticated routing', () => {
@@ -121,6 +131,41 @@ describe('App', () => {
       mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
       render(<App />);
       expect(screen.getByText('Dashboard Page')).toBeInTheDocument();
+    });
+
+    it('renders Chat route for authenticated user', async () => {
+      window.history.pushState({}, '', '/chat');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Chat Page')).toBeInTheDocument();
+    });
+
+    it('renders Reports route for authenticated user', async () => {
+      window.history.pushState({}, '', '/reports');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Reports Page')).toBeInTheDocument();
+    });
+
+    it('renders Notifications route for authenticated user', async () => {
+      window.history.pushState({}, '', '/notifications');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Notifications Page')).toBeInTheDocument();
+    });
+
+    it('renders Vulnerabilities route for authenticated user', async () => {
+      window.history.pushState({}, '', '/vulnerabilities');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Vulnerabilities Page')).toBeInTheDocument();
+    });
+
+    it('renders Activity route for authenticated user', async () => {
+      window.history.pushState({}, '', '/activity');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Activity Page')).toBeInTheDocument();
     });
   });
 });

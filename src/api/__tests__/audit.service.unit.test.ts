@@ -310,6 +310,26 @@ describe('AuditService', () => {
       expect(summary.failureCount).toBe(0);
       expect(summary.topFailures).toHaveLength(0);
     });
+
+    it('sorts topFailures by count descending (exercises sort comparator)', async () => {
+      const fakeLogs: Partial<AuditLogEntry>[] = [
+        { action: AuditAction.SCAN_FAILED, status: 'failure', errorMessage: 'err', userId: 'u1' },
+        { action: AuditAction.AUTH_FAILED, status: 'failure', errorMessage: 'err', userId: 'u2' },
+        { action: AuditAction.AUTH_FAILED, status: 'failure', errorMessage: 'err', userId: 'u3' },
+        { action: AuditAction.AUTH_FAILED, status: 'failure', errorMessage: 'err', userId: 'u4' },
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(
+        fakeLogs as AuditLogEntry[]
+      );
+
+      const summary = await AuditService.getSummary(
+        'org-1', new Date(Date.now() - 3600_000), new Date()
+      );
+
+      expect(summary.topFailures[0].action).toBe(AuditAction.AUTH_FAILED);
+      expect(summary.topFailures[0].count).toBe(3);
+      expect(summary.topFailures[1].action).toBe(AuditAction.SCAN_FAILED);
+    });
   });
 
   // ── detectAnomalies() ─────────────────────────────────────────────────────
@@ -375,6 +395,34 @@ describe('AuditService', () => {
       expect(anomalies.rateLimitedUsers).toHaveLength(0);
       expect(anomalies.failedAuthAttempts).toHaveLength(0);
       expect(anomalies.circuitBreakerEvents).toBe(0);
+    });
+
+    it('sorts rateLimitedUsers by count descending (exercises sort comparator)', async () => {
+      const fakeLogs: Partial<AuditLogEntry>[] = [
+        ...Array.from({ length: 6 }, () => ({ userId: 'low-spammer', action: AuditAction.RATE_LIMIT_EXCEEDED, status: 'failure' as const })),
+        ...Array.from({ length: 9 }, () => ({ userId: 'high-spammer', action: AuditAction.RATE_LIMIT_EXCEEDED, status: 'failure' as const })),
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(fakeLogs as AuditLogEntry[]);
+
+      const anomalies = await AuditService.detectAnomalies('org-1');
+
+      expect(anomalies.rateLimitedUsers[0].userId).toBe('high-spammer');
+      expect(anomalies.rateLimitedUsers[0].count).toBe(9);
+      expect(anomalies.rateLimitedUsers[1].userId).toBe('low-spammer');
+    });
+
+    it('sorts failedAuthAttempts by count descending (exercises sort comparator)', async () => {
+      const fakeLogs: Partial<AuditLogEntry>[] = [
+        ...Array.from({ length: 4 }, () => ({ userId: 'less-brute', action: AuditAction.AUTH_FAILED, status: 'failure' as const })),
+        ...Array.from({ length: 7 }, () => ({ userId: 'more-brute', action: AuditAction.AUTH_FAILED, status: 'failure' as const })),
+      ];
+      vi.spyOn(AuditService, 'queryLogs').mockResolvedValueOnce(fakeLogs as AuditLogEntry[]);
+
+      const anomalies = await AuditService.detectAnomalies('org-1');
+
+      expect(anomalies.failedAuthAttempts[0].userId).toBe('more-brute');
+      expect(anomalies.failedAuthAttempts[0].count).toBe(7);
+      expect(anomalies.failedAuthAttempts[1].userId).toBe('less-brute');
     });
   });
 

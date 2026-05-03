@@ -692,4 +692,54 @@ describe('Vulnerabilities — VulnRow note and low CVSS', () => {
     await screen.findByText('Low CVSS Vuln');
     expect(screen.getByText('2.1')).toBeInTheDocument();
   });
+
+  it('clicking High stat card toggles high filter', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByText('High').closest('button')!);
+    // SQL Injection (critical) should be hidden; XSS Reflected (high) should remain
+    expect(screen.queryByText('SQL Injection')).not.toBeInTheDocument();
+    expect(screen.getByText('XSS Reflected')).toBeInTheDocument();
+  });
+
+  it('clicking Open stat card toggles open filter', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // StatCard renders label in a div inside a button; pick the first Open button (stat card)
+    const openButtons = screen.getAllByText('Open').map(el => el.closest('button')).filter(Boolean);
+    fireEvent.click(openButtons[0]!);
+    // Open vulns should remain visible
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('clicking SLA breached stat card toggles slaBreached filter', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    const slaButtons = screen.getAllByText('SLA breached').map(el => el.closest('button')).filter(Boolean);
+    // Click to activate and then again to deactivate (toggle)
+    fireEvent.click(slaButtons[0]!);
+    fireEvent.click(slaButtons[0]!);
+    // After toggling off, all vulns should be visible again
+    expect(screen.getByText('SQL Injection')).toBeInTheDocument();
+  });
+
+  it('clicking severity pill applies severity filter', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    // Use severity pill row button (not the stat card)
+    fireEvent.click(screen.getByRole('button', { name: /^low$/i }));
+    expect(await screen.findByText('No vulnerabilities match the filters')).toBeInTheDocument();
+  });
+
+  it('clear filters button resets active severity pill filter', async () => {
+    render(<Vulnerabilities />);
+    await screen.findByText('SQL Injection');
+    fireEvent.click(screen.getByRole('button', { name: /^low$/i }));
+    await screen.findByText('No vulnerabilities match the filters');
+
+    const clearButtons = screen.getAllByRole('button', { name: /clear filters/i });
+    clearButtons.forEach((btn) => fireEvent.click(btn));
+
+    expect(await screen.findByText('SQL Injection')).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import Landing from '../Landing';
 
@@ -100,5 +100,16 @@ describe('Landing — handleSubscribe & FAQ', () => {
     await waitFor(() =>
       expect(screen.queryByText(/autonomous threat exposure/i)).not.toBeInTheDocument(),
     );
+  });
+
+  it('resets subscribed state after 3 seconds', () => {
+    vi.useFakeTimers();
+    render(<Landing />);
+    const emailInput = screen.getByPlaceholderText(/enter your email/i);
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.submit(emailInput.closest('form')!);
+    act(() => { vi.advanceTimersByTime(3100); });
+    expect(screen.queryByText(/thanks for subscribing/i)).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

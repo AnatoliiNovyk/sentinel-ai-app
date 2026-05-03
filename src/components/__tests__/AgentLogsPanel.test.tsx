@@ -151,6 +151,38 @@ describe('AgentLogsPanel — level filter', () => {
     expect(screen.getByText(/Info line/)).toBeInTheDocument();
     expect(screen.getByText(/Error line/)).toBeInTheDocument();
   });
+
+  it('filters to success logs when success pill clicked', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'info',    message: 'Info line' }),
+      makeLog({ level: 'success', message: 'Success line' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByRole('button', { name: /^success$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^success$/i }));
+    expect(screen.getByText(/Success line/)).toBeInTheDocument();
+    expect(screen.queryByText(/Info line/)).not.toBeInTheDocument();
+  });
+
+  it('filters to info logs when info pill clicked', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'info',  message: 'Info line' }),
+      makeLog({ level: 'error', message: 'Error line' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByRole('button', { name: /^info$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^info$/i }));
+    expect(screen.getByText(/Info line/)).toBeInTheDocument();
+    expect(screen.queryByText(/Error line/)).not.toBeInTheDocument();
+  });
+
+  it('shows empty state message when no logs loaded', async () => {
+    mockFetchReturns([]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() =>
+      expect(screen.getByText(/No logs yet/i)).toBeInTheDocument(),
+    );
+  });
 });
 
 describe('AgentLogsPanel — copyLog', () => {

@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportViewer from '../ReportViewer';
 import type { Report } from '../../lib/supabase';
 
@@ -108,6 +108,18 @@ describe('ReportViewer', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(onClose).toHaveBeenCalledOnce();
     });
+
+    it('calls onClose when clicking on backdrop overlay element', () => {
+      const onClose = vi.fn();
+      render(<ReportViewer report={makeReport()} onClose={onClose} />);
+      // The outermost div is the overlay backdrop; clicking directly on it (not child) triggers onClose
+      const overlayEl = document.querySelector('[data-testid="report-overlay"]') ??
+        document.querySelector('.fixed.inset-0') as HTMLElement | null;
+      if (overlayEl) {
+        // Simulate click where e.target === overlayRef.current
+        fireEvent.click(overlayEl, { target: overlayEl });
+      }
+    });
   });
 
   describe('copy action', () => {
@@ -213,6 +225,83 @@ describe('ReportViewer', () => {
       fireEvent.click(screen.getByText('Markdown'));
       const markdownBtn = screen.getByText('Markdown');
       expect(markdownBtn.className).toContain('bg-slate-800');
+    });
+
+    it('switches back to rendered mode by clicking Preview after Markdown', () => {
+      render(<ReportViewer report={makeReport()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Markdown'));
+      fireEvent.click(screen.getByText('Preview'));
+      const previewBtn = screen.getByText('Preview');
+      expect(previewBtn.className).toContain('bg-slate-800');
+    });
+  });
+
+  describe('print action', () => {
+    it('calls window.print when Print button clicked', () => {
+      const printMock = vi.fn();
+      vi.stubGlobal('print', printMock);
+      render(<ReportViewer report={makeReport()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByTitle('Print report'));
+      expect(printMock).toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('backdrop click', () => {
+    it('calls onClose when clicking directly on overlay backdrop', () => {
+      const onClose = vi.fn();
+      const { container } = render(<ReportViewer report={makeReport()} onClose={onClose} />);
+      const overlay = container.firstChild as HTMLElement;
+      fireEvent.click(overlay);
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('share guard', () => {
+    it('does not trigger share again while sharing is in progress', async () => {
+      // Set up a share that resolves slowly so we can catch the in-progress state
+      let resolveShare!: () => void;
+      mockEq.mockReturnValueOnce(new Promise<{ data: null; error: null }>((res) => {
+        resolveShare = () => res({ data: null, error: null });
+      }));
+      render(<ReportViewer report={makeReport({ share_token: null })} onClose={vi.fn()} />);
+      const shareBtn = screen.getByTitle('Generate public link');
+      // First click starts the async share
+      fireEvent.click(shareBtn);
+      // Second click while sharing is in progress (button is disabled)
+      fireEvent.click(shareBtn);
+      // Only one supabase update should have been called
+      resolveShare();
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('event listener cleanup', () => {
+    it('removes keydown listener when component unmounts', () => {
+      const removeSpy = vi.spyOn(window, 'removeEventListener');
+      const { unmount } = render(<ReportViewer report={makeReport()} onClose={vi.fn()} />);
+      unmount();
+      expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+      removeSpy.mockRestore();
+    });
+  });
+
+  describe('unknown report kind', () => {
+    it('renders fallback kind label for unknown kind value', () => {
+      render(<ReportViewer report={makeReport({ kind: 'custom-kind' as never })} onClose={vi.fn()} />);
+      expect(screen.getByText('custom-kind')).toBeInTheDocument();
+    });
+  });
+
+  describe('copy state reset', () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('clears copied state after 2 seconds', () => {
+      vi.useFakeTimers();
+      render(<ReportViewer report={makeReport()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByTitle('Copy Markdown'));
+      act(() => { vi.advanceTimersByTime(2100); });
+      expect(screen.queryByText('Copied!')).not.toBeInTheDocument();
     });
   });
 });

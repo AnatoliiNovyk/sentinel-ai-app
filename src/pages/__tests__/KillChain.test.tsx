@@ -252,6 +252,21 @@ describe('KillChain — exports and interactive functions', () => {
     );
   });
 
+  it('clicking All phase filter resets phase filter', async () => {
+    await generateChain();
+    const reconBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Recon'));
+    expect(reconBtn).toBeTruthy();
+    fireEvent.click(reconBtn!);
+
+    const allBtn = screen.getAllByRole('button').find(b => /^All\s*\(\d+\)$/.test(b.textContent?.trim() ?? ''));
+    expect(allBtn).toBeTruthy();
+    fireEvent.click(allBtn!);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Reconnaissance').length).toBeGreaterThanOrEqual(1),
+    );
+  });
+
   it('stepSearch filters steps by tactic', async () => {
     await generateChain();
     const searchInput = screen.getByPlaceholderText(/search tactic/i);
@@ -407,5 +422,14 @@ describe('KillChain — clear filters via sort button', () => {
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument());
+  });
+
+  it('changing project select updates projectId', async () => {
+    render(<KillChain />);
+    await waitFor(() => screen.getByRole('combobox'));
+    const select = screen.getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'proj-2' } });
+    // After change the select value should reflect the new project
+    expect((select as HTMLSelectElement).value).toBe('proj-2');
   });
 });
