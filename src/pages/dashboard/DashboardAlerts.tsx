@@ -2,13 +2,15 @@ import { useState, useMemo } from 'react';
 import {
   ShieldAlert, ExternalLink, Activity, Zap, Timer, Clock,
   ArrowRight, Search, ArrowUpDown, Users, TrendingUp, TrendingDown, Minus,
+  AlertTriangle, CheckCheck, Target,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Scan, Vulnerability, Project, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
 import { Sparkline } from '../../components/Sparkline';
 import { SkeletonList } from '../../components/Skeleton';
 import { StatusBadge, SlaGroup } from './DashboardAlertsHelpers';
-import { ScanVelocityChart, SummaryPill, SlaDonut } from './DashboardCharts';
+import { ScanVelocityChart, SummaryPill, SlaDonut, RiskTrendChart } from './DashboardCharts';
+import { SeverityDistribution } from './DashboardStats';
 
 // ─── Types ────────────────────────────────────────────────────────────
 
