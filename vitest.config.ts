@@ -9,7 +9,7 @@ export default defineConfig({
     testTimeout: 15000,
     hookTimeout: 15000,
     setupFiles: ['./src/__tests__/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/__tests__/*.{test,spec}.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov', 'json-summary'],
@@ -21,7 +21,6 @@ export default defineConfig({
         'src/vite-env.d.ts',
         'src/main.tsx',
         '**/*.d.ts',
-        '**/__tests__/**',
         '**/index.ts',
         'vite.config.ts',
         'vitest.config.ts',
