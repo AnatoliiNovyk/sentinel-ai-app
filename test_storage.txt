@@ -1,0 +1,43 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+
+ [31mтЭп[39m src/lib/__tests__/storage.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 16[2mms[22m[39m
+       [32mтЬУ[39m saves data with version envelope[32m 2[2mms[22m[39m
+       [32mтЬУ[39m ignores quota errors silently[32m 2[2mms[22m[39m
+[31m       [31m├Ч[31m overwrites existing key[39m[32m 7[2mms[22m[39m
+       [32mтЬУ[39m reads valid versioned data[32m 0[2mms[22m[39m
+       [32mтЬУ[39m returns fallback when key absent[32m 0[2mms[22m[39m
+       [32mтЬУ[39m returns fallback when version mismatch[32m 0[2mms[22m[39m
+       [32mтЬУ[39m returns fallback on invalid JSON[32m 0[2mms[22m[39m
+       [32mтЬУ[39m returns fallback when envelope data is null[32m 0[2mms[22m[39m
+       [32mтЬУ[39m handles missing _v property gracefully[32m 0[2mms[22m[39m
+
+тОптОптОптОптОптОптОп Failed Tests 1 тОптОптОптОптОптОптОп
+
+ FAIL  src/lib/__tests__/storage.test.ts > storage тАФ versioned helpers > saveVersioned > overwrites existing key
+AssertionError: expected undefined to deeply equal { new: true }
+
+- Expected:
+{
+  "new": true,
+}
+
++ Received:
+undefined
+
+ тЭп src/lib/__tests__/storage.test.ts:33:22
+     31|       saveVersioned('key', 'v1', { new: true });
+     32|       const loaded = loadVersioned('key', {});
+     33|       expect(loaded).toEqual({ new: true });
+       |                      ^
+     34|       expect(loaded).not.toHaveProperty('old');
+     35|     });
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[1/1]тОп
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m8 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 13:15:07
+[2m   Duration [22m 1.31s[2m (transform 48ms, setup 171ms, import 26ms, tests 16ms, environment 846ms)[22m
+

@@ -1,0 +1,62 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90mD:/WORK/GITHUB/SENTINEL_AI/sentinel-ai-app[39m
+
+ [31mтЭп[39m src/lib/__tests__/httpClient.test.ts [2m([22m[2m11 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 17[2mms[22m[39m
+       [32mтЬУ[39m extends Error with status property[32m 2[2mms[22m[39m
+       [32mтЬУ[39m preserves status on throw/catch[32m 1[2mms[22m[39m
+       [32mтЬУ[39m throws HttpError for non-2xx responses[32m 1[2mms[22m[39m
+       [32mтЬУ[39m resolves with Response for 2xx[32m 0[2mms[22m[39m
+       [32mтЬУ[39m adds default timeout if not specified[32m 0[2mms[22m[39m
+       [32mтЬУ[39m respects custom timeout[32m 0[2mms[22m[39m
+       [32mтЬУ[39m throws HttpError on fetch network error[32m 0[2mms[22m[39m
+       [32mтЬУ[39m POSTs JSON body and returns parsed response[32m 2[2mms[22m[39m
+       [32mтЬУ[39m throws HttpError for POST failures[32m 1[2mms[22m[39m
+[31m       [31m├Ч[31m accepts optional headers in options[39m[32m 5[2mms[22m[39m
+[31m       [31m├Ч[31m includes auth token when provided[39m[32m 1[2mms[22m[39m
+
+тОптОптОптОптОптОптОп Failed Tests 2 тОптОптОптОптОптОптОп
+
+ FAIL  src/lib/__tests__/httpClient.test.ts > httpClient > httpPost > accepts optional headers in options
+AssertionError: expected undefined to be 'header' // Object.is equality
+
+- Expected:
+"header"
+
++ Received:
+undefined
+
+ тЭп src/lib/__tests__/httpClient.test.ts:149:35
+    147|       const callArgs = mockFetch.mock.calls[0];
+    148|       const headers = callArgs[1].headers;
+    149|       expect(headers['X-Custom']).toBe('header');
+       |                                   ^
+    150|     });
+    151|
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[1/2]тОп
+
+ FAIL  src/lib/__tests__/httpClient.test.ts > httpClient > httpPost > includes auth token when provided
+AssertionError: expected undefined to be 'Bearer secret-token' // Object.is equality
+
+- Expected:
+"Bearer secret-token"
+
++ Received:
+undefined
+
+ тЭп src/lib/__tests__/httpClient.test.ts:165:40
+    163|       const callArgs = mockFetch.mock.calls[0];
+    164|       const headers = callArgs[1].headers;
+    165|       expect(headers['Authorization']).toBe('Bearer secret-token');
+       |                                        ^
+    166|     });
+    167|   });
+
+тОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОптОп[2/2]тОп
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (11)[39m
+[2m   Start at [22m 13:29:29
+[2m   Duration [22m 1.27s[2m (transform 55ms, setup 182ms, import 30ms, tests 17ms, environment 805ms)[22m
+
