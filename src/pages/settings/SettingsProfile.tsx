@@ -2,9 +2,9 @@ import { useState } from 'react';
 import {
   Check, Eye, EyeOff, Key, Mail, Inbox, Webhook, Users, Plus, Trash2, ExternalLink,
 } from 'lucide-react';
-import { useAuth } from '../context/useAuth';
-import { SlaConfig, DEFAULT_SLA_CONFIG } from '../lib/supabase';
-import { AuditService, AuditAction } from '../api/audit.service';
+import { useAuth } from '../../context/useAuth';
+import { SlaConfig, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
+import { AuditService, AuditAction } from '../../api/audit.service';
 
 // ─── Notification preferences ────────────────────────────────────────────────
 

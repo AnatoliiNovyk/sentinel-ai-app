@@ -3,7 +3,7 @@ import {
   Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink,
   Settings2, X, Zap, AlertTriangle, RefreshCw,
 } from 'lucide-react';
-import { loadVersioned, saveVersioned } from '../lib/storage';
+import { loadVersioned, saveVersioned } from '../../lib/storage';
 
 // ─── Types ────────────────────────────────────────────────────────────
 

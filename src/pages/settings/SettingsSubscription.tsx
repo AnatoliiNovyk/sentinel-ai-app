@@ -3,10 +3,10 @@ import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown,
 } from 'lucide-react';
-import { useAuth } from '../context/useAuth';
-import { SlaConfig, DEFAULT_SLA_CONFIG } from '../lib/supabase';
-import { AuditService, AuditAction } from '../api/audit.service';
-import { httpPost } from '../lib/httpClient';
+import { useAuth } from '../../context/useAuth';
+import { SlaConfig, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
+import { AuditService, AuditAction } from '../../api/audit.service';
+import { httpPost } from '../../lib/httpClient';
 
 // ─── Plan definitions ─────────────────────────────────────────────────
 const PLANS = [

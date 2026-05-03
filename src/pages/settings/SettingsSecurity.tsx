@@ -3,11 +3,11 @@ import {
   Timer, Database, Loader2, RefreshCw, WifiOff, Server, Eye, EyeOff,
   Check, Shield, Rocket, Package, ArrowRight, Crown, CreditCard,
 } from 'lucide-react';
-import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../lib/supabase';
-import { useAuth } from '../context/useAuth';
-import { AuditService, AuditAction } from '../api/audit.service';
-import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../lib/agentHealth';
-import { httpPost } from '../lib/httpClient';
+import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../../lib/supabase';
+import { useAuth } from '../../context/useAuth';
+import { AuditService, AuditAction } from '../../api/audit.service';
+import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../../lib/agentHealth';
+import { httpPost } from '../../lib/httpClient';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
 
