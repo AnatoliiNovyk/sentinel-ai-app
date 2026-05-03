@@ -69,8 +69,16 @@
 - **Тести**: 2401/2401 проходять після всіх змін ✅
 - **Покриття гілок**: 89.5% → 93.44% (+3.94%) 📈
 
+### 4. Мікротести для покриття гілок (commit `c8e3ca2`)
+
+**Новий файл `src/lib/__tests__/storage.test.ts`:**
+- 9 тест-кейсів для `loadVersioned` та `saveVersioned`
+- Покривають edge cases: версійний mismatch, невалідний JSON, хибна конверт, quota errors
+- Тести використовують `vi.spyOn` для тестування silent error handling
+- Всі 9 тестів проходять ✅
+
 ## Наступні кроки
 
-- **Branch coverage 93.44% → 95%+**: Потребує +1.56% — 5-10 мікротестів на error paths
+- **Branch coverage 93.44% → 95%+**: Потребує +1.56% — додаткові мікротести на error paths
 - **God objects рефакторинг**: Dashboard (1545 LOC), Integrations (1395 LOC), Settings (1156 LOC) — високий ризик, велика робота
 
