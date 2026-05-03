@@ -166,5 +166,30 @@ describe('httpClient', () => {
       // httpClient uses a Headers object internally
       expect(headers.get('Authorization')).toBe('Bearer secret-token');
     });
+
+    it('does not set signal when timeoutMs is 0', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: vi.fn().mockResolvedValue({}) });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await httpPost('http://example.com/api', {}, { timeoutMs: 0 });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[1].signal).toBeUndefined();
+    });
+
+    it('does not override Content-Type when explicitly provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: vi.fn().mockResolvedValue({}) });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await httpFetch('http://example.com/api', {
+        method: 'POST',
+        body: JSON.stringify({ test: true }),
+        headers: { 'Content-Type': 'text/plain' },
+      });
+
+      const callArgs = mockFetch.mock.calls[0];
+      const headers = callArgs[1].headers as Headers;
+      expect(headers.get('Content-Type')).toBe('text/plain');
+    });
   });
 });

@@ -231,4 +231,46 @@ describe('buildReport — technical', () => {
   it('handles empty vulns list without throwing', () => {
     expect(() => buildReport('technical', makeProject(), [], [])).not.toThrow();
   });
+
+  it('omits CVE line when cve_id is null or empty', () => {
+    const report = buildReport('technical', makeProject(), [makeScan()], [
+      makeVuln({ cve_id: null as unknown as string }),
+    ]);
+    expect(report).not.toContain('- CVE:');
+  });
+
+  it('includes bash code block for aws-cli remediation type', () => {
+    const report = buildReport('technical', makeProject(), [makeScan()], [
+      makeVuln({ remediation_code: 'aws s3 ls', remediation_type: 'aws-cli' }),
+    ]);
+    expect(report).toContain('```bash');
+    expect(report).toContain('aws s3 ls');
+  });
+
+  it('includes text code block for unknown remediation type', () => {
+    const report = buildReport('technical', makeProject(), [makeScan()], [
+      makeVuln({ remediation_code: 'manual steps', remediation_type: 'manual' }),
+    ]);
+    expect(report).toContain('```text');
+  });
+
+  it('sorts statuses: open → in_progress → accepted → resolved → false_positive', () => {
+    const vulns = [
+      makeVuln({ id: 'fp', title: 'FP Finding', status: 'false_positive' }),
+      makeVuln({ id: 'ip', title: 'IP Finding', status: 'in_progress' }),
+      makeVuln({ id: 'acc', title: 'Acc Finding', status: 'accepted' }),
+      makeVuln({ id: 'op', title: 'Op Finding', status: 'open' }),
+      makeVuln({ id: 'res', title: 'Res Finding', status: 'resolved' }),
+    ];
+    const report = buildReport('technical', makeProject(), [makeScan()], vulns);
+    const idxOpen = report.indexOf('Op Finding');
+    const idxInProgress = report.indexOf('IP Finding');
+    const idxAccepted = report.indexOf('Acc Finding');
+    const idxResolved = report.indexOf('Res Finding');
+    const idxFP = report.indexOf('FP Finding');
+    expect(idxOpen).toBeLessThan(idxInProgress);
+    expect(idxInProgress).toBeLessThan(idxAccepted);
+    expect(idxAccepted).toBeLessThan(idxResolved);
+    expect(idxResolved).toBeLessThan(idxFP);
+  });
 });
