@@ -438,7 +438,7 @@ async function runProwler(target: string): Promise<Finding[]> {
   try {
     const { stdout } = await execFileAsync(
       'prowler',
-      ['aws', '-M', 'json', '--no-banner'],
+      ['aws', '--output-formats', 'json-ocsf', '--no-banner'],
       { timeout: 5 * 60_000, maxBuffer: 20 * 1024 * 1024 }
     );
     const lines = stdout.split('\n').filter(l => l.trim().startsWith('{'));
@@ -470,7 +470,25 @@ async function runProwler(target: string): Promise<Finding[]> {
 }
 
 // --- Amass (subdomain enumeration) ---
-const AMASS_TIMEOUT_MS = 2 * 60_000; // 2 minutes
+const AMASS_TIMEOUT_MS = 6 * 60_000; // 6 minutes
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseAmassSubdomains(output: string, domain: string): string[] {
+  if (!output.trim()) return [];
+  const escapedDomain = escapeRegExp(domain.toLowerCase());
+  const subdomainRe = new RegExp(`\\b(?:[a-z0-9-]+\\.)+${escapedDomain}\\b`, 'gi');
+  const unique = new Set<string>();
+
+  let match: RegExpExecArray | null;
+  while ((match = subdomainRe.exec(output)) !== null) {
+    unique.add(match[0].toLowerCase());
+  }
+
+  return Array.from(unique);
+}
 
 async function runAmass(target: string): Promise<Finding[]> {
   const safeTarget = sanitizeTarget(target);
@@ -478,10 +496,10 @@ async function runAmass(target: string): Promise<Finding[]> {
   try {
     const { stdout } = await execFileAsync(
       'amass',
-      ['enum', '-passive', '-d', safeTarget, '-timeout', '90'],
+      ['enum', '-passive', '-norecursive', '-noalts', '-d', safeTarget],
       { timeout: AMASS_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 }
     );
-    const subdomains = stdout.split('\n').map(l => l.trim()).filter(Boolean);
+    const subdomains = parseAmassSubdomains(stdout, safeTarget);
     if (subdomains.length === 0) {
       return [{ title: 'No subdomains found', description: `Amass passive enumeration of "${safeTarget}" found no subdomains.`, severity: 'info', asset: safeTarget, status: 'open' }];
     }
@@ -495,6 +513,23 @@ async function runAmass(target: string): Promise<Finding[]> {
       status: 'open',
     }));
   } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'stdout' in err) {
+      const partialStdout = String((err as { stdout?: string }).stdout ?? '');
+      const partialResults = parseAmassSubdomains(partialStdout, safeTarget);
+      if (partialResults.length > 0) {
+        console.warn(`⚠️ Amass ended with an error but produced ${partialResults.length} partial result(s). Returning partial findings.`);
+        return partialResults.map(sub => ({
+          title: `Exposed subdomain: ${sub}`,
+          description: `Subdomain "${sub}" discovered via passive DNS enumeration (partial output).`,
+          severity: 'low' as Finding['severity'],
+          asset: sub,
+          remediation: 'Review exposed subdomains and ensure they are intentional and properly secured.',
+          remediation_type: 'configuration',
+          status: 'open',
+        }));
+      }
+    }
+
     const message = getErrorMessage(err);
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
       throw new Error('amass is not installed. Run: apt-get install -y amass');
