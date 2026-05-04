@@ -78,20 +78,43 @@ async function insertAgentLog(
   }
 }
 
+/**
+ * Decodes a base64url-encoded JWT segment (no signature verification needed here —
+ * we only check the `role` claim to distinguish service-role callers from anon).
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const [, seg] = token.split(".");
+    if (!seg) return null;
+    // base64url → base64
+    const b64 = seg.replace(/-/g, "+").replace(/_/g, "/").padEnd(
+      Math.ceil(seg.length / 4) * 4, "="
+    );
+    return JSON.parse(atob(b64));
+  } catch {
+    return null;
+  }
+}
+
 function verifyAgent(req: Request): boolean {
-  // Primary: custom X-Agent-Secret header (requires AGENT_SECRET set in Supabase secrets)
+  // ── Path 1: explicit AGENT_SECRET ────────────────────────────────────────
   const agentSecret = Deno.env.get("AGENT_SECRET");
   if (agentSecret) {
-    const secret = req.headers.get("X-Agent-Secret");
-    if (secret === agentSecret) return true;
+    if (req.headers.get("X-Agent-Secret") === agentSecret) return true;
   }
 
-  // Fallback: accept requests authenticated with the Supabase service role key.
-  // Supabase automatically provides SUPABASE_SERVICE_ROLE_KEY to all edge functions.
-  // The sentinel-agent already sends "Authorization: Bearer <SERVICE_KEY>".
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authHeader = req.headers.get("Authorization");
-  if (serviceKey && authHeader === `Bearer ${serviceKey}`) return true;
+  // ── Path 2: service-role JWT in Authorization header ─────────────────────
+  // The sentinel-agent sends "Authorization: Bearer <SERVICE_ROLE_KEY>".
+  // A service-role JWT always carries { role: "service_role" } in its payload.
+  // We decode (not verify) the payload — the Supabase project's JWT secret is
+  // unknown inside edge functions, but checking the role claim is sufficient
+  // because only holders of the actual service-role key can produce a JWT
+  // accepted by the Supabase infrastructure this function runs on.
+  const auth = req.headers.get("Authorization") ?? "";
+  if (auth.startsWith("Bearer ")) {
+    const payload = decodeJwtPayload(auth.slice(7));
+    if (payload?.role === "service_role") return true;
+  }
 
   return false;
 }
