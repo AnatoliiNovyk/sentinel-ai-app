@@ -269,7 +269,7 @@ function parseNmapXml(xml: string, target: string): Finding[] {
   return findings;
 }
 
-const NMAP_TIMEOUT_MS   = 5 * 60 * 1000; // 5 minutes
+const NMAP_TIMEOUT_MS   = 60 * 1000; // 1 minute (prevent long hangs on unresolvable hosts)
 const NUCLEI_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 
 async function runNmap(target: string): Promise<Finding[]> {
@@ -279,9 +279,10 @@ async function runNmap(target: string): Promise<Finding[]> {
   try {
     // -sV: version detection, -T4: aggressive timing, -oX -: XML to stdout
     // --open: only open ports, top 1000 ports (default)
+    // --host-timeout: abort per-host scan after 30s to avoid DNS/routing hangs
     const { stdout, stderr } = await execFileAsync(
       'nmap',
-      ['-sV', '-T4', '--open', '-oX', '-', safeTarget],
+      ['-sV', '-T4', '--open', '--host-timeout', '30s', '-oX', '-', safeTarget],
       { timeout: NMAP_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 }
     );
 
@@ -395,6 +396,110 @@ async function runNuclei(target: string): Promise<Finding[]> {
       throw new Error('nuclei is not installed. Run: apt-get install -y nuclei or install from https://github.com/projectdiscovery/nuclei');
     }
     throw new Error(`nuclei failed: ${message}`);
+  }
+}
+
+// --- tfsec (Terraform IaC static analysis) ---
+async function runTfsec(target: string): Promise<Finding[]> {
+  console.log(`🏗️ Running tfsec on ${target}...`);
+  try {
+    // tfsec scans a directory for IaC misconfigurations
+    const { stdout } = await execFileAsync(
+      'tfsec',
+      [target, '--format', 'json', '--no-colour'],
+      { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 }
+    );
+    const parsed = JSON.parse(stdout) as { results?: Array<{ description: string; severity: string; location?: { filename?: string }; links?: string[] }> };
+    const results = parsed.results ?? [];
+    if (results.length === 0) {
+      return [{ title: 'No IaC misconfigurations found', description: `tfsec scan of "${target}" found no issues.`, severity: 'info', asset: target, status: 'open' }];
+    }
+    return results.map(r => ({
+      title: r.description?.split('\n')[0]?.slice(0, 120) ?? 'IaC misconfiguration',
+      description: r.description ?? '',
+      severity: (r.severity?.toLowerCase() ?? 'medium') as Finding['severity'],
+      asset: r.location?.filename ?? target,
+      remediation: r.links?.[0] ? `See: ${r.links[0]}` : 'Review and fix the IaC configuration.',
+      remediation_type: 'configuration',
+      status: 'open',
+    }));
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
+      throw new Error('tfsec is not installed. Run: apt-get install -y tfsec or see https://github.com/aquasecurity/tfsec');
+    }
+    throw new Error(`tfsec failed: ${message}`);
+  }
+}
+
+// --- Prowler (AWS cloud security posture) ---
+async function runProwler(target: string): Promise<Finding[]> {
+  console.log(`☁️ Running prowler on ${target}...`);
+  try {
+    const { stdout } = await execFileAsync(
+      'prowler',
+      ['aws', '-M', 'json', '--no-banner'],
+      { timeout: 5 * 60_000, maxBuffer: 20 * 1024 * 1024 }
+    );
+    const lines = stdout.split('\n').filter(l => l.trim().startsWith('{'));
+    if (lines.length === 0) {
+      return [{ title: 'No Prowler findings', description: `Prowler scan completed. No issues found.`, severity: 'info', asset: target, status: 'open' }];
+    }
+    return lines.slice(0, 100).flatMap(line => {
+      try {
+        const r = JSON.parse(line) as { CheckTitle?: string; Status?: string; StatusExtended?: string; Severity?: string; ResourceId?: string; Remediation?: { Recommendation?: { Text?: string; Url?: string } } };
+        const f: Finding = {
+          title: r.CheckTitle ?? 'Cloud security check',
+          description: r.StatusExtended ?? r.Status ?? '',
+          severity: (r.Severity?.toLowerCase() ?? 'medium') as Finding['severity'],
+          asset: r.ResourceId ?? target,
+          remediation: r.Remediation?.Recommendation?.Text ?? 'Review AWS security configuration.',
+          remediation_type: 'configuration',
+          status: 'open',
+        };
+        return [f];
+      } catch { return [] as Finding[]; }
+    });
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
+      throw new Error('prowler is not installed. Run: pip install prowler');
+    }
+    throw new Error(`prowler failed: ${message}`);
+  }
+}
+
+// --- Amass (subdomain enumeration) ---
+const AMASS_TIMEOUT_MS = 2 * 60_000; // 2 minutes
+
+async function runAmass(target: string): Promise<Finding[]> {
+  const safeTarget = sanitizeTarget(target);
+  console.log(`🌐 Running amass enum on ${safeTarget}...`);
+  try {
+    const { stdout } = await execFileAsync(
+      'amass',
+      ['enum', '-passive', '-d', safeTarget, '-timeout', '90'],
+      { timeout: AMASS_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 }
+    );
+    const subdomains = stdout.split('\n').map(l => l.trim()).filter(Boolean);
+    if (subdomains.length === 0) {
+      return [{ title: 'No subdomains found', description: `Amass passive enumeration of "${safeTarget}" found no subdomains.`, severity: 'info', asset: safeTarget, status: 'open' }];
+    }
+    return subdomains.map(sub => ({
+      title: `Exposed subdomain: ${sub}`,
+      description: `Subdomain "${sub}" discovered via passive DNS enumeration.`,
+      severity: 'low' as Finding['severity'],
+      asset: sub,
+      remediation: 'Review exposed subdomains and ensure they are intentional and properly secured.',
+      remediation_type: 'configuration',
+      status: 'open',
+    }));
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
+      throw new Error('amass is not installed. Run: apt-get install -y amass');
+    }
+    throw new Error(`amass failed: ${message}`);
   }
 }
 
@@ -598,6 +703,15 @@ async function runJob(job: ScanJob) {
     } else if (job.scanner === 'nuclei' || job.scanner === 'nuclei-scan') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `🔬 Running Nuclei template scan on ${job.target}...`);
       findings = await runNuclei(job.target);
+    } else if (job.scanner === 'tfsec') {
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🏗️ Running tfsec IaC analysis...`);
+      findings = await runTfsec(job.target);
+    } else if (job.scanner === 'prowler') {
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', `☁️ Running Prowler cloud security scan...`);
+      findings = await runProwler(job.target);
+    } else if (job.scanner === 'amass') {
+      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🌐 Running Amass subdomain enumeration on ${job.target}...`);
+      findings = await runAmass(job.target);
     } else {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `📡 Running Nmap port scan on ${job.target}...`);
       findings = await runNmap(job.target);
