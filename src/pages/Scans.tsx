@@ -644,6 +644,15 @@ Respond ONLY with valid JSON in this exact format:
                 {isDispatching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
                 {isDispatching ? 'Dispatching...' : 'Launch Scan'}
               </button>
+              {agentReachable === false && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/8 text-amber-300 text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    <strong>Agent offline</strong> — scan will run in demo mode with simulated findings.
+                    {' '}Real scanning requires the sentinel-agent to be running.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

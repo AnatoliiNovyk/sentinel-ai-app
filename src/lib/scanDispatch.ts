@@ -9,6 +9,19 @@ const EDGE_BASE = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
   : '';
 const ALLOW_MOCK_FALLBACK = import.meta.env.DEV || import.meta.env.VITE_ALLOW_MOCK_SCAN_FALLBACK === 'true';
+const AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined) ?? null;
+
+/** Quick liveness probe — resolves in ≤3 s to avoid blocking UX. */
+async function isAgentReachable(): Promise<boolean> {
+  try {
+    const url = AGENT_HEALTH_URL ?? (typeof window !== 'undefined' ? localStorage.getItem('agentHealthUrl') : null);
+    if (!url) return false;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3_000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Dispatches a scan.
@@ -50,8 +63,11 @@ export async function dispatchScan(
     );
   }
 
-  // 2. Attempt to call the real Edge Function
-  if (EDGE_BASE) {
+  // 2. Attempt to call the real Edge Function — but only when agent is reachable.
+  //    Skipping when agent is offline avoids creating zombie REAL jobs that stay
+  //    in "running" for 180 min before the stale-job watchdog marks them failed.
+  const agentOnline = await isAgentReachable();
+  if (EDGE_BASE && agentOnline) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -72,6 +88,8 @@ export async function dispatchScan(
     } catch (netErr) {
       console.warn('[scanDispatch] Edge fn unreachable, falling back to mock:', netErr);
     }
+  } else if (EDGE_BASE && !agentOnline) {
+    console.info('[scanDispatch] Agent offline — skipping real dispatch, falling back to mock');
   }
 
   if (!ALLOW_MOCK_FALLBACK) {
@@ -95,12 +113,7 @@ export async function dispatchScan(
 
   // 3. Fallback: browser mock (dev/demo only)
   console.info('[scanDispatch] Running in MOCK mode (no real agent)');
-  // Mark this scan row as the one mock will use
-  await supabase.from('scans').update({ status: 'failed', detected_mode: 'MOCK', is_mock: true }).eq('id', scan.id);
-
-  // runMockScan creates its own scan row — we need to delete the duplicate we created above
-  // and let the mock complete it, OR we patch mock to accept an existing scan ID.
-  // Simplest: delete the placeholder row and let mock handle everything.
+  // Delete the placeholder row — runMockScan creates its own with correct lifecycle.
   await supabase.from('scans').delete().eq('id', scan.id);
   const mockScanId = await runMockScan(userId, projectId, scanner);
   if (!mockScanId) {
