@@ -1,20 +1,6 @@
 import { supabase } from './client';
 import { runMockScan } from '../lib/scanMock';
 
-const ALLOW_MOCK_FALLBACK = import.meta.env.DEV || import.meta.env.VITE_ALLOW_MOCK_SCAN_FALLBACK === 'true';
-const AGENT_HEALTH_URL_ENV = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined) ?? null;
-
-async function checkAgentReachable(): Promise<boolean> {
-  try {
-    const url = AGENT_HEALTH_URL_ENV ?? (typeof window !== 'undefined' ? localStorage.getItem('agentHealthUrl') : null);
-    if (!url) return false;
-    const res = await fetch(url, { signal: AbortSignal.timeout(3_000) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function getFunctionErrorMessage(error: unknown): Promise<string> {
   const asRecord = (value: unknown): Record<string, unknown> | null =>
     value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
@@ -105,30 +91,29 @@ export const ScansService = {
   /**
    * Dispatches a new scan task.
    *
+   * @param agentOnline - result of the health probe already performed by the caller (Scans.tsx).
+   *                      Pass `true` to attempt real dispatch, `false` or `null` for mock fallback.
+   *
    * Flow:
-   *  1. Check agent liveness (≤3 s probe).
-   *  2a. Agent online  → create scan row, call scan-dispatch edge fn → REAL mode.
-   *  2b. Agent offline + mock allowed → run browser mock → MOCK mode.
-   *  2c. Agent offline + mock disabled → throw, no orphan scan row created.
+   *  1. Agent online  → create scan row, call scan-dispatch edge fn → REAL mode.
+   *  2. Agent offline → run browser mock → MOCK mode (demo findings).
    */
-  async dispatchScan(projectId: string, scanner: string, target: string, orgId?: string | null) {
+  async dispatchScan(
+    projectId: string,
+    scanner: string,
+    target: string,
+    orgId?: string | null,
+    agentOnline: boolean | null = false,
+  ) {
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     if (authErr || !authData.user) {
       throw new Error('Authentication required to start scan. Please sign in again.');
     }
 
     const userId = authData.user.id;
-    const agentOnline = await checkAgentReachable();
 
     // ── MOCK path (agent offline) ────────────────────────────────────────────
     if (!agentOnline) {
-      if (!ALLOW_MOCK_FALLBACK) {
-        throw new Error(
-          'Scanner agent is unreachable and mock fallback is disabled. ' +
-          'Start the sentinel-agent or set VITE_ALLOW_MOCK_SCAN_FALLBACK=true.',
-        );
-      }
-
       const mockScanId = await runMockScan(userId, projectId, scanner);
       if (!mockScanId) {
         throw new Error('Mock scan failed to execute. Check project access.');
@@ -171,14 +156,6 @@ export const ScansService = {
 
     if (error) {
       const message = await getFunctionErrorMessage(error);
-      // Edge fn failed after row was created — fall back to mock if allowed,
-      // otherwise mark failed and surface the error.
-      if (ALLOW_MOCK_FALLBACK) {
-        await supabase.from('scans').delete().eq('id', scan.id);
-        const mockScanId = await runMockScan(userId, projectId, scanner);
-        if (!mockScanId) throw new Error('Mock scan failed to execute.');
-        return { scan: { id: mockScanId }, dispatchResult: { mode: 'MOCK' } };
-      }
       await supabase
         .from('scans')
         .update({

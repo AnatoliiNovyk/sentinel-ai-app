@@ -251,7 +251,8 @@ const Scans = () => {
         project.id,
         newScanConfig.scanner,
         effectiveTarget,
-        project.org_id
+        project.org_id,
+        agentReachable,
       );
       setShowNewScanModal(false);
       toast.success('Scan started successfully.');
