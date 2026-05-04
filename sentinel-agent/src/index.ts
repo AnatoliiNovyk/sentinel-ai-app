@@ -687,8 +687,12 @@ async function runJob(job: ScanJob) {
   try {
     const executionStartedAt = Date.now();
     let findings: Finding[] = [];
-    
-    if (job.scanner === 'ai_task' || job.scanner === 'ai-agent') {
+
+    // Normalise scanner name to lowercase for case-insensitive matching
+    // (UI sends 'Tfsec', 'Amass', etc. while older dispatches may be lowercase)
+    const scannerKey = job.scanner.toLowerCase();
+
+    if (scannerKey === 'ai_task' || scannerKey === 'ai-agent') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', '🤖 Consulting Ollama AI model...');
       const aiResponse = await consultOllama(job.target);
       findings = [{
@@ -700,19 +704,20 @@ async function runJob(job: ScanJob) {
         remediation_type: 'manual',
         status: 'open'
       }];
-    } else if (job.scanner === 'nuclei' || job.scanner === 'nuclei-scan') {
+    } else if (scannerKey === 'nuclei' || scannerKey === 'nuclei-scan') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `🔬 Running Nuclei template scan on ${job.target}...`);
       findings = await runNuclei(job.target);
-    } else if (job.scanner === 'tfsec') {
+    } else if (scannerKey === 'tfsec') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `🏗️ Running tfsec IaC analysis...`);
       findings = await runTfsec(job.target);
-    } else if (job.scanner === 'prowler') {
+    } else if (scannerKey === 'prowler') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `☁️ Running Prowler cloud security scan...`);
       findings = await runProwler(job.target);
-    } else if (job.scanner === 'amass') {
+    } else if (scannerKey === 'amass') {
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `🌐 Running Amass subdomain enumeration on ${job.target}...`);
       findings = await runAmass(job.target);
     } else {
+      // Catches: 'nmap', 'nmap:intense', 'nmap:vuln', 'nmap:full', etc.
       await writeLog(job.id, job.scan_id, job.project_id, 'info', `📡 Running Nmap port scan on ${job.target}...`);
       findings = await runNmap(job.target);
     }
