@@ -79,9 +79,21 @@ async function insertAgentLog(
 }
 
 function verifyAgent(req: Request): boolean {
-  const secret = req.headers.get("X-Agent-Secret");
-  const expected = Deno.env.get("AGENT_SECRET");
-  return !!expected && secret === expected;
+  // Primary: custom X-Agent-Secret header (requires AGENT_SECRET set in Supabase secrets)
+  const agentSecret = Deno.env.get("AGENT_SECRET");
+  if (agentSecret) {
+    const secret = req.headers.get("X-Agent-Secret");
+    if (secret === agentSecret) return true;
+  }
+
+  // Fallback: accept requests authenticated with the Supabase service role key.
+  // Supabase automatically provides SUPABASE_SERVICE_ROLE_KEY to all edge functions.
+  // The sentinel-agent already sends "Authorization: Bearer <SERVICE_KEY>".
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authHeader = req.headers.get("Authorization");
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) return true;
+
+  return false;
 }
 
 Deno.serve(async (req: Request) => {
