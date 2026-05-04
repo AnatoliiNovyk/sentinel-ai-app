@@ -1,4 +1,9 @@
 {
+  "build": {
+    "env": {
+      "VITE_ALLOW_MOCK_SCAN_FALLBACK": "true"
+    }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
