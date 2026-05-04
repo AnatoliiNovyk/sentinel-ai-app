@@ -104,7 +104,19 @@ const Scans = () => {
     if (!selectedProjectId || isRefreshing) return;
     setIsRefreshing(true);
     try {
-      await loadScans(selectedProjectId);
+      const data = await ScansService.getProjectScans(selectedProjectId);
+      setScans(data);
+      // Auto-select most recent completed scan if current is failed or missing
+      const currentScan = data.find((s) => s.id === selectedScanId);
+      if (!currentScan || currentScan.status === 'failed') {
+        const best =
+          data.find((s) => s.status === 'completed' && !s.is_mock) ??
+          data.find((s) => s.status === 'completed') ??
+          data[0];
+        if (best) setSelectedScanId(best.id);
+      }
+    } catch (err) {
+      console.error('Failed to refresh scans:', err);
     } finally {
       setIsRefreshing(false);
     }
@@ -331,6 +343,8 @@ Respond ONLY with valid JSON in this exact format:
     });
     return stats;
   };
+
+  const selectedScan = scans.find((s) => s.id === selectedScanId);
 
   const scanSummary = useMemo(() => ({
     total: scans.length,
@@ -585,12 +599,31 @@ Respond ONLY with valid JSON in this exact format:
 
         {/* Main Content */}
         <div className="flex-1 min-w-0">
-          <VulnerabilityList 
-            vulnerabilities={vulnerabilities}
-            onViewDetails={setSelectedVuln}
-            onGenerateAiFix={handleAiGeneration}
-            generatingId={generatingId}
-          />
+          {selectedScan?.status === 'failed' ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center rounded-2xl border border-red-500/20 bg-red-500/5">
+              <XCircle className="w-12 h-12 text-red-500/40 mb-4" />
+              <div className="text-lg font-semibold text-red-300 mb-1">Scan Failed</div>
+              <div className="text-sm text-slate-400 max-w-sm">
+                This scan did not complete successfully. No findings were recorded.
+                {selectedScan.scanner && (
+                  <span className="block mt-1 text-slate-500">Scanner: {selectedScan.scanner}</span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowNewScanModal(true)}
+                className="mt-6 px-4 py-2 text-sm bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded-xl transition-colors"
+              >
+                Start New Scan
+              </button>
+            </div>
+          ) : (
+            <VulnerabilityList
+              vulnerabilities={vulnerabilities}
+              onViewDetails={setSelectedVuln}
+              onGenerateAiFix={handleAiGeneration}
+              generatingId={generatingId}
+            />
+          )}
         </div>
       </div>
 
