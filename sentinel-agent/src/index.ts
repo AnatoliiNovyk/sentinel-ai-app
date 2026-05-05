@@ -271,6 +271,7 @@ function parseNmapXml(xml: string, target: string): Finding[] {
 
 const NMAP_TIMEOUT_MS   = 60 * 1000; // 1 minute (prevent long hangs on unresolvable hosts)
 const NUCLEI_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
+const PROWLER_TIMEOUT_MS = parseInt(process.env.PROWLER_TIMEOUT_MS ?? '1200000', 10); // 20 minutes
 
 async function runNmap(target: string): Promise<Finding[]> {
   const safeTarget = sanitizeTarget(target);
@@ -433,40 +434,65 @@ async function runTfsec(target: string): Promise<Finding[]> {
 }
 
 // --- Prowler (AWS cloud security posture) ---
+function parseProwlerFindings(output: string, target: string): Finding[] {
+  const lines = output.split('\n').filter(l => l.trim().startsWith('{'));
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return lines.slice(0, 100).flatMap(line => {
+    try {
+      const r = JSON.parse(line) as { CheckTitle?: string; Status?: string; StatusExtended?: string; Severity?: string; ResourceId?: string; Remediation?: { Recommendation?: { Text?: string; Url?: string } } };
+      const f: Finding = {
+        title: r.CheckTitle ?? 'Cloud security check',
+        description: r.StatusExtended ?? r.Status ?? '',
+        severity: (r.Severity?.toLowerCase() ?? 'medium') as Finding['severity'],
+        asset: r.ResourceId ?? target,
+        remediation: r.Remediation?.Recommendation?.Text ?? 'Review AWS security configuration.',
+        remediation_type: 'configuration',
+        status: 'open',
+      };
+      return [f];
+    } catch {
+      return [] as Finding[];
+    }
+  });
+}
+
 async function runProwler(target: string): Promise<Finding[]> {
   console.log(`☁️ Running prowler on ${target}...`);
   try {
     const { stdout } = await execFileAsync(
       'prowler',
       ['aws', '--output-formats', 'json-ocsf', '--no-banner', '--no-color', '--ignore-exit-code-3', '--only-logs'],
-      { timeout: 5 * 60_000, maxBuffer: 20 * 1024 * 1024 }
+      { timeout: PROWLER_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }
     );
-    const lines = stdout.split('\n').filter(l => l.trim().startsWith('{'));
-    if (lines.length === 0) {
+    const findings = parseProwlerFindings(stdout, target);
+    if (findings.length === 0) {
       return [{ title: 'No Prowler findings', description: `Prowler scan completed. No issues found.`, severity: 'info', asset: target, status: 'open' }];
     }
-    return lines.slice(0, 100).flatMap(line => {
-      try {
-        const r = JSON.parse(line) as { CheckTitle?: string; Status?: string; StatusExtended?: string; Severity?: string; ResourceId?: string; Remediation?: { Recommendation?: { Text?: string; Url?: string } } };
-        const f: Finding = {
-          title: r.CheckTitle ?? 'Cloud security check',
-          description: r.StatusExtended ?? r.Status ?? '',
-          severity: (r.Severity?.toLowerCase() ?? 'medium') as Finding['severity'],
-          asset: r.ResourceId ?? target,
-          remediation: r.Remediation?.Recommendation?.Text ?? 'Review AWS security configuration.',
-          remediation_type: 'configuration',
-          status: 'open',
-        };
-        return [f];
-      } catch { return [] as Finding[]; }
-    });
+    return findings;
   } catch (err: unknown) {
     const message = getErrorMessage(err);
+    const errStdout = typeof err === 'object' && err !== null && 'stdout' in err
+      ? String((err as { stdout?: string }).stdout ?? '')
+      : '';
+    const errStderr = typeof err === 'object' && err !== null && 'stderr' in err
+      ? String((err as { stderr?: string }).stderr ?? '')
+      : '';
+
+    const findingsFromErrorStdout = parseProwlerFindings(errStdout, target);
+    if (findingsFromErrorStdout.length > 0) {
+      console.warn(`⚠️ Prowler exited non-zero but produced ${findingsFromErrorStdout.length} finding(s). Returning partial findings.`);
+      return findingsFromErrorStdout;
+    }
+
+    const combinedMessage = `${message}\n${errStderr}`.trim();
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
       throw new Error('prowler is not installed. Run: pip install prowler');
     }
     // NoCredentialsError — AWS not configured on this host; return info finding instead of crashing
-    if (message.includes('NoCredentialsError') || message.includes('Unable to locate credentials')) {
+    if (combinedMessage.includes('NoCredentialsError') || combinedMessage.includes('Unable to locate credentials')) {
       return [{
         title: 'AWS credentials not configured',
         description: 'Prowler could not run because no AWS credentials are available on this host. Configure AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION in the agent .env to enable cloud security scanning.',
@@ -477,7 +503,7 @@ async function runProwler(target: string): Promise<Finding[]> {
         status: 'open',
       }];
     }
-    throw new Error(`prowler failed: ${message}`);
+    throw new Error(`prowler failed: ${combinedMessage || message}`);
   }
 }
 
