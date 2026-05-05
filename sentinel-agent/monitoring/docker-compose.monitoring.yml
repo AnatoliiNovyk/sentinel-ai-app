@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Sentinel AI — Monitoring Stack
 # Запуск: docker compose -f docker-compose.monitoring.yml up -d
 #

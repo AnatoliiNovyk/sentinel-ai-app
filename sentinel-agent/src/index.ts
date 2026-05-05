@@ -42,8 +42,15 @@ function initOpenTelemetry(): void {
     otelTracer = otelApi.trace.getTracer('sentinel-agent', '1.0.0');
     console.log(`✅ OpenTelemetry tracing enabled → ${endpoint}`);
 
-    process.on('SIGTERM', () => { sdk.shutdown().catch(() => {}); });
-    process.on('SIGINT',  () => { sdk.shutdown().catch(() => {}); });
+    const shutdownOtel = () => {
+      sdk.shutdown()
+        .catch(() => {})
+        .finally(() => process.exit(0));
+      // Force exit if SDK takes too long
+      setTimeout(() => process.exit(0), 5000).unref();
+    };
+    process.on('SIGTERM', shutdownOtel);
+    process.on('SIGINT',  shutdownOtel);
   } catch (err) {
     console.warn('⚠️ OpenTelemetry init failed (non-fatal):', err instanceof Error ? err.message : String(err));
   }
