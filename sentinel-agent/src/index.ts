@@ -32,6 +32,8 @@ const REPORT_MAX_ATTEMPTS = 4;
 const REPORT_BASE_DELAY_MS = 1_000;
 const STALE_RUNNING_JOB_TIMEOUT_MINUTES = parseInt(process.env.STALE_RUNNING_JOB_TIMEOUT_MINUTES ?? '180', 10);
 const AGENT_MAX_CONCURRENT_JOBS = parseInt(process.env.AGENT_MAX_CONCURRENT_JOBS ?? '2', 10);
+const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS ?? '90', 10);
+const LOG_CLEANUP_INTERVAL_MS = parseInt(process.env.LOG_CLEANUP_INTERVAL_MS ?? '86400000', 10); // 24h
 const STALE_WATCHDOG_INTERVAL_MS = parseInt(process.env.STALE_WATCHDOG_INTERVAL_MS ?? '60000', 10);
 const OPERATIONAL_ALERT_WEBHOOK_URL = process.env.OPERATIONAL_ALERT_WEBHOOK_URL ?? '';
 const SLO_CLAIM_AVG_MS_THRESHOLD = parseInt(process.env.SLO_CLAIM_AVG_MS_THRESHOLD ?? '2000', 10);
@@ -977,6 +979,9 @@ const metrics = {
   sloAlertsTotal: 0,
   sloAlertsSuppressedTotal: 0,
   sloAlertLastAtMs: 0,
+  logCleanupRunsTotal: 0,
+  logCleanupLastDeletedTotal: 0,
+  logCleanupLastRunAt: 0,
 };
 
 function recordDurationMetric(
@@ -1061,6 +1066,15 @@ function startHealthServer() {
         '# HELP sentinel_slo_alert_last_timestamp_seconds Unix timestamp of last sent latency SLO alert',
         '# TYPE sentinel_slo_alert_last_timestamp_seconds gauge',
         `sentinel_slo_alert_last_timestamp_seconds ${metrics.sloAlertLastAtMs > 0 ? Math.floor(metrics.sloAlertLastAtMs / 1000) : 0}`,
+        '# HELP sentinel_log_cleanup_runs_total Total log retention cleanup runs',
+        '# TYPE sentinel_log_cleanup_runs_total counter',
+        `sentinel_log_cleanup_runs_total ${metrics.logCleanupRunsTotal}`,
+        '# HELP sentinel_log_cleanup_last_deleted_total Rows deleted in last log retention cleanup',
+        '# TYPE sentinel_log_cleanup_last_deleted_total gauge',
+        `sentinel_log_cleanup_last_deleted_total ${metrics.logCleanupLastDeletedTotal}`,
+        '# HELP sentinel_log_cleanup_last_run_timestamp_seconds Unix timestamp of last log cleanup run',
+        '# TYPE sentinel_log_cleanup_last_run_timestamp_seconds gauge',
+        `sentinel_log_cleanup_last_run_timestamp_seconds ${metrics.logCleanupLastRunAt > 0 ? Math.floor(metrics.logCleanupLastRunAt / 1000) : 0}`,
         '# HELP sentinel_active_jobs Current number of concurrently running scan jobs',
         '# TYPE sentinel_active_jobs gauge',
         `sentinel_active_jobs ${health.activeJobs}`,
@@ -1109,6 +1123,7 @@ async function main() {
   let consecutiveLoopErrors = 0;
   let pollIntervalMs = BASE_POLL_INTERVAL_MS;
   let lastWatchdogRunAt = 0;
+  let lastLogCleanupRunAt = 0;
 
   while (true) {
     try {
@@ -1123,6 +1138,29 @@ async function main() {
           }
 
           await maybeSendLatencySloAlert();
+
+          // Log retention cleanup (once per LOG_CLEANUP_INTERVAL_MS, default 24h)
+          if (nowMs - lastLogCleanupRunAt >= LOG_CLEANUP_INTERVAL_MS) {
+            try {
+              const { data: cleanupResult, error: cleanupError } = await supabase
+                .rpc('cleanup_old_logs', { retention_days: LOG_RETENTION_DAYS });
+              if (cleanupError) {
+                console.warn(`⚠️ Log retention cleanup failed: ${cleanupError.message}`);
+              } else {
+                const result = cleanupResult as { total_deleted?: number; agent_logs_deleted?: number; audit_logs_deleted?: number } | null;
+                const totalDeleted = result?.total_deleted ?? 0;
+                metrics.logCleanupRunsTotal++;
+                metrics.logCleanupLastDeletedTotal = totalDeleted;
+                metrics.logCleanupLastRunAt = nowMs;
+                lastLogCleanupRunAt = nowMs;
+                if (totalDeleted > 0) {
+                  console.log(`🧹 Log retention cleanup: deleted ${totalDeleted} row(s) older than ${LOG_RETENTION_DAYS} days (agent_logs=${result?.agent_logs_deleted ?? 0}, audit_logs=${result?.audit_logs_deleted ?? 0})`);
+                }
+              }
+            } catch (cleanupErr: unknown) {
+              console.warn(`⚠️ Log retention cleanup error: ${getErrorMessage(cleanupErr)}`);
+            }
+          }
         } catch (watchdogErr: unknown) {
           console.warn(`⚠️ Watchdog error: ${getErrorMessage(watchdogErr)}`);
         }
