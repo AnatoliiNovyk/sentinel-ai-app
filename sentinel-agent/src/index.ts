@@ -31,6 +31,7 @@ const MAX_POLL_INTERVAL_MS = 30_000;
 const REPORT_MAX_ATTEMPTS = 4;
 const REPORT_BASE_DELAY_MS = 1_000;
 const STALE_RUNNING_JOB_TIMEOUT_MINUTES = parseInt(process.env.STALE_RUNNING_JOB_TIMEOUT_MINUTES ?? '180', 10);
+const AGENT_MAX_CONCURRENT_JOBS = parseInt(process.env.AGENT_MAX_CONCURRENT_JOBS ?? '2', 10);
 const STALE_WATCHDOG_INTERVAL_MS = parseInt(process.env.STALE_WATCHDOG_INTERVAL_MS ?? '60000', 10);
 const OPERATIONAL_ALERT_WEBHOOK_URL = process.env.OPERATIONAL_ALERT_WEBHOOK_URL ?? '';
 const SLO_CLAIM_AVG_MS_THRESHOLD = parseInt(process.env.SLO_CLAIM_AVG_MS_THRESHOLD ?? '2000', 10);
@@ -947,6 +948,8 @@ const health = {
   startedAt: new Date().toISOString(),
   jobsProcessed: 0,
   jobsFailed: 0,
+  activeJobs: 0,
+  maxConcurrentJobs: AGENT_MAX_CONCURRENT_JOBS,
   lastJobAt: null as string | null,
   lastError: null as string | null,
 };
@@ -1058,6 +1061,12 @@ function startHealthServer() {
         '# HELP sentinel_slo_alert_last_timestamp_seconds Unix timestamp of last sent latency SLO alert',
         '# TYPE sentinel_slo_alert_last_timestamp_seconds gauge',
         `sentinel_slo_alert_last_timestamp_seconds ${metrics.sloAlertLastAtMs > 0 ? Math.floor(metrics.sloAlertLastAtMs / 1000) : 0}`,
+        '# HELP sentinel_active_jobs Current number of concurrently running scan jobs',
+        '# TYPE sentinel_active_jobs gauge',
+        `sentinel_active_jobs ${health.activeJobs}`,
+        '# HELP sentinel_max_concurrent_jobs Configured maximum concurrent jobs',
+        '# TYPE sentinel_max_concurrent_jobs gauge',
+        `sentinel_max_concurrent_jobs ${AGENT_MAX_CONCURRENT_JOBS}`,
       ];
 
       res.writeHead(200, {
@@ -1120,15 +1129,23 @@ async function main() {
         lastWatchdogRunAt = nowMs;
       }
 
-      const job = await fetchPendingJob();
-      if (job) {
+      // Fill all available concurrent slots with pending jobs
+      let foundJob = false;
+      while (health.activeJobs < AGENT_MAX_CONCURRENT_JOBS) {
+        const job = await fetchPendingJob();
+        if (!job) break;
+        foundJob = true;
+        health.activeJobs++;
         health.lastJobAt = new Date().toISOString();
-        await runJob(job);
-        health.jobsProcessed++;
+        runJob(job).finally(() => {
+          health.activeJobs--;
+          health.jobsProcessed++;
+        });
       }
+      void foundJob; // suppress unused var warning
 
       consecutiveLoopErrors = 0;
-      pollIntervalMs = BASE_POLL_INTERVAL_MS;
+      pollIntervalMs = health.activeJobs > 0 ? BASE_POLL_INTERVAL_MS : pollIntervalMs;
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
       console.error('⚠️ Loop Error:', msg);
