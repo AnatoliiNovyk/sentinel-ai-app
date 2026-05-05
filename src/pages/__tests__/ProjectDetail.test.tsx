@@ -287,7 +287,6 @@ describe('ProjectDetail — tab switching', () => {
 
 describe('ProjectDetail — quickScan', () => {
   const mockOnBack = vi.fn();
-  const { dispatchScan: _dispatchScan } = vi.hoisted(() => ({ dispatchScan: vi.fn() }));
 
   beforeEach(() => {
     mockOnBack.mockReset();

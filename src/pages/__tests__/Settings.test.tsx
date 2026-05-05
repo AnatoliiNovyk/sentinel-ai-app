@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Settings from '../Settings';
+import { AuditService } from '../../api/audit.service';
 
 const originalLocation = window.location;
 
@@ -235,6 +236,20 @@ describe('Settings — Save', () => {
       () => expect(screen.getByRole('button', { name: /saved!/i })).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  it('continues save flow when audit logging throws', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const auditSpy = vi.spyOn(AuditService, 'logSecurityEvent').mockRejectedValue(new Error('audit failed'));
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateEq).toHaveBeenCalledWith('id', 'user-1'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /saved!/i })).toBeInTheDocument());
+    await waitFor(() => expect(warnSpy).toHaveBeenCalledWith('Audit log failed:', expect.any(Error)));
+
+    auditSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });
 
