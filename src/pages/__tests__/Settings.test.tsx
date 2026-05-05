@@ -122,10 +122,6 @@ describe('Settings — layout', () => {
   it('renders "Team Members" section heading', () => {
     expect(screen.getByText('Team Members')).toBeInTheDocument();
   });
-
-  it('renders "Webhook Integrations" section heading', () => {
-    expect(screen.getByText('Webhook Integrations')).toBeInTheDocument();
-  });
 });
 
 describe('Settings — Profile section', () => {
@@ -510,20 +506,6 @@ describe('Settings — Team Members management', () => {
     await waitFor(() => screen.getByText('new@acme.com'));
     fireEvent.click(screen.getByRole('button', { name: 'Remove member' }));
     await waitFor(() => expect(screen.queryByText('new@acme.com')).toBeNull());
-  });
-});
-
-describe('Settings — Webhook section', () => {
-  beforeEach(async () => {
-    await act(async () => { render(<Settings />); });
-  });
-
-  it('types webhook URL and shows show/hide button', () => {
-    const webhookInput = screen.getByPlaceholderText(/hooks\.slack\.com/i) as HTMLInputElement;
-    fireEvent.change(webhookInput, { target: { value: 'https://hooks.slack.com/services/abc' } });
-    expect(screen.getByRole('button', { name: 'Show URL' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show URL' }));
-    expect(screen.getByRole('button', { name: 'Hide URL' })).toBeInTheDocument();
   });
 });
 

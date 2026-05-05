@@ -248,6 +248,7 @@ export function IntegrationsLegacy({ initialTab = 'services' }: { initialTab?: T
 }
 
 function Integrations() {
+  // Default to CI/CD tab for primary security workflow (users can switch to other integrations from tab)
   return <IntegrationsLegacy initialTab="cicd" />;
 }
 

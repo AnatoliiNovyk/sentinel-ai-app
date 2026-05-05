@@ -73,8 +73,6 @@ export function SettingsProfile() {
   const { user, profile } = useAuth();
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [showWebhookUrl, setShowWebhookUrl] = useState(false);
 
   // Notification preferences
   const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(() => {
@@ -122,8 +120,9 @@ export function SettingsProfile() {
         user.id,
         { fields: ['full_name', 'company'] },
       ));
-    } catch {
+    } catch (err) {
       // Audit logging must not block profile save flow.
+      console.warn('Audit log failed:', err);
     }
     setSaving(false);
     setSaved(true);
@@ -254,36 +253,6 @@ export function SettingsProfile() {
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Webhook Integrations */}
-      <section className="rounded-xl border border-slate-800 bg-slate-900/30 p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Webhook className="w-4 h-4 text-emerald-400" />
-          <h2 className="font-semibold">Webhook Integrations</h2>
-        </div>
-        <p className="text-sm text-slate-500 mb-5">Configure outbound webhook URL for alert delivery.</p>
-        <div className="space-y-2">
-          <label htmlFor="webhookUrl" className="block text-sm text-slate-300">Webhook URL</label>
-          <div className="flex gap-2">
-            <input
-              id="webhookUrl"
-              type={showWebhookUrl ? 'text' : 'password'}
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://hooks.slack.com/services/..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <button
-              type="button"
-              onClick={() => setShowWebhookUrl((v) => !v)}
-              className="px-3 py-2 text-sm rounded-md border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition"
-              aria-label={showWebhookUrl ? 'Hide URL' : 'Show URL'}
-            >
-              {showWebhookUrl ? 'Hide URL' : 'Show URL'}
-            </button>
           </div>
         </div>
       </section>
