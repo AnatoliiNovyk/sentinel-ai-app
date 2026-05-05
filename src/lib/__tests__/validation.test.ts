@@ -42,7 +42,7 @@ describe('validateDarkWebQuery', () => {
     const long = 'a'.repeat(ValidationLimits.QUERY_MAX_LENGTH + 1);
     const r = validateDarkWebQuery(long);
     expect(r.valid).toBe(false);
-    expect(r.error).toContain('exceeds maximum length');
+    expect(r.error).toContain('too long');
   });
 
   it('accepts query at exactly max length', () => {

@@ -153,7 +153,7 @@ describe('ScansService.dispatchScan', () => {
     mockSingle.mockResolvedValue({ data: mockScan, error: null });
     mockInvoke.mockResolvedValue({ data: { jobId: 'j1' }, error: null });
 
-    const result = await ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1');
+    const result = await ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true);
     expect(result.scan).toEqual(mockScan);
     expect(result.dispatchResult).toEqual({ jobId: 'j1' });
     expect(mockInvoke).toHaveBeenCalledWith('scan-dispatch', expect.objectContaining({
@@ -168,7 +168,7 @@ describe('ScansService.dispatchScan', () => {
     mockSingle.mockResolvedValue({ data: null, error: new Error('Insert failed') });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('Insert failed');
   });
 
@@ -181,7 +181,7 @@ describe('ScansService.dispatchScan', () => {
     mockInvoke.mockResolvedValue({ data: null, error: new Error('Edge function error') });
 
     await expect(
-      ScansService.dispatchScan('proj-2', 'prowler', 'aws-account', 'org-2'),
+      ScansService.dispatchScan('proj-2', 'prowler', 'aws-account', 'org-2', true),
     ).rejects.toThrow('Edge function error');
   });
 
@@ -209,7 +209,7 @@ describe('ScansService.dispatchScan', () => {
     mockSingle.mockResolvedValue({ data: null, error: { message: 'Constraint violation' } });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('Constraint violation');
   });
 
@@ -222,7 +222,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow();
   });
 
@@ -235,7 +235,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('payload error from context.json');
   });
 
@@ -248,7 +248,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('message from context.json');
   });
 
@@ -261,7 +261,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('text body from context');
   });
 
@@ -274,7 +274,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('fallback message');
   });
 
@@ -287,7 +287,7 @@ describe('ScansService.dispatchScan', () => {
     });
 
     await expect(
-      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1'),
+      ScansService.dispatchScan('proj-1', 'nmap', 'target.com', 'org-1', true),
     ).rejects.toThrow('text fallback message');
   });
 });

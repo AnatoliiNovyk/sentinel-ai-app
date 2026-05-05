@@ -76,7 +76,8 @@ describe('Scans Service Integration', () => {
         'proj-1',
         'sbom',
         JSON.stringify({ version: '1.4', components: [] }),
-        'org-1'
+        'org-1',
+        true
       );
 
       expect(result).toBeDefined();
@@ -97,7 +98,8 @@ describe('Scans Service Integration', () => {
         'proj-1',
         'sbom',
         JSON.stringify(mockSbom),
-        'org-1'
+        'org-1',
+        true
       );
 
       expect(result.scan.id).toEqual('scan-123');
@@ -147,7 +149,8 @@ describe('Scans Service Integration', () => {
         'proj-1',
         'sbom',
         JSON.stringify(mockSbom),
-        'org-1'
+        'org-1',
+        true
       );
 
       expect(result.scan).toBeDefined();
@@ -167,7 +170,8 @@ describe('Scans Service Integration', () => {
         'proj-1',
         'sbom',
         JSON.stringify(sbomData),
-        'org-1'
+        'org-1',
+        true
       );
 
       expect(result.dispatchResult).toBeDefined();
@@ -180,7 +184,8 @@ describe('Scans Service Integration', () => {
         'proj-1',
         'sbom',
         JSON.stringify(emptyBom),
-        'org-1'
+        'org-1',
+        true
       );
 
       expect(result.scan).toBeDefined();

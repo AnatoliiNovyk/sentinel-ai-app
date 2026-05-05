@@ -232,13 +232,13 @@ describe('RLS — Row Level Security Isolation', () => {
   describe('scan dispatch attribution', () => {
     it('dispatched scan is attributed to the authenticated user', async () => {
       ctx.activeUserId = USER_A.id;
-      const result = await ScansService.dispatchScan(PROJECT_A_ID, 'nmap', '10.0.0.1', USER_A.orgId);
+      const result = await ScansService.dispatchScan(PROJECT_A_ID, 'nmap', '10.0.0.1', USER_A.orgId, true);
       expect(result.scan.user_id).toBe(USER_A.id);
     });
 
     it('User B scan is attributed to User B, not User A', async () => {
       ctx.activeUserId = USER_B.id;
-      const result = await ScansService.dispatchScan(PROJECT_A_ID, 'nmap', '10.0.0.2', USER_B.orgId);
+      const result = await ScansService.dispatchScan(PROJECT_A_ID, 'nmap', '10.0.0.2', USER_B.orgId, true);
       expect(result.scan.user_id).toBe(USER_B.id);
       expect(result.scan.user_id).not.toBe(USER_A.id);
     });

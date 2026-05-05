@@ -108,11 +108,13 @@ describe('dispatchScan', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+    vi.stubEnv('VITE_AGENT_HEALTH_URL', 'http://localhost:9090/health');
     const { dispatchScan } = await import('../scanDispatch');
 
     const result = await dispatchScan('u1', 'p1', 'nmap', 'example.com');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // fetchMock called twice: once for health probe, once for edge dispatch
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(runMockScan).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, data: { scanId: 'scan-real-1', mode: 'REAL' } });
   });
