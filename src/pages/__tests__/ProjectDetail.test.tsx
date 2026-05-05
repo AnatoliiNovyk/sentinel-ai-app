@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ProjectDetail from '../ProjectDetail';
 import type { Project } from '../../lib/supabase';
+import { ScansService } from '../../api/scans.service';
 
 const { mockNotifsLimit, mockVulnsIn, mockScansOrder, mockReportsOrder, mockProjectsUpdate, mockScanJobsLimit, mockDownloadFile } = vi.hoisted(() => ({
   mockNotifsLimit: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -110,6 +111,18 @@ vi.mock('../../context/useAuth', () => {
 
 vi.mock('../../lib/scanDispatch', () => ({
   dispatchScan: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+vi.mock('../../api/scans.service', () => ({
+  ScansService: {
+    dispatchScan: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('../../lib/agentHealth', () => ({
+  probeAgentHealth: vi.fn().mockResolvedValue({ reachable: false }),
+  isHttpsAgentUrl: vi.fn().mockReturnValue(false),
+  isMixedContentAgentUrl: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock('../../lib/reportBuilder', () => ({
@@ -283,21 +296,19 @@ describe('ProjectDetail — quickScan', () => {
   });
 
   it('calls dispatchScan and reloads on Run scan click', async () => {
-    const { dispatchScan: ds } = await import('../../lib/scanDispatch');
-    (ds as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    vi.mocked(ScansService.dispatchScan).mockResolvedValue(undefined);
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     await waitFor(() => screen.getByRole('button', { name: /Run scan/i }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Run scan/i }));
     });
     await waitFor(() =>
-      expect(ds).toHaveBeenCalledWith('user-1', 'proj-1', 'nmap', 'example.com'),
+      expect(ScansService.dispatchScan).toHaveBeenCalledWith('proj-1', 'nmap', 'example.com', 'org-1', false),
     );
   });
 
   it('shows alert when dispatchScan returns error', async () => {
-    const { dispatchScan: ds } = await import('../../lib/scanDispatch');
-    (ds as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, error: 'scan failed' });
+    vi.mocked(ScansService.dispatchScan).mockRejectedValue(new Error('scan failed'));
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     await waitFor(() => screen.getByRole('button', { name: /Run scan/i }));
@@ -495,15 +506,14 @@ describe('ProjectDetail — ScansTab with data', () => {
   });
 
   it('handleRescan calls dispatchScan when re-run button clicked', async () => {
-    const { dispatchScan: ds } = await import('../../lib/scanDispatch');
-    (ds as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    vi.mocked(ScansService.dispatchScan).mockResolvedValue(undefined);
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     fireEvent.click(screen.getByRole('button', { name: /^scans/i }));
     await waitFor(() => screen.getByRole('button', { name: /Re-run scan/i }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Re-run scan/i }));
     });
-    await waitFor(() => expect(ds).toHaveBeenCalled());
+    await waitFor(() => expect(ScansService.dispatchScan).toHaveBeenCalled());
   });
 
   it('shows ScanProgressBanner when liveJobs present via scan_jobs mock', async () => {
