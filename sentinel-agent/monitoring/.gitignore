@@ -1,0 +1,15 @@
+# Local overrides — do not commit
+alertmanager.local.yml
+prometheus.local.yml
+
+# Grafana persistent data (if bind-mounted locally)
+grafana-data/
+
+# Generated certs / secrets
+*.pem
+*.key
+*.crt
+
+# OS artifacts
+.DS_Store
+Thumbs.db
