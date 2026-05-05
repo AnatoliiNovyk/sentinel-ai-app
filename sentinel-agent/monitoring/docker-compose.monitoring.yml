@@ -1,0 +1,90 @@
+version: '3.8'
+
+# Sentinel AI — Monitoring Stack
+# Запуск: docker compose -f docker-compose.monitoring.yml up -d
+#
+# Endpoints після запуску:
+#   Prometheus:   http://localhost:9091
+#   Alertmanager: http://localhost:9093
+#   Grafana:      http://localhost:3000  (admin/sentinel)
+#   Jaeger UI:    http://localhost:16686
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: sentinel-prometheus
+    restart: unless-stopped
+    ports:
+      - '9091:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: sentinel-alertmanager
+    restart: unless-stopped
+    ports:
+      - '9093:9093'
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: sentinel-grafana
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: sentinel
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/sentinel-agent.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/sentinel-agent.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: sentinel-jaeger
+    restart: unless-stopped
+    ports:
+      - '16686:16686'   # Jaeger UI
+      - '4318:4318'     # OTLP HTTP (для агента OTEL_EXPORTER_OTLP_ENDPOINT)
+      - '4317:4317'     # OTLP gRPC
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+      SPAN_STORAGE_TYPE: memory
+      MEMORY_MAX_TRACES: 10000
+    networks:
+      - monitoring
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+
+networks:
+  monitoring:
+    name: sentinel-monitoring

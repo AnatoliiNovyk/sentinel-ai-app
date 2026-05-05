@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: 'production'
+    service: 'sentinel-ai'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - 'alert.rules.yml'
+
+scrape_configs:
+  - job_name: 'sentinel-agent'
+    static_configs:
+      - targets: ['192.168.10.80:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    relabel_configs:
+      - target_label: instance
+        replacement: 'sentinel-agent-vps'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

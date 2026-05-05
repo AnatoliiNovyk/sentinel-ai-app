@@ -1,0 +1,61 @@
+global:
+  resolve_timeout: 5m
+  # Для Slack: замінити на реальний Slack webhook URL
+  # slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+# Routing tree
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'webhook-default'
+
+  routes:
+    # Critical alerts — коротший repeat
+    - matchers:
+        - severity="critical"
+      receiver: 'webhook-critical'
+      repeat_interval: 1h
+      continue: false
+
+    # Warning alerts — стандартний
+    - matchers:
+        - severity="warning"
+      receiver: 'webhook-default'
+      repeat_interval: 4h
+      continue: false
+
+receivers:
+  # Отримувач за замовчуванням — Sentinel webhook (той самий що в агенті)
+  # Замінити ALERT_WEBHOOK_URL на реальний URL (Slack/Discord/PagerDuty/Teams)
+  - name: 'webhook-default'
+    webhook_configs:
+      - url: 'http://host.docker.internal:9091/alert'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 10
+
+  - name: 'webhook-critical'
+    webhook_configs:
+      - url: 'http://host.docker.internal:9091/alert'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 0
+    # Slack (розкоментувати та налаштувати):
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#sentinel-alerts'
+    #     title: '🚨 [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+
+inhibit_rules:
+  # Якщо Agent is DOWN — заглушити всі інші alerts від того ж instance
+  - source_matchers:
+      - alertname="SentinelAgentDown"
+    target_matchers:
+      - job="sentinel-agent"
+    equal: ['instance']

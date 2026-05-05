@@ -1,0 +1,156 @@
+groups:
+  - name: sentinel_agent_availability
+    interval: 30s
+    rules:
+      # Agent недоступний (metrics endpoint не відповідає)
+      - alert: SentinelAgentDown
+        expr: up{job="sentinel-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Sentinel Agent is DOWN"
+          description: "Sentinel Agent on {{ $labels.instance }} has been unreachable for more than 1 minute."
+          runbook_url: "https://github.com/AnatoliiNovyk/sentinel-ai-app/blob/main/sentinel-agent/RUNBOOK.md#agent-down"
+
+  - name: sentinel_agent_jobs
+    interval: 60s
+    rules:
+      # Висока частота фейлів job-ів
+      - alert: SentinelHighJobFailureRate
+        expr: |
+          rate(sentinel_jobs_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "High scan job failure rate"
+          description: "Sentinel Agent is failing more than 0.1 jobs/sec over 5 minutes. Current rate: {{ $value | printf \"%.3f\" }}/s"
+
+      # Жодних jobs не оброблялось тривалий час
+      - alert: SentinelNoJobsProcessed
+        expr: |
+          increase(sentinel_jobs_processed_total[30m]) == 0
+          and on(instance) up{job="sentinel-agent"} == 1
+        for: 30m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "No scan jobs processed in 30 minutes"
+          description: "Sentinel Agent is up but has not processed any jobs in the last 30 minutes."
+
+      # Всі слоти concurrent jobs зайняті тривалий час (bottleneck)
+      - alert: SentinelAllJobSlotsBusy
+        expr: |
+          sentinel_active_jobs >= sentinel_max_concurrent_jobs
+        for: 15m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "All scan job slots occupied for 15+ minutes"
+          description: "Agent has {{ $value }} active jobs (at max capacity). Jobs may be queuing."
+
+  - name: sentinel_agent_latency
+    interval: 60s
+    rules:
+      # Середній час виконання сканування перевищує поріг
+      - alert: SentinelHighScanLatency
+        expr: |
+          sentinel_execute_duration_ms_avg > 1200000
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Average scan execution time exceeds 20 minutes"
+          description: "Current average scan execution: {{ $value | printf \"%.0f\" }}ms ({{ $value | printf \"%.1f\" | printf \"%s\" }}ms). SLO threshold: 1200000ms (20min)."
+
+      # End-to-end latency SLO порушено
+      - alert: SentinelEndToEndLatencySLO
+        expr: |
+          sentinel_end_to_end_duration_ms_avg > 1800000
+        for: 5m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "End-to-end scan SLO breached (>30 min)"
+          description: "Average end-to-end job duration is {{ $value | printf \"%.0f\" }}ms. SLO is 1800000ms (30min)."
+
+      # Велика кількість SLO alert-ів надіслана
+      - alert: SentinelFrequentSLOAlerts
+        expr: |
+          increase(sentinel_slo_alerts_total[1h]) > 10
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "More than 10 SLO latency alerts in the last hour"
+          description: "{{ $value }} SLO alerts were fired in the last 1 hour. Investigate scan performance."
+
+  - name: sentinel_agent_reporting
+    interval: 60s
+    rules:
+      # Велика кількість помилок report (після retry)
+      - alert: SentinelHighReportFailures
+        expr: |
+          increase(sentinel_report_failures_total[10m]) > 5
+        for: 0m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "High scan-result reporting failures"
+          description: "{{ $value }} report failures (after retries) in the last 10 minutes. Results may be lost."
+
+      # report success rate нижче 90%
+      - alert: SentinelLowReportSuccessRate
+        expr: |
+          (
+            rate(sentinel_report_success_total[10m]) /
+            (rate(sentinel_report_attempts_total[10m]) + 0.0001)
+          ) < 0.9
+          and rate(sentinel_report_attempts_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Report success rate below 90%"
+          description: "Report success rate is {{ $value | printf \"%.1%\" }} over the last 10 minutes."
+
+  - name: sentinel_agent_watchdog
+    interval: 60s
+    rules:
+      # Watchdog часто відновлює stale jobs — ознака системної нестабільності
+      - alert: SentinelFrequentStaleJobRecovery
+        expr: |
+          increase(sentinel_stale_jobs_recovered_total[1h]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Frequent stale scan job recovery"
+          description: "{{ $value }} stale jobs were auto-recovered in the last hour. This may indicate scan hangs or agent restarts."
+
+  - name: sentinel_agent_logs
+    interval: 300s
+    rules:
+      # Log cleanup не виконувався більше 25 годин (повинен щодня)
+      - alert: SentinelLogCleanupStale
+        expr: |
+          (time() - sentinel_log_cleanup_last_run_timestamp_seconds) > 90000
+          and sentinel_log_cleanup_last_run_timestamp_seconds > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Log cleanup hasn't run in 25+ hours"
+          description: "Last log cleanup was {{ $value | printf \"%.0f\" }} seconds ago. Expected every 86400s (24h)."
