@@ -38,6 +38,7 @@ import AssetGraph from '../components/AssetGraph';
 import ReportViewer from '../components/ReportViewer';
 import ScanDiff from '../components/ScanDiff';
 import AgentLogsPanel from '../components/AgentLogsPanel';
+import { ComplianceTab } from '../components/ComplianceTab';
 
 const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: string }> = {
   external: { label: 'External', icon: Globe, color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
@@ -46,7 +47,7 @@ const ENV_META: Record<string, { label: string; icon: typeof Cloud; color: strin
   iac: { label: 'IaC', icon: FileCode, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
 };
 
-type Tab = 'overview' | 'topology' | 'findings' | 'scans' | 'reports' | 'activity';
+type Tab = 'overview' | 'topology' | 'findings' | 'scans' | 'reports' | 'activity' | 'compliance';
 
 type ActivityItem = {
   at: string;
@@ -416,7 +417,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       </div>
 
       <div className="flex items-center gap-1 mb-6 border-b border-slate-800">
-        {(['overview', 'topology', 'findings', 'scans', 'reports', 'activity'] as Tab[]).map((t) => {
+        {(['overview', 'topology', 'findings', 'scans', 'reports', 'activity', 'compliance'] as Tab[]).map((t) => {
           const counts: Partial<Record<Tab, number>> = {
             findings: vulns.length,
             scans: scans.length,
@@ -476,6 +477,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
         }} />}
       {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}
       {tab === 'activity' && <ActivityTab items={activity} />}
+      {tab === 'compliance' && user && <ComplianceTab projectId={project.id} userId={user.id} />}
 
       {selectedReport && (
         <ReportViewer report={selectedReport} onClose={() => setSelectedReport(null)} />
