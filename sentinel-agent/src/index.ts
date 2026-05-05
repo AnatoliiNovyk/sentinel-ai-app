@@ -438,7 +438,7 @@ async function runProwler(target: string): Promise<Finding[]> {
   try {
     const { stdout } = await execFileAsync(
       'prowler',
-      ['aws', '--output-formats', 'json-ocsf', '--no-banner'],
+      ['aws', '--output-formats', 'json-ocsf', '--no-banner', '--no-color', '--ignore-exit-code-3', '--only-logs'],
       { timeout: 5 * 60_000, maxBuffer: 20 * 1024 * 1024 }
     );
     const lines = stdout.split('\n').filter(l => l.trim().startsWith('{'));
@@ -464,6 +464,18 @@ async function runProwler(target: string): Promise<Finding[]> {
     const message = getErrorMessage(err);
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
       throw new Error('prowler is not installed. Run: pip install prowler');
+    }
+    // NoCredentialsError — AWS not configured on this host; return info finding instead of crashing
+    if (message.includes('NoCredentialsError') || message.includes('Unable to locate credentials')) {
+      return [{
+        title: 'AWS credentials not configured',
+        description: 'Prowler could not run because no AWS credentials are available on this host. Configure AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION in the agent .env to enable cloud security scanning.',
+        severity: 'info',
+        asset: target,
+        remediation: 'Set AWS credentials in /opt/sentinel-agent/.env or via IAM instance role.',
+        remediation_type: 'configuration',
+        status: 'open',
+      }];
     }
     throw new Error(`prowler failed: ${message}`);
   }
@@ -530,7 +542,9 @@ async function runAmass(target: string): Promise<Finding[]> {
       }
     }
 
-    const message = getErrorMessage(err);
+    const rawMessage = getErrorMessage(err);
+    // Strip ANSI escape codes (Amass progress bars) from error messages stored in DB
+    const message = rawMessage.replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\r/g, '').trim();
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
       throw new Error('amass is not installed. Run: apt-get install -y amass');
     }
