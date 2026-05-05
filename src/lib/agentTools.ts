@@ -2,6 +2,7 @@ import { supabase, Project, Scan } from './supabase';
 import { ScansService } from '../api/scans.service';
 import { getGlobalDarkWebMonitor } from './darkWebMonitor';
 import { getRateLimiter } from './rateLimiter';
+import { validateDarkWebQuery } from './validation';
 
 export type ToolName =
   | 'list_projects'
@@ -132,17 +133,10 @@ function toRunScanArgs(args: Record<string, unknown>): { raw: string; scanner: s
 async function toolDarkWebScan(args: { query: string }): Promise<ToolResult> {
   const query = (args.query ?? '').trim();
 
-  /* c8 ignore next 3 */
-  if (!query) {
-    return { name: 'dark_web_scan', ok: false, summary: 'Please provide an email, domain, username, or IP to scan.' };
-  }
-  /* c8 ignore next 2 */
-  if (query.length > 253) {
-    return { name: 'dark_web_scan', ok: false, summary: 'Query is too long (max 253 characters).' };
-  }
-  /* c8 ignore next 3 */
-  if (/[<>'"`;]|(\.\.)|(\/\/)|(select\s+\*|drop\s+table|insert\s+into)/i.test(query)) {
-    return { name: 'dark_web_scan', ok: false, summary: 'Query contains invalid characters.' };
+  /* c8 ignore next 4 */
+  const validation = validateDarkWebQuery(query);
+  if (!validation.valid) {
+    return { name: 'dark_web_scan', ok: false, summary: validation.error ?? 'Invalid query.' };
   }
 
   const limiter = getRateLimiter('agent-dark-web', { maxRequests: 10, windowMs: 60 * 1000 });

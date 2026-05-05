@@ -3,6 +3,7 @@ import { loadVersioned, saveVersioned } from '../lib/storage';
 import { Eye, Search, AlertTriangle, CheckCircle2, Loader2, Info, FileText, RefreshCw, Download, Trash2, X, BarChart2, ShieldOff, ShieldCheck, Clock, Copy, Check } from 'lucide-react';
 import { getGlobalDarkWebMonitor, type LeakScanResult } from '../lib/darkWebMonitor';
 import { getRateLimiter } from '../lib/rateLimiter';
+import { validateDarkWebQuery } from '../lib/validation';
 import { downloadFile } from '../lib/exporters';
 import { useToast } from '../lib/toastContext';
 import { AuditService, AuditAction } from '../api/audit.service';
@@ -158,17 +159,9 @@ export default function OsintAnalyzer() {
     const trimmed = query.trim();
     setValidationError(null);
 
-    if (!trimmed) {
-      setValidationError('Please enter an email, domain, IP address, or username.');
-      return;
-    }
-    if (trimmed.length > 253) {
-      setValidationError('Query is too long (max 253 characters).');
-      return;
-    }
-    // Reject obviously invalid patterns (script tags, SQL keywords, path traversal)
-    if (/[<>'"`;]|(\.\.)|(\/\/)|(select\s+\*|drop\s+table|insert\s+into)/i.test(trimmed)) {
-      setValidationError('Query contains invalid characters.');
+    const validation = validateDarkWebQuery(trimmed);
+    if (!validation.valid) {
+      setValidationError(validation.error ?? 'Invalid query.');
       return;
     }
 
