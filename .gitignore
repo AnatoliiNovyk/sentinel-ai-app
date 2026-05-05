@@ -23,3 +23,5 @@ coverage
 *.sw?
 .env
 smoke_test.ps1
+
+test-results.json

@@ -59,7 +59,7 @@ describe('Security Integration Tests', () => {
       const oversized = 'a'.repeat(ValidationLimits.QUERY_MAX_LENGTH + 1);
       const result = validateDarkWebQuery(oversized);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/exceeds maximum/i);
+      expect(result.error).toMatch(/too long/i);
     });
 
     it('blocks SQL injection attempts', () => {
