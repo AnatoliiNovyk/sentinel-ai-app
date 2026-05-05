@@ -11,6 +11,9 @@
     "prestart": "node scripts/check-env.cjs"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
+    "@opentelemetry/sdk-node": "^0.216.0",
     "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.15.2",
     "dotenv": "^17.4.2"

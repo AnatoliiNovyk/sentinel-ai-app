@@ -10,6 +10,45 @@ import { resolve } from 'path';
 dotenv.config();
 dotenv.config({ path: resolve(__dirname, '../.env') });
 
+// ---------------------------------------------------------------------------
+// OpenTelemetry — distributed tracing (opt-in via OTEL_ENABLED=true)
+// ---------------------------------------------------------------------------
+import * as otelApi from '@opentelemetry/api';
+
+let otelTracer: otelApi.Tracer = otelApi.trace.getTracer('sentinel-agent', '1.0.0');
+
+function initOpenTelemetry(): void {
+  const enabled = process.env.OTEL_ENABLED?.toLowerCase() === 'true';
+  if (!enabled) {
+    console.log('ℹ️  OpenTelemetry disabled (set OTEL_ENABLED=true to enable)');
+    return;
+  }
+
+  try {
+    // Dynamic require so the SDK is only loaded when enabled
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { NodeSDK } = require('@opentelemetry/sdk-node') as typeof import('@opentelemetry/sdk-node');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http') as typeof import('@opentelemetry/exporter-trace-otlp-http');
+
+    const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318';
+
+    const sdk = new NodeSDK({
+      serviceName: process.env.OTEL_SERVICE_NAME ?? 'sentinel-agent',
+      traceExporter: new OTLPTraceExporter({ url: `${endpoint}/v1/traces` }),
+    });
+
+    sdk.start();
+    otelTracer = otelApi.trace.getTracer('sentinel-agent', '1.0.0');
+    console.log(`✅ OpenTelemetry tracing enabled → ${endpoint}`);
+
+    process.on('SIGTERM', () => { sdk.shutdown().catch(() => {}); });
+    process.on('SIGINT',  () => { sdk.shutdown().catch(() => {}); });
+  } catch (err) {
+    console.warn('⚠️ OpenTelemetry init failed (non-fatal):', err instanceof Error ? err.message : String(err));
+  }
+}
+
 const execFileAsync = promisify(execFile);
 
 function getRequiredEnv(name: string): string {
@@ -587,7 +626,9 @@ async function writeLog(
   scanId: string | null,
   projectId: string,
   level: 'info' | 'success' | 'error' | 'warn',
-  message: string
+  message: string,
+  traceId?: string,
+  spanId?: string,
 ): Promise<void> {
   try {
     await supabase.from('agent_logs').insert({
@@ -596,10 +637,20 @@ async function writeLog(
       project_id: projectId,
       level,
       message,
+      ...(traceId ? { trace_id: traceId } : {}),
+      ...(spanId  ? { span_id: spanId }   : {}),
     });
   } catch {
     // fire-and-forget — logging must never crash the agent
   }
+}
+
+function getActiveTraceIds(): { traceId: string | undefined; spanId: string | undefined } {
+  const spanContext = otelApi.trace.getActiveSpan()?.spanContext();
+  if (!spanContext || !otelApi.isValidTraceId(spanContext.traceId)) {
+    return { traceId: undefined, spanId: undefined };
+  }
+  return { traceId: spanContext.traceId, spanId: spanContext.spanId };
 }
 
 // --- Job Processing ---
@@ -760,78 +811,104 @@ async function recoverStaleRunningJobs(): Promise<{ jobsRecovered: number; scans
 
 async function runJob(job: ScanJob) {
   const jobStartedAt = Date.now();
-  console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...`);
-  await writeLog(job.id, job.scan_id, job.project_id, 'info', `▶️ Starting ${job.scanner} scan on ${job.target}`);
-  try {
-    const executionStartedAt = Date.now();
-    let findings: Finding[] = [];
 
-    // Normalise scanner name to lowercase for case-insensitive matching
-    // (UI sends 'Tfsec', 'Amass', etc. while older dispatches may be lowercase)
-    const scannerKey = job.scanner.toLowerCase();
+  return otelTracer.startActiveSpan(
+    `scan.${job.scanner.toLowerCase()}`,
+    {
+      kind: otelApi.SpanKind.INTERNAL,
+      attributes: {
+        'job.id':      job.id,
+        'job.scanner': job.scanner,
+        'job.target':  job.target,
+        'job.scan_id': job.scan_id ?? '',
+        'job.project': job.project_id,
+      },
+    },
+    async (span) => {
+      const { traceId, spanId } = getActiveTraceIds();
+      try {
+        console.log(`▶️ Executing ${job.scanner} task for job ${job.id}...${traceId ? ` [trace=${traceId.slice(0, 8)}...]` : ''}`);
+        await writeLog(job.id, job.scan_id, job.project_id, 'info', `▶️ Starting ${job.scanner} scan on ${job.target}`, traceId, spanId);
+        try {
+          const executionStartedAt = Date.now();
+          let findings: Finding[] = [];
 
-    if (scannerKey === 'ai_task' || scannerKey === 'ai-agent') {
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', '🤖 Consulting Ollama AI model...');
-      const aiResponse = await consultOllama(job.target);
-      findings = [{
-        title: 'AI Security Response',
-        description: aiResponse,
-        severity: 'info',
-        asset: 'AI Engine',
-        remediation: 'Review AI suggestions',
-        remediation_type: 'manual',
-        status: 'open'
-      }];
-    } else if (scannerKey === 'nuclei' || scannerKey === 'nuclei-scan') {
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🔬 Running Nuclei template scan on ${job.target}...`);
-      findings = await runNuclei(job.target);
-    } else if (scannerKey === 'tfsec') {
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🏗️ Running tfsec IaC analysis...`);
-      findings = await runTfsec(job.target);
-    } else if (scannerKey === 'prowler') {
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', `☁️ Running Prowler cloud security scan...`);
-      findings = await runProwler(job.target);
-    } else if (scannerKey === 'amass') {
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', `🌐 Running Amass subdomain enumeration on ${job.target}...`);
-      findings = await runAmass(job.target);
-    } else {
-      // Catches: 'nmap', 'nmap:intense', 'nmap:vuln', 'nmap:full', etc.
-      await writeLog(job.id, job.scan_id, job.project_id, 'info', `📡 Running Nmap port scan on ${job.target}...`);
-      findings = await runNmap(job.target);
-    }
+          const scannerKey = job.scanner.toLowerCase();
 
-    const realFindings = findings.filter(f => f.severity !== 'info' || !f.title.toLowerCase().includes('no '));
-    recordDurationMetric('executeDurationMsLast', 'executeDurationMsSum', 'executeDurationMsSamples', Date.now() - executionStartedAt);
+          if (scannerKey === 'ai_task' || scannerKey === 'ai-agent') {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', '🤖 Consulting Ollama AI model...', traceId, spanId);
+            const aiResponse = await consultOllama(job.target);
+            findings = [{
+              title: 'AI Security Response',
+              description: aiResponse,
+              severity: 'info',
+              asset: 'AI Engine',
+              remediation: 'Review AI suggestions',
+              remediation_type: 'manual',
+              status: 'open'
+            }];
+          } else if (scannerKey === 'nuclei' || scannerKey === 'nuclei-scan') {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', `🔬 Running Nuclei template scan on ${job.target}...`, traceId, spanId);
+            findings = await runNuclei(job.target);
+          } else if (scannerKey === 'tfsec') {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', `🏗️ Running tfsec IaC analysis...`, traceId, spanId);
+            findings = await runTfsec(job.target);
+          } else if (scannerKey === 'prowler') {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', `☁️ Running Prowler cloud security scan...`, traceId, spanId);
+            findings = await runProwler(job.target);
+          } else if (scannerKey === 'amass') {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', `🌐 Running Amass subdomain enumeration on ${job.target}...`, traceId, spanId);
+            findings = await runAmass(job.target);
+          } else {
+            await writeLog(job.id, job.scan_id, job.project_id, 'info', `📡 Running Nmap port scan on ${job.target}...`, traceId, spanId);
+            findings = await runNmap(job.target);
+          }
 
-    await writeLog(
-      job.id, job.scan_id, job.project_id, 'success',
-      `✅ Scan complete — ${realFindings.length} finding(s) found (${findings.length} total)`
-    );
+          const realFindings = findings.filter(f => f.severity !== 'info' || !f.title.toLowerCase().includes('no '));
+          recordDurationMetric('executeDurationMsLast', 'executeDurationMsSum', 'executeDurationMsSamples', Date.now() - executionStartedAt);
 
-    const reportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
-    recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', reportOutcome.durationMs);
+          span.setAttribute('job.findings_total', findings.length);
+          span.setAttribute('job.findings_real', realFindings.length);
 
-    if (reportOutcome.ok) {
-      await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI');
-    } else {
-      await writeLog(job.id, job.scan_id, job.project_id, 'error', '📤 Result reporting failed after retries');
-    }
+          await writeLog(
+            job.id, job.scan_id, job.project_id, 'success',
+            `✅ Scan complete — ${realFindings.length} finding(s) found (${findings.length} total)`,
+            traceId, spanId,
+          );
 
-    await sendWebhookAlert(job.project_id, job.target, findings);
-  } catch (err: unknown) {
-    const message = getErrorMessage(err);
-    console.error(`❌ Job ${job.id} crashed:`, message);
-    await writeLog(job.id, job.scan_id, job.project_id, 'error', `❌ Scan failed: ${message}`);
+          const reportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, findings, job.metadata);
+          recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', reportOutcome.durationMs);
 
-    const failureReportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
-    recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', failureReportOutcome.durationMs);
+          if (reportOutcome.ok) {
+            await writeLog(job.id, job.scan_id, job.project_id, 'success', '📤 Results reported to Sentinel AI', traceId, spanId);
+            span.setStatus({ code: otelApi.SpanStatusCode.OK });
+          } else {
+            await writeLog(job.id, job.scan_id, job.project_id, 'error', '📤 Result reporting failed after retries', traceId, spanId);
+            span.setStatus({ code: otelApi.SpanStatusCode.ERROR, message: 'Result reporting failed' });
+          }
 
-    if (!failureReportOutcome.ok) {
-      await writeLog(job.id, job.scan_id, job.project_id, 'error', '❌ Failed to deliver scan failure payload after retries');
-    }
-  } finally {
-    recordDurationMetric('endToEndDurationMsLast', 'endToEndDurationMsSum', 'endToEndDurationMsSamples', Date.now() - jobStartedAt);
-  }
+          await sendWebhookAlert(job.project_id, job.target, findings);
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          console.error(`❌ Job ${job.id} crashed:`, message);
+          span.recordException(err instanceof Error ? err : new Error(message));
+          span.setStatus({ code: otelApi.SpanStatusCode.ERROR, message });
+          await writeLog(job.id, job.scan_id, job.project_id, 'error', `❌ Scan failed: ${message}`, traceId, spanId);
+
+          const failureReportOutcome = await reportResult(job.id, job.scan_id, job.user_id, job.project_id, [], job.metadata, message);
+          recordDurationMetric('reportDurationMsLast', 'reportDurationMsSum', 'reportDurationMsSamples', failureReportOutcome.durationMs);
+
+          if (!failureReportOutcome.ok) {
+            await writeLog(job.id, job.scan_id, job.project_id, 'error', '❌ Failed to deliver scan failure payload after retries', traceId, spanId);
+          }
+        } finally {
+          recordDurationMetric('endToEndDurationMsLast', 'endToEndDurationMsSum', 'endToEndDurationMsSamples', Date.now() - jobStartedAt);
+        }
+      } finally {
+        span.end();
+      }
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,4 +1280,5 @@ async function main() {
   }
 }
 
+initOpenTelemetry();
 main().catch((err: unknown) => console.error('🔥 Fatal Crash:', getErrorMessage(err)));
