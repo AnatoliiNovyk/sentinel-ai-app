@@ -8,14 +8,31 @@ on:
       - 'sentinel-agent/**'
   workflow_dispatch:
 
+concurrency:
+  group: deploy-agent
+  cancel-in-progress: false   # Never cancel an in-flight deploy
+
 jobs:
   deploy:
     name: Build & Deploy to VPS
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ─── Verify TypeScript builds locally before SSH ──────────────────────
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sentinel-agent/package-lock.json
+
+      - name: Install & build (CI validation)
+        working-directory: sentinel-agent
+        run: npm ci && npm run build
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -42,7 +59,7 @@ jobs:
             echo "📦 Installing dependencies..."
             cd /opt/sentinel-agent
             sudo rm -rf node_modules
-            sudo npm install
+            sudo npm ci --omit=dev
 
             echo "🧰 Ensuring scanner runtime dependencies..."
             if ! command -v nmap >/dev/null 2>&1; then
@@ -55,6 +72,10 @@ jobs:
 
             echo "🔄 Restarting service..."
             sudo systemctl restart sentinel-agent
+
+            echo "🔃 Reloading nginx config..."
+            sudo cp /opt/sentinel-agent-repo/sentinel-agent/nginx.conf /etc/nginx/sites-available/sentinel-agent 2>/dev/null || true
+            sudo nginx -t && sudo systemctl reload nginx || echo "nginx not configured yet — skipping"
 
             echo "✅ Deploy complete."
             sudo systemctl status sentinel-agent --no-pager
