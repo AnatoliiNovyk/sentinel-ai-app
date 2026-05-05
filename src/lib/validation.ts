@@ -10,7 +10,7 @@ export interface ValidationResult {
 
 export const ValidationLimits = {
   // Query limits
-  QUERY_MAX_LENGTH: 500,
+  QUERY_MAX_LENGTH: 253,
   QUERY_MIN_LENGTH: 1,
 
   // SBOM limits
@@ -54,7 +54,7 @@ export function validateDarkWebQuery(query: string): ValidationResult {
   if (trimmed.length > ValidationLimits.QUERY_MAX_LENGTH) {
     return {
       valid: false,
-      error: `Query exceeds maximum length of ${ValidationLimits.QUERY_MAX_LENGTH} characters`,
+      error: 'Query is too long',
     };
   }
 

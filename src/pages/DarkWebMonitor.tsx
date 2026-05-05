@@ -159,6 +159,11 @@ export default function OsintAnalyzer() {
     const trimmed = query.trim();
     setValidationError(null);
 
+    if (!trimmed) {
+      setValidationError('Please enter an email, domain, IP address, or username');
+      return;
+    }
+
     const validation = validateDarkWebQuery(trimmed);
     if (!validation.valid) {
       setValidationError(validation.error ?? 'Invalid query.');

@@ -153,7 +153,7 @@ describe('Scans integration flow', () => {
 
     await waitFor(
       () => {
-        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1');
+        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1', expect.anything());
       },
       { timeout: 3000 },
     );
