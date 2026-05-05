@@ -9,8 +9,8 @@ import { CiCdTab } from './integrations/IntegrationsCloud';
 type Tab = 'cicd' | 'services' | 'webhooks';
 
 // exported for test coverage
-export function IntegrationsLegacy() {
-  const [tab, setTab] = useState<Tab>('services');
+export function IntegrationsLegacy({ initialTab = 'services' }: { initialTab?: Tab } = {}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [services, setServices] = useState<Record<string, ServiceConfig>>(loadServices);
   const [webhooks, setWebhooks] = useState<Webhook[]>(loadWebhooks);
   const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
@@ -247,6 +247,10 @@ export function IntegrationsLegacy() {
   );
 }
 
+function Integrations() {
+  return <IntegrationsLegacy initialTab="cicd" />;
+}
+
 // exported for test coverage
-export { IntegrationsLegacy as Integrations };
-export default IntegrationsLegacy;
+export { Integrations };
+export default Integrations;

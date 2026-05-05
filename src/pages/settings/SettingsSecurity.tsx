@@ -564,7 +564,7 @@ export function SettingsSecurity() {
           }`}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
-          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save changes'}
+          {saving ? 'Saving security...' : saved ? 'Security saved!' : 'Save security settings'}
         </button>
       </div>
     </div>

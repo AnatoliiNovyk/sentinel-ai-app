@@ -276,17 +276,18 @@ export function SparkKpi({ label, value, icon: Icon, accent, sparkData, sparkCol
 
 // ─── SummaryPill component ────────────────────────────────────────────────
 
-export function SummaryPill({ label, value, color, suffix, signed }: {
+export function SummaryPill({ label, value, color, suffix, signed, title }: {
   label: string;
   value: number | string;
   color: string;
   suffix?: string;
   signed?: boolean;
+  title?: string;
 }) {
   const display = signed && typeof value === 'number' && value > 0 ? `+${value}` : value;
   return (
     <div className="text-center">
-      <div className={`text-lg font-bold tabular-nums ${color}`}>{display}{suffix && <span className="text-xs ml-0.5">{suffix}</span>}</div>
+      <div className={`text-lg font-bold tabular-nums ${color}`} title={title}>{display}{suffix && <span className="text-xs ml-0.5">{suffix}</span>}</div>
       <div className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</div>
     </div>
   );

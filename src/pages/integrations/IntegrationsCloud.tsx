@@ -42,7 +42,10 @@ jobs:
           scanner: "tfsec"
           fail-on-critical: true`;
 
-  const gitlabCi = `sentinel_ai_scan:
+  const gitlabCi = `stages:
+  - test
+
+sentinel_ai_scan:
   stage: test
   image: sentinelai/cli:latest
   script:
@@ -261,17 +264,23 @@ jobs:
 
       {/* Platform filter */}
       <div className="flex items-center gap-2 flex-wrap">
-        {(['all', 'github', 'gitlab', 'jenkins', 'bitbucket'] as const).map((p) => (
+        {([
+          { key: 'all', label: 'All' },
+          { key: 'github', label: 'GitHub' },
+          { key: 'gitlab', label: 'GitLab' },
+          { key: 'jenkins', label: 'Jenkins' },
+          { key: 'bitbucket', label: 'Bitbucket' },
+        ] as const).map(({ key, label }) => (
           <button
-            key={p}
-            onClick={() => setPlatform(p)}
+            key={key}
+            onClick={() => setPlatform(key)}
             className={`text-xs px-3 py-1.5 rounded-md border transition ${
-              platform === p
+              platform === key
                 ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
                 : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'
             }`}
           >
-            {p === 'all' ? 'All Platforms' : p.charAt(0).toUpperCase() + p.slice(1)}
+            {label}
           </button>
         ))}
       </div>
@@ -293,10 +302,21 @@ jobs:
               </div>
               <button
                 onClick={() => copy(card.code, card.id)}
-                title="Copy to clipboard"
-                className="flex-shrink-0 text-slate-500 hover:text-white transition p-1.5 rounded-md hover:bg-slate-800"
+                title="Copy YAML"
+                aria-label="Copy YAML"
+                className="flex-shrink-0 inline-flex items-center gap-1.5 text-slate-500 hover:text-white transition p-1.5 rounded-md hover:bg-slate-800 text-xs"
               >
-                {copied === card.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied === card.id ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copy YAML</span>
+                  </>
+                )}
               </button>
             </div>
             <div className="border-t border-slate-800 bg-slate-950/50">

@@ -286,7 +286,12 @@ export function TopOpenFindings({
         </div>
         <div className="flex items-center gap-1">
           <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
-          {(['severity', 'Severity'], ['newest', 'Newest'], ['oldest', 'Oldest'], ['title', 'A→Z'] as const).map(([val, label]) => (
+          {([
+            ['severity', 'Severity'],
+            ['newest', 'Newest'],
+            ['oldest', 'Oldest'],
+            ['title', 'A→Z'],
+          ] as const).map(([val, label]) => (
             <button
               key={val}
               onClick={() => setFindingsSort(val)}
@@ -305,32 +310,36 @@ export function TopOpenFindings({
             onClick={() => { setFindingsSearch(''); setFindingsSort('severity'); }}
             className="inline-flex items-center gap-1.5 text-xs border border-slate-700 hover:border-amber-500/40 hover:text-amber-300 px-2.5 py-1.5 rounded-md transition text-slate-400"
           >
-            Reset
+            Clear
           </button>
         )}
       </div>
       {/* Findings list */}
       <div className="space-y-2">
-        {filteredFindings.map(v => {
-          const proj = projects?.find(p => p.id === v.project_id);
-          return (
-            <div key={v.id} className="flex items-start gap-3 p-2 rounded-md hover:bg-slate-800/30 transition">
-              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
-                v.severity === 'critical' ? 'text-red-300 bg-red-500/15 border-red-500/30' :
-                v.severity === 'high'     ? 'text-orange-300 bg-orange-500/15 border-orange-500/30' :
-                v.severity === 'medium'   ? 'text-yellow-300 bg-yellow-500/15 border-yellow-500/30' :
-                'text-sky-300 bg-sky-500/15 border-sky-500/30'
-              }`}>{v.severity}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-slate-200 font-medium">{v.title}</div>
-                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
-                  {v.cve_id && <span className="font-mono text-sky-400">{v.cve_id}</span>}
-                  {proj && <span>{proj.name}</span>}
+        {filteredFindings.length === 0 ? (
+          <div className="text-xs text-slate-500 py-2">No findings match the search.</div>
+        ) : (
+          filteredFindings.map(v => {
+            const proj = projects?.find(p => p.id === v.project_id);
+            return (
+              <div key={v.id} className="flex items-start gap-3 p-2 rounded-md hover:bg-slate-800/30 transition">
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                  v.severity === 'critical' ? 'text-red-300 bg-red-500/15 border-red-500/30' :
+                  v.severity === 'high'     ? 'text-orange-300 bg-orange-500/15 border-orange-500/30' :
+                  v.severity === 'medium'   ? 'text-yellow-300 bg-yellow-500/15 border-yellow-500/30' :
+                  'text-sky-300 bg-sky-500/15 border-sky-500/30'
+                }`}>{v.severity}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-slate-200 font-medium">{v.title}</div>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                    {v.cve_id && <span className="font-mono text-sky-400">{v.cve_id}</span>}
+                    {proj && <span>{proj.name}</span>}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );
