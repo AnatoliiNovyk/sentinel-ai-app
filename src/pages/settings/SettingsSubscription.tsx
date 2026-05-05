@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Check, Loader2, Timer, CreditCard, Zap, Star, Building2,
   Shield, Rocket, Package, ArrowRight, ExternalLink, Crown, Users, Database,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { SlaConfig, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
-import { AuditService, AuditAction } from '../../api/audit.service';
 import { httpPost } from '../../lib/httpClient';
 import { ApiRateLimitsPanel } from '../../components/ApiRateLimitsPanel';
 
@@ -128,12 +127,12 @@ export function SettingsSubscription() {
   const { user, profile } = useAuth();
   const [plan, setPlan] = useState('free');
   const [sla, setSla] = useState<SlaConfig>(DEFAULT_SLA_CONFIG);
-  const [retention, setRetention] = useState<RetentionPolicy>(() =>
+  const [retention, _setRetention] = useState<RetentionPolicy>(() =>
     loadFromStorage<RetentionPolicy>('sentinelRetention', DEFAULT_RETENTION)
   );
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
-  const [teamEmails, setTeamEmails] = useState<{ email: string; role: string }[]>([
+  const [teamEmails, _setTeamEmails] = useState<{ email: string; role: string }[]>([
     { email: profile?.email || '', role: 'Owner' }
   ]);
 

@@ -3,13 +3,13 @@
  * Executes remediation workflows triggered by alert rules
  * Phase 5, Batch 2: Auto-Remediation
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { supabase } from './client';
 import {
   RemediationWorkflow,
   RemediationEvent,
   RemediationAction,
-  RemediationActionType,
   RemediationStatus,
   CreateRemediationWorkflowRequest,
   UpdateRemediationWorkflowRequest,
@@ -373,7 +373,7 @@ export const RemediationService = {
       };
     }
 
-    const timeout = action.parameters?.timeoutMs || 30000;
+    const _timeout = action.parameters?.timeoutMs || 30000;
 
     try {
       let status: RemediationStatus = 'pending';

@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Check, Eye, EyeOff, Key, Mail, Inbox, Webhook, Users, Plus, Trash2, ExternalLink, Bell, Loader2,
+  Check, Eye, EyeOff, Key, Mail, Inbox, Webhook, Users, Plus, Trash2, Bell, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
-import { SlaConfig, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
 import { AuditService, AuditAction } from '../../api/audit.service';
 
 // ─── Notification preferences ────────────────────────────────────────────────
@@ -22,17 +21,6 @@ const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   minSeverity: 'medium',
   digest: 'realtime',
 };
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return { ...fallback, ...(JSON.parse(raw) as Partial<T>) } as T;
-  } catch {
-    /* c8 ignore next 2 */
-    return fallback;
-  }
-}
 
 // ─── ApiKeyRow component ─────────────────────────────────────────────────────
 

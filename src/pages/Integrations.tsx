@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
-  Globe, Link2, Shield, Filter, Pencil, Info,
+  Globe, Link2, Shield, Filter, Pencil,
 } from 'lucide-react';
-import { ServiceId, ServiceConfig, ServiceDef, SERVICES, ServiceCard, loadServices, saveServices } from './integrations/IntegrationsForm';
+import { ServiceId, ServiceConfig, SERVICES, ServiceCard, loadServices, saveServices } from './integrations/IntegrationsForm';
 import { Webhook, WebhookEvent, WebhookRow, WebhookCreator, HealthDashboard, loadWebhooks, saveWebhooks } from './integrations/IntegrationsList';
 import { CiCdTab } from './integrations/IntegrationsCloud';
 

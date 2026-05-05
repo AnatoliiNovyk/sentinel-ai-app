@@ -10,13 +10,12 @@ import {
   RemediationWorkflow,
   RemediationAction,
   CreateRemediationWorkflowRequest,
-  RemediationEvent,
 } from '../types.remediation';
 
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((table) => ({
+    from: vi.fn((_table) => ({
       select: vi.fn(function () {
         return this;
       }),
@@ -111,6 +110,7 @@ describe('RemediationService', () => {
     });
 
     it('should reject workflow without required fields', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const request: any = {
         name: 'Incomplete',
         // Missing ruleId and actions
@@ -241,6 +241,7 @@ describe('RemediationService', () => {
     });
 
     it('should handle unknown action types', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const action: any = {
         type: 'unknown_action',
         description: 'Unknown',
@@ -312,6 +313,7 @@ describe('RemediationService', () => {
   describe('error handling', () => {
     it('should handle null action gracefully', async () => {
       const result = await RemediationService.executeAction(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         undefined as any,
         'test-user',
         0

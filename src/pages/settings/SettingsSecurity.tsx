@@ -1,13 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Timer, Database, Loader2, RefreshCw, WifiOff, Server, Eye, EyeOff,
-  Check, Shield, Rocket, Package, ArrowRight, Crown, CreditCard, Lock, Sun, Moon,
+  Timer, Database, Loader2, RefreshCw, WifiOff, Server,
+  Check, Lock, Sun, Moon,
 } from 'lucide-react';
 import { supabase, DEFAULT_SLA_CONFIG, SlaConfig } from '../../lib/supabase';
 import { useAuth } from '../../context/useAuth';
 import { AuditService, AuditAction } from '../../api/audit.service';
 import { isHttpsAgentUrl, isMixedContentAgentUrl, probeAgentHealth } from '../../lib/agentHealth';
-import { httpPost } from '../../lib/httpClient';
 
 const DEFAULT_AGENT_URL = 'http://95.67.75.146:9090/health';
 
@@ -99,7 +98,7 @@ export function SettingsSecurity() {
   const { user, profile } = useAuth();
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
-  const [plan, setPlan] = useState('free');
+  const [_plan, setPlan] = useState('free');
   const [sla, setSla] = useState<SlaConfig>(DEFAULT_SLA_CONFIG);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

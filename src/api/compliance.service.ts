@@ -3,6 +3,7 @@
  * Aggregates metrics from Alert Rules, Remediation Workflows, and Vulnerabilities
  * Phase 5, Batch 3: Compliance Dashboard
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { supabase } from './client';
 import {
@@ -13,10 +14,8 @@ import {
   SecurityPostureMetric,
   RemediationMetric,
   AlertMetric,
-  ComplianceStatus,
   ComplianceReport,
   ComplianceReportRequest,
-  ComplianceTrendData,
 } from './types.compliance';
 
 /**
@@ -320,7 +319,7 @@ export const ComplianceService = {
       }
 
       return { success: true, metrics };
-    } catch (err: any) {
+    } catch (_err: any) {
       return { success: false };
     }
   },
@@ -363,7 +362,7 @@ export const ComplianceService = {
       };
 
       return { success: true, score };
-    } catch (err: any) {
+    } catch (_err: any) {
       return { success: false };
     }
   },

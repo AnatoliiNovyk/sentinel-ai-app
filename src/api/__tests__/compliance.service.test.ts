@@ -9,7 +9,7 @@ import { ComplianceService } from '../compliance.service';
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((table) => ({
+    from: vi.fn((_table) => ({
       select: vi.fn(function () {
         return this;
       }),

@@ -4,13 +4,13 @@
  * Phase 5: Alert Rules + Auto-Remediation
  * Frontend service for managing alert rules via Supabase
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { supabase } from './client';
 import {
   AlertRule,
   AlertRuleType,
   AlertCondition,
-  AlertAction,
   VulnerabilityForEval,
   RuleEvaluationResult,
   AlertTriggerEvent,

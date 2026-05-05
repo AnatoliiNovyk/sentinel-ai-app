@@ -362,6 +362,7 @@ describe('Notifications — additional coverage', () => {
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, 'createElement').mockImplementation((tag) => {
       if (tag === 'a') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return { click: mockClick, href: '', download: '' } as any;
       }
       return originalCreateElement(tag);

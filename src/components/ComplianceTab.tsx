@@ -3,6 +3,7 @@
  * Phase 5, Batch 3: Compliance Dashboard
  * Displays compliance metrics, frameworks, and recommendations
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, TrendingUp, Shield, CheckCircle, XCircle, Clock } from 'lucide-react';
@@ -31,6 +32,7 @@ export const ComplianceTab: React.FC<ComplianceDashboardProps> = ({
     // Refresh every 5 minutes
     const interval = setInterval(loadDashboard, 5 * 60 * 1000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, userId]);
 
   const loadDashboard = async () => {

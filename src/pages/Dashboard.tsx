@@ -4,10 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, Scan, Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
 import { useSearchShortcut } from '../lib/useSearchShortcut';
-import { SkeletonList } from '../components/Skeleton';
 import {
   buildTrend, buildSeveritySparklines, buildScanVelocity, buildRiskTrend,
-  AreaTrendChart, ScanVelocityChart, RiskTrendChart, SlaDonut, SparkKpi, SummaryPill
+  AreaTrendChart, SummaryPill
 } from './dashboard/DashboardCharts';
 import {
   ProjectHealthSection, KpiRow, WeeklySloSummary, AgentProbeSection,
@@ -185,6 +184,7 @@ export default function Dashboard() {
       }
     }, 1500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, vulns]);
 
   const completedScans = scans.filter(s => s.status === 'completed').length;

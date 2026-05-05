@@ -1,20 +1,11 @@
 import { useMemo } from 'react';
 import {
-  Shield, AlertTriangle, CheckCircle2, Activity, Timer, Radar,
-  TrendingDown, TrendingUp, Minus, Users, Target, CheckCheck,
+  Shield, AlertTriangle, CheckCircle2, Activity, TrendingUp, Target,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Project, Vulnerability, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
+import { Project, Vulnerability } from '../../lib/supabase';
 import { SparkKpi, SummaryPill } from './DashboardCharts';
-import { Sparkline } from '../../components/Sparkline';
 
 // ─── Types ────────────────────────────────────────────────────────────────
-
-type TeamMember = {
-  id: string;
-  role: string;
-  auth?: { users?: { email?: string } };
-};
 
 type ProbeSmokeStatus = {
   status: 'ok' | 'error' | 'unknown';
@@ -24,14 +15,6 @@ type ProbeSmokeStatus = {
   probedUrl: string | null;
   error: string | null;
   generatedAt: string | null;
-};
-
-type SlaRow = {
-  v: Vulnerability;
-  ageDays: number;
-  budget: number;
-  overdue: boolean;
-  remaining: number;
 };
 
 type WeeklySloSummary = {
@@ -51,7 +34,7 @@ type WeeklySloSummary = {
 
 export function ProjectHealthSection({
   projects,
-  openVulns,
+  openVulns: _openVulns,
   riskFilter,
   setRiskFilter,
   onManageProjects,

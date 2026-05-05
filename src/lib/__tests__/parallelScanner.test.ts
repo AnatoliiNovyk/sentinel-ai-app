@@ -134,7 +134,6 @@ describe('runScansParallel', () => {
   it('handles non-Error thrown values (string throw) and marks as failed', async () => {
     const jobs = [createMockScanJob('job-str-err')];
     const workerFn = vi.fn(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw 'string error value';
     });
 

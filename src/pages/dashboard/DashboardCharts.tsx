@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Vulnerability, Project } from '../../lib/supabase';
 
@@ -88,7 +89,7 @@ export function buildRiskTrend(vulns: Vulnerability[], projects: Project[], days
     });
   }
   for (const b of buckets) {
-    const dayVulns = vulns.filter(v => v.created_at.slice(0, 10) <= b.day && (v.status === 'open' || v.status === 'in_progress'));
+    const _dayVulns = vulns.filter(v => v.created_at.slice(0, 10) <= b.day && (v.status === 'open' || v.status === 'in_progress'));
     const dayProjects = projects.filter(p => p.created_at.slice(0, 10) <= b.day);
     const totalRisk = dayProjects.reduce((sum, p) => sum + (p.risk_score || 0), 0);
     b.score = Math.round(totalRisk / Math.max(1, dayProjects.length));

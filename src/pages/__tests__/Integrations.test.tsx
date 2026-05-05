@@ -236,7 +236,7 @@ describe('Integrations — YAML code blocks', () => {
 
   it('renders scanner configuration', () => {
     render(<Integrations />);
-    expect(screen.getByText(/scanner: \"tfsec\"/i)).toBeInTheDocument();
+    expect(screen.getByText(/scanner: "tfsec"/i)).toBeInTheDocument();
   });
 });
 

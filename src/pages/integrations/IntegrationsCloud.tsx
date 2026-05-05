@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  Check, Copy, ChevronDown, ChevronRight, Github, Gitlab,
-  RefreshCw, Shield, X,
+  Check, Copy, Github, Gitlab,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────

@@ -4,12 +4,11 @@
  * Phase 5: Alert Rules + Auto-Remediation
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AlertRulesService } from '../alert.service';
 import {
   AlertRule,
   AlertCondition,
-  AlertAction,
   VulnerabilityForEval,
   CreateAlertRuleRequest,
   UpdateAlertRuleRequest,
@@ -18,7 +17,7 @@ import {
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((table) => ({
+    from: vi.fn((_table) => ({
       select: vi.fn(function () {
         return this;
       }),
@@ -99,6 +98,7 @@ describe('AlertRulesService', () => {
     });
 
     it('should reject rule without required fields', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const request: any = {
         name: 'Incomplete Rule',
         // Missing rule_type and condition
@@ -111,6 +111,7 @@ describe('AlertRulesService', () => {
     });
 
     it('should validate rule_type', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const request: any = {
         name: 'Invalid Rule',
         rule_type: 'invalid_type',
@@ -126,7 +127,7 @@ describe('AlertRulesService', () => {
 
   describe('evaluateSeverity', () => {
     it('should match severity-based rules', () => {
-      const condition: AlertCondition = {
+      const _condition: AlertCondition = {
         severity: ['critical', 'high'],
       };
 
@@ -146,7 +147,7 @@ describe('AlertRulesService', () => {
         severity: 'info',
       };
 
-      const condition: AlertCondition = {
+      const _condition: AlertCondition = {
         severity: ['critical', 'high'],
       };
 
