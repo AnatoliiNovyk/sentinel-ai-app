@@ -75,7 +75,7 @@ export function buildScanVelocity(scans: any[], days: number) {
   return buckets;
 }
 
-export function buildRiskTrend(vulns: Vulnerability[], projects: Project[], days: number) {
+export function buildRiskTrend(_vulns: Vulnerability[], projects: Project[], days: number) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const buckets: { day: string; label: string; score: number }[] = [];
@@ -89,7 +89,6 @@ export function buildRiskTrend(vulns: Vulnerability[], projects: Project[], days
     });
   }
   for (const b of buckets) {
-    const _dayVulns = vulns.filter(v => v.created_at.slice(0, 10) <= b.day && (v.status === 'open' || v.status === 'in_progress'));
     const dayProjects = projects.filter(p => p.created_at.slice(0, 10) <= b.day);
     const totalRisk = dayProjects.reduce((sum, p) => sum + (p.risk_score || 0), 0);
     b.score = Math.round(totalRisk / Math.max(1, dayProjects.length));

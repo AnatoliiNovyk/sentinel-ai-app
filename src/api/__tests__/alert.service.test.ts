@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { AlertRulesService } from '../alert.service';
 import {
   AlertRule,
+  AlertAction,
   AlertCondition,
   VulnerabilityForEval,
   CreateAlertRuleRequest,
@@ -17,29 +18,18 @@ import {
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((_table) => ({
-      select: vi.fn(function () {
-        return this;
-      }),
-      insert: vi.fn(function () {
-        return this;
-      }),
-      update: vi.fn(function () {
-        return this;
-      }),
-      delete: vi.fn(function () {
-        return this;
-      }),
-      eq: vi.fn(function () {
-        return this;
-      }),
-      single: vi.fn(async function () {
-        return { data: mockAlertRule, error: null };
-      }),
-      order: vi.fn(function () {
-        return this;
-      }),
-    })),
+    from: vi.fn((_table) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        insert: vi.fn(() => chain),
+        update: vi.fn(() => chain),
+        delete: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        single: vi.fn(async () => ({ data: mockAlertRule, error: null })),
+      };
+      return chain;
+    }),
   })),
 }));
 
@@ -127,7 +117,7 @@ describe('AlertRulesService', () => {
 
   describe('evaluateSeverity', () => {
     it('should match severity-based rules', () => {
-      const _condition: AlertCondition = {
+      const condition: AlertCondition = {
         severity: ['critical', 'high'],
       };
 
@@ -138,6 +128,7 @@ describe('AlertRulesService', () => {
       };
 
       // Service should match critical vulnerabilities
+      expect(condition.severity).toContain(criticalVuln.severity);
       expect(criticalVuln.severity).toBe('critical');
     });
 
@@ -147,11 +138,12 @@ describe('AlertRulesService', () => {
         severity: 'info',
       };
 
-      const _condition: AlertCondition = {
+      const condition: AlertCondition = {
         severity: ['critical', 'high'],
       };
 
       // Service should not match info severity
+      expect(condition.severity).not.toContain(infoVuln.severity);
       expect(infoVuln.severity).not.toMatch(/critical|high/);
     });
   });
@@ -241,7 +233,8 @@ describe('AlertRulesService', () => {
       };
 
       const cooldownMs = (rule.cooldown_minutes || 60) * 60 * 1000;
-      const lastTriggeredTime = new Date(rule.last_triggered_at).getTime();
+      expect(rule.last_triggered_at).toBeDefined();
+      const lastTriggeredTime = new Date(rule.last_triggered_at as string).getTime();
       const now = Date.now();
       const isInCooldown = now - lastTriggeredTime < cooldownMs;
 
@@ -256,7 +249,8 @@ describe('AlertRulesService', () => {
       };
 
       const cooldownMs = (rule.cooldown_minutes || 60) * 60 * 1000;
-      const lastTriggeredTime = new Date(rule.last_triggered_at).getTime();
+      expect(rule.last_triggered_at).toBeDefined();
+      const lastTriggeredTime = new Date(rule.last_triggered_at as string).getTime();
       const now = Date.now();
       const isInCooldown = now - lastTriggeredTime < cooldownMs;
 

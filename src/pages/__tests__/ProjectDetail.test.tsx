@@ -295,7 +295,7 @@ describe('ProjectDetail — quickScan', () => {
   });
 
   it('calls dispatchScan and reloads on Run scan click', async () => {
-    vi.mocked(ScansService.dispatchScan).mockResolvedValue(undefined);
+    vi.mocked(ScansService.dispatchScan).mockResolvedValue({ scan: null, dispatchResult: null } as never);
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     await waitFor(() => screen.getByRole('button', { name: /Run scan/i }));
     await act(async () => {
@@ -505,7 +505,7 @@ describe('ProjectDetail — ScansTab with data', () => {
   });
 
   it('handleRescan calls dispatchScan when re-run button clicked', async () => {
-    vi.mocked(ScansService.dispatchScan).mockResolvedValue(undefined);
+    vi.mocked(ScansService.dispatchScan).mockResolvedValue({ scan: null, dispatchResult: null } as never);
     render(<ProjectDetail project={makeProject()} onBack={mockOnBack} />);
     fireEvent.click(screen.getByRole('button', { name: /^scans/i }));
     await waitFor(() => screen.getByRole('button', { name: /Re-run scan/i }));

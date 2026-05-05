@@ -190,7 +190,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
       await load();
     } catch (err) {
       console.error('[ProjectDetail] quickScan failed:', err);
-      alert(errorToUserMessage(err));
+      alert(errorToUserMessage(err as Parameters<typeof errorToUserMessage>[0]));
     } finally {
       setLaunching(false);
     }
@@ -472,7 +472,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
             await ScansService.dispatchScan(project.id, scanner, project.target ?? '', project.org_id, agentReachable);
             await load();
           } catch (err) {
-            alert(errorToUserMessage(err));
+            alert(errorToUserMessage(err as Parameters<typeof errorToUserMessage>[0]));
           }
         }} />}
       {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}

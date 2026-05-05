@@ -47,7 +47,13 @@ export const ComplianceService = {
       // Generate recommendation
       const recommendation = ComplianceService.generateRecommendation(
         frameworks.metrics || [],
-        score.score
+        score.score ?? {
+          overallScore: 0,
+          securityScore: 0,
+          remediationScore: 0,
+          alertingScore: 0,
+          lastUpdatedAt: new Date().toISOString(),
+        }
       );
 
       const dashboard: ComplianceDashboard = {
@@ -205,7 +211,7 @@ export const ComplianceService = {
    * Get security posture metrics
    */
   async getSecurityPostureMetrics(
-    userId: string,
+    _userId: string,
     projectId: string
   ): Promise<{ success: boolean; metrics?: SecurityPostureMetric; error?: string }> {
     try {
@@ -370,7 +376,7 @@ export const ComplianceService = {
   /**
    * Generate AI recommendation
    */
-  generateRecommendation(frameworks: ComplianceMetric[], score: ComplianceScore): string {
+  generateRecommendation(_frameworks: ComplianceMetric[], score: ComplianceScore): string {
     if (score.overallScore < 50) {
       return 'Critical: Security posture is below acceptable. Focus on remediating high-severity vulnerabilities immediately.';
     }

@@ -232,13 +232,14 @@ export const RemediationService = {
       // Create remediation event
       const eventStartTime = Date.now();
 
-      const eventRecord: Omit<RemediationEvent, 'id' | 'action_results'> = {
+      const workflowAny = workflow as unknown as Record<string, unknown>;
+      const eventRecord = {
         workflow_id: workflow.id,
         workflow_name: workflow.name,
-        rule_id: workflow.rule_id,
+        rule_id: (workflowAny['rule_id'] as string | undefined) ?? workflow.ruleId,
         rule_name: 'Unknown', // Will be filled in by join
         user_id: userId,
-        project_id: workflow.project_id,
+        project_id: (workflowAny['project_id'] as string | undefined) ?? workflow.projectId ?? null,
         trigger_reason: request.triggerReason,
         vulnerability_ids: request.vulnerabilityIds || [],
         overall_status: 'in_progress',
@@ -270,7 +271,14 @@ export const RemediationService = {
       let successCount = 0;
       let failureCount = 0;
 
-      if (workflow.execute_sequentially) {
+      const executeSequentially =
+        (workflowAny['execute_sequentially'] as boolean | undefined) ?? workflow.executeSequentially;
+      const stopOnFirstFailure =
+        (workflowAny['stop_on_first_failure'] as boolean | undefined) ?? workflow.stopOnFirstFailure;
+      const executionCount =
+        (workflowAny['execution_count'] as number | undefined) ?? 0;
+
+      if (executeSequentially) {
         // Sequential execution
         for (let i = 0; i < workflow.actions.length; i++) {
           const result = await RemediationService.executeAction(
@@ -285,7 +293,7 @@ export const RemediationService = {
             successCount++;
           } else {
             failureCount++;
-            if (workflow.stop_on_first_failure) {
+            if (stopOnFirstFailure) {
               break;
             }
           }
@@ -330,7 +338,7 @@ export const RemediationService = {
         .from('remediation_workflows')
         .update({
           last_executed_at: new Date().toISOString(),
-          execution_count: (workflow.execution_count || 0) + 1,
+          execution_count: executionCount + 1,
         })
         .eq('id', workflow.id);
 
@@ -357,7 +365,7 @@ export const RemediationService = {
    */
   async executeAction(
     action: RemediationAction,
-    userId: string,
+    _userId: string,
     actionIndex: number
   ): Promise<ActionExecutionResult> {
     const startTime = Date.now();
@@ -366,14 +374,12 @@ export const RemediationService = {
     if (!action) {
       return {
         actionIndex,
-        actionType: 'unknown',
+        actionType: 'custom_action',
         status: 'failed',
         errorMessage: 'Action is null or undefined',
         executionTimeMs: Date.now() - startTime,
       };
     }
-
-    const _timeout = action.parameters?.timeoutMs || 30000;
 
     try {
       let status: RemediationStatus = 'pending';

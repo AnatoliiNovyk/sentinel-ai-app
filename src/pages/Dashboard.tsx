@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;created_at:string;project_id:string}[]>([]);
-  const [teamMembers, setTeamMembers] = useState<{id:string;role:string;auth?:{users?:{email?:string}}[]}[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{id:string;role:string;auth?:{users?:{email?:string}}}[]>([]);
   const [probeSmokeStatus, setProbeSmokeStatus] = useState<{
     status: 'ok' | 'error' | 'unknown';
     reachable: boolean | null;
@@ -74,7 +74,18 @@ export default function Dashboard() {
       setProjects(projectsRes.data ?? []);
       setVulns(vulnsRes.data ?? []);
       setLiveJobs((jobsRes.data ?? []) as typeof liveJobs);
-      setTeamMembers((teamRes.data ?? []) as unknown as {id:string;role:string;auth?:{users?:{email?:string}}[]});
+      setTeamMembers(
+        (teamRes.data ?? []).map((tm) => {
+          const authObj = Array.isArray((tm as { auth?: unknown }).auth)
+            ? ((tm as { auth?: Array<{ users?: { email?: string } }> }).auth?.[0] ?? undefined)
+            : ((tm as { auth?: { users?: { email?: string } } }).auth ?? undefined);
+          return {
+            id: String((tm as { id?: string }).id ?? ''),
+            role: String((tm as { role?: string }).role ?? ''),
+            auth: authObj,
+          };
+        })
+      );
 
       const probeRow = (probeRes.data ?? [])[0] as { created_at?: string; status?: string; metadata?: unknown } | undefined;
       const probeMeta = (probeRow?.metadata && typeof probeRow.metadata === 'object')

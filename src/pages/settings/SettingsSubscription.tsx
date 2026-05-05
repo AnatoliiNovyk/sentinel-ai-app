@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { SlaConfig, DEFAULT_SLA_CONFIG } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { httpPost } from '../../lib/httpClient';
 import { ApiRateLimitsPanel } from '../../components/ApiRateLimitsPanel';
 

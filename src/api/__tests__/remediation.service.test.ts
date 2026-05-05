@@ -15,42 +15,29 @@ import {
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((_table) => ({
-      select: vi.fn(function () {
-        return this;
-      }),
-      insert: vi.fn(function () {
-        return this;
-      }),
-      update: vi.fn(function () {
-        return this;
-      }),
-      delete: vi.fn(function () {
-        return this;
-      }),
-      eq: vi.fn(function () {
-        return this;
-      }),
-      order: vi.fn(function () {
-        return this;
-      }),
-      limit: vi.fn(function () {
-        return this;
-      }),
-      single: vi.fn(async function () {
-        return { data: mockWorkflow, error: null };
-      }),
-    })),
+    from: vi.fn((_table) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        insert: vi.fn(() => chain),
+        update: vi.fn(() => chain),
+        delete: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        limit: vi.fn(() => chain),
+        single: vi.fn(async () => ({ data: mockWorkflow, error: null })),
+      };
+      return chain;
+    }),
   })),
 }));
 
 // Mock data
 const mockWorkflow: RemediationWorkflow = {
   id: 'workflow-1',
-  user_id: 'test-user-1',
-  rule_id: 'alert-rule-1',
-  rule_name: 'Critical CVE Alert',
-  project_id: 'test-project-1',
+  userId: 'test-user-1',
+  ruleId: 'alert-rule-1',
+  ruleName: 'Critical CVE Alert',
+  projectId: 'test-project-1',
   name: 'Auto-Disable on Critical',
   description: 'Automatically disable assets when critical CVE found',
   actions: [
@@ -74,11 +61,10 @@ const mockWorkflow: RemediationWorkflow = {
     },
   ],
   enabled: true,
-  execute_sequentially: true,
-  stop_on_first_failure: false,
+  executeSequentially: true,
+  stopOnFirstFailure: false,
   created_at: '2026-05-05T10:00:00Z',
   updated_at: '2026-05-05T10:00:00Z',
-  execution_count: 0,
   created_by: 'test-user-1',
   updated_by: 'test-user-1',
 };
@@ -297,12 +283,12 @@ describe('RemediationService', () => {
 
   describe('workflow execution', () => {
     it('should handle sequential action execution', async () => {
-      // Tested through executeWorkflow with execute_sequentially: true
-      expect(mockWorkflow.execute_sequentially).toBe(true);
+      // Tested through executeWorkflow with executeSequentially: true
+      expect(mockWorkflow.executeSequentially).toBe(true);
     });
 
     it('should respect stop_on_first_failure flag', async () => {
-      expect(mockWorkflow.stop_on_first_failure).toBe(false);
+      expect(mockWorkflow.stopOnFirstFailure).toBe(false);
     });
 
     it('should track action count in workflow', async () => {
@@ -378,7 +364,6 @@ describe('RemediationService', () => {
     });
 
     it('should track execution metadata', () => {
-      expect(mockWorkflow.execution_count).toBeGreaterThanOrEqual(0);
       expect(mockWorkflow.created_at).toBeDefined();
       expect(mockWorkflow.updated_at).toBeDefined();
     });

@@ -5,27 +5,21 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { ComplianceService } from '../compliance.service';
+import type { ComplianceReportRequest } from '../types.compliance';
 
 // Mock Supabase
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    from: vi.fn((_table) => ({
-      select: vi.fn(function () {
-        return this;
-      }),
-      eq: vi.fn(function () {
-        return this;
-      }),
-      gte: vi.fn(function () {
-        return this;
-      }),
-      order: vi.fn(function () {
-        return this;
-      }),
-      single: vi.fn(async function () {
-        return { data: null, error: null };
-      }),
-    })),
+    from: vi.fn((_table) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        gte: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        single: vi.fn(async () => ({ data: null, error: null })),
+      };
+      return chain;
+    }),
   })),
 }));
 
@@ -328,7 +322,7 @@ describe('ComplianceService', () => {
 
   describe('report generation', () => {
     it('should generate compliance report', async () => {
-      const request = {
+      const request: ComplianceReportRequest = {
         projectId: testProjectId,
         frameworks: ['SOC2', 'GDPR'],
         includeEvidence: true,

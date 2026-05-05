@@ -699,7 +699,7 @@ describe('IntegrationsLegacy — ServiceCard expand/collapse', () => {
     // Only fill one field
     fireEvent.change(screen.getByPlaceholderText('https://yourcompany.atlassian.net'), { target: { value: 'https://test.atlassian.net' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    const saved = readVersioned('sentinel_service_configs', {});
+    const saved = readVersioned<Record<string, { connected?: boolean }>>('sentinel_service_configs', {});
     expect(saved.jira.connected).toBe(false);
   });
 });
@@ -791,7 +791,7 @@ describe('IntegrationsLegacy — loaded connected service from localStorage', ()
     render(<IntegrationsLegacy />);
     const disconnectBtn = screen.getByTitle('Disconnect integration');
     fireEvent.click(disconnectBtn);
-    const saved = readVersioned('sentinel_service_configs', {});
+    const saved = readVersioned<Record<string, { connected?: boolean }>>('sentinel_service_configs', {});
     expect(saved.slack?.connected).toBe(false);
   });
 });
@@ -872,7 +872,7 @@ describe('IntegrationsLegacy — WebhookCreator open/close', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. Slack Security Alerts'), { target: { value: 'localStorage Hook' } });
     fireEvent.change(screen.getByPlaceholderText('https://your-server.com/webhook'), { target: { value: 'https://example.com/wh' } });
     fireEvent.click(screen.getByRole('button', { name: /create webhook/i }));
-    const saved = readVersioned('sentinel_webhooks', []);
+    const saved = readVersioned<Array<{ name: string }>>('sentinel_webhooks', []);
     expect(saved.length).toBeGreaterThan(0);
     expect(saved[0].name).toBe('localStorage Hook');
   });
@@ -951,7 +951,7 @@ describe('IntegrationsLegacy — WebhookRow interactions', () => {
     render(<IntegrationsLegacy />);
     fireEvent.click(screen.getByRole('button', { name: /webhooks/i }));
     fireEvent.click(screen.getByTitle('Disable webhook'));
-    const saved = readVersioned('sentinel_webhooks', []);
+    const saved = readVersioned<Array<{ enabled: boolean }>>('sentinel_webhooks', []);
     expect(saved[0].enabled).toBe(false);
   });
 
