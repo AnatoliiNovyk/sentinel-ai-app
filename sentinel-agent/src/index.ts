@@ -17,7 +17,7 @@ import * as otelApi from '@opentelemetry/api';
 
 let otelTracer: otelApi.Tracer = otelApi.trace.getTracer('sentinel-agent', '1.0.0');
 
-function initOpenTelemetry(): void {
+async function initOpenTelemetry(): Promise<void> {
   const enabled = process.env.OTEL_ENABLED?.toLowerCase() === 'true';
   if (!enabled) {
     console.log('ℹ️  OpenTelemetry disabled (set OTEL_ENABLED=true to enable)');
@@ -25,11 +25,9 @@ function initOpenTelemetry(): void {
   }
 
   try {
-    // Dynamic require so the SDK is only loaded when enabled
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { NodeSDK } = require('@opentelemetry/sdk-node') as typeof import('@opentelemetry/sdk-node');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http') as typeof import('@opentelemetry/exporter-trace-otlp-http');
+    // Dynamic import so the SDK is only loaded when enabled
+    const { NodeSDK } = await import('@opentelemetry/sdk-node');
+    const { OTLPTraceExporter } = await import('@opentelemetry/exporter-trace-otlp-http');
 
     const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318';
 
@@ -619,7 +617,8 @@ async function runAmass(target: string): Promise<Finding[]> {
 
     const rawMessage = getErrorMessage(err);
     // Strip ANSI escape codes (Amass progress bars) from error messages stored in DB
-    const message = rawMessage.replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\r/g, '').trim();
+    const ansiEscapePattern = new RegExp(String.raw`\u001b\[[0-9;]*[mGKHF]`, 'g');
+    const message = rawMessage.replace(ansiEscapePattern, '').replace(/\r/g, '').trim();
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
       throw new Error('amass is not installed. Run: apt-get install -y amass');
     }
@@ -1287,5 +1286,5 @@ async function main() {
   }
 }
 
-initOpenTelemetry();
+void initOpenTelemetry();
 main().catch((err: unknown) => console.error('🔥 Fatal Crash:', getErrorMessage(err)));
