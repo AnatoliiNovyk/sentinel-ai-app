@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { supabase, Project, Scan, Report, Vulnerability, Notification } from '../lib/supabase';
 import { useAuth } from '../context/useAuth';
-import { dispatchScan } from '../lib/scanDispatch';
+import { ScansService } from '../api/scans.service';
+import { probeAgentHealth } from '../lib/agentHealth';
 import { errorToUserMessage } from '../lib/errors';
 import { buildReport } from '../lib/reportBuilder';
 import { toJsonExport, downloadFile } from '../lib/exporters';
@@ -67,7 +68,28 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [liveJobs, setLiveJobs] = useState<{id:string;scanner:string;target:string;status:string;started_at:string|null;created_at:string}[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [agentReachable, setAgentReachable] = useState<boolean | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+
+  const DEFAULT_AGENT_HEALTH_URL = (import.meta.env.VITE_AGENT_HEALTH_URL as string | undefined) ?? 'http://95.67.75.146:9090/health';
+
+  useEffect(() => {
+    let active = true;
+    const checkAgent = async () => {
+      try {
+        const url = localStorage.getItem('agentHealthUrl') ?? DEFAULT_AGENT_HEALTH_URL;
+        const probe = await probeAgentHealth(url);
+        if (!active) return;
+        setAgentReachable(probe.reachable);
+      } catch {
+        if (!active) return;
+        setAgentReachable(false);
+      }
+    };
+    checkAgent();
+    const id = setInterval(checkAgent, 30_000);
+    return () => { active = false; clearInterval(id); };
+  }, [DEFAULT_AGENT_HEALTH_URL]);
 
   const meta = ENV_META[project.environment] ?? ENV_META.external;
   const EnvIcon = meta.icon;
@@ -163,13 +185,11 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     if (!user || launching) return;
     setLaunching(true);
     try {
-      const result = await dispatchScan(user.id, project.id, defaultScanner, project.target ?? '');
-      if (!result.ok) {
-        console.error('[ProjectDetail] quickScan failed:', result.error);
-        alert(errorToUserMessage(result.error));
-        return;
-      }
+      await ScansService.dispatchScan(project.id, defaultScanner, project.target ?? '', project.org_id, agentReachable);
       await load();
+    } catch (err) {
+      console.error('[ProjectDetail] quickScan failed:', err);
+      alert(errorToUserMessage(err));
     } finally {
       setLaunching(false);
     }
@@ -447,10 +467,12 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
         />
       )}
       {tab === 'scans' && <ScansTab scans={scans} vulns={vulns} project={project} liveJobs={liveJobs} onRescan={async (scanner) => {
-          if (!user) return;
-          const result = await dispatchScan(user.id, project.id, scanner, project.target ?? '');
-          if (!result.ok) alert(errorToUserMessage(result.error));
-          else await load();
+          try {
+            await ScansService.dispatchScan(project.id, scanner, project.target ?? '', project.org_id, agentReachable);
+            await load();
+          } catch (err) {
+            alert(errorToUserMessage(err));
+          }
         }} />}
       {tab === 'reports' && <ReportsTab reports={reports} onView={setSelectedReport} />}
       {tab === 'activity' && <ActivityTab items={activity} />}
