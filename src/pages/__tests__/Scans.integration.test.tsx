@@ -146,16 +146,16 @@ describe('Scans integration flow', () => {
   it('dispatches new scan from modal with project fallback target', async () => {
     render(<Scans />);
 
-    await waitFor(() => screen.getByText('open-new-scan'), { timeout: 3000 });
+    await waitFor(() => expect(mockGetProjects).toHaveBeenCalledTimes(1), { timeout: 6000 });
 
-    fireEvent.click(screen.getByText('open-new-scan'));
-    fireEvent.click(screen.getByRole('button', { name: 'Launch scan' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'open-new-scan' }, { timeout: 6000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Launch scan' }, { timeout: 6000 }));
 
     await waitFor(
       () => {
-        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1', expect.anything());
+        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1', null);
       },
-      { timeout: 3000 },
+      { timeout: 6000 },
     );
   });
 

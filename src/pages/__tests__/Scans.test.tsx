@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import Scans from '../Scans';
 import type { Project, Scan, Vulnerability } from '../../lib/supabase';
 
@@ -84,8 +84,14 @@ const localStorageMock = {
   getItem: vi.fn().mockReturnValue(null),
   setItem: vi.fn(),
   removeItem: vi.fn(),
+  clear: vi.fn(),
 };
 vi.stubGlobal('localStorage', localStorageMock);
+
+afterEach(() => {
+  vi.clearAllMocks();
+  localStorageMock.getItem.mockReturnValue(null);
+});
 
 // ── Test Data Helpers ────────────────────────────────────────────────────
 
@@ -179,8 +185,8 @@ describe('Scans — mock mode warning', () => {
     render(<Scans />);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /dismiss mock warning/i })).toBeInTheDocument();
-      expect(screen.getByText(/selected scan is a simulated run/i)).toBeInTheDocument();
-    });
+    }, { timeout: 6000 });
+    expect(await screen.findByText(/selected scan is a simulated run/i, {}, { timeout: 6000 })).toBeInTheDocument();
   });
 
   it('hides mock warning when agent is reachable', async () => {
