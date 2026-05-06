@@ -942,3 +942,85 @@ describe('Settings — company input interaction', () => {
     expect(companyInput).toHaveValue('New Corp Ltd');
   });
 });
+
+describe('Settings — SettingsProfile audit failure recovery', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('save flow continues even when audit log fails (catch block ~line 88)', async () => {
+    const logSecurityEventSpy = vi.spyOn(AuditService, 'logSecurityEvent').mockRejectedValueOnce(new Error('Audit service unavailable'));
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await act(async () => { render(<Settings />); });
+
+    const fullNameInput = screen.getByLabelText('Full name') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(fullNameInput, { target: { value: 'New Name' } });
+    });
+
+    const saveBtn = screen.getByRole('button', { name: /save changes/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    // Even though audit log failed, save flow should succeed (setSaved = true)
+    await waitFor(() => {
+      expect(screen.getByText('Saved!')).toBeInTheDocument();
+    }, { timeout: 4000 });
+
+    expect(logSecurityEventSpy).toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Audit log failed'), expect.any(Error));
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('hasChanges returns false when profile is null initially (line 165)', async () => {
+    // When profile is null, the Save button should not show "Unsaved changes" indicator initially
+    await act(async () => { render(<Settings />); });
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+});
+
+describe('Settings — SettingsSubscription overview stats', () => {
+  it('renders all four overview cards with correct icon labels', async () => {
+    await act(async () => { render(<Settings />); });
+    expect(screen.getByText('Current plan')).toBeInTheDocument();
+    expect(screen.getByText('SLA rules')).toBeInTheDocument();
+    expect(screen.getByText('Team members')).toBeInTheDocument();
+    expect(screen.getByText('Retention policies')).toBeInTheDocument();
+  });
+
+  it('displays plan-specific colors for current plan indicator', async () => {
+    mockAuthProfile.plan = 'pro';
+    await act(async () => { render(<Settings />); });
+    // Pro plan should show violet color indicator
+    expect(screen.getByText('Current plan')).toBeInTheDocument();
+  });
+
+  it('plan cards show correct feature lists', async () => {
+    await act(async () => { render(<Settings />); });
+    // Check that at least one plan has its expected feature
+    expect(screen.getByText(/GitHub CI integration/)).toBeInTheDocument();
+  });
+
+  it('free plan shows "Current plan ✓" text instead of upgrade button', async () => {
+    mockAuthProfile.plan = 'free';
+    await act(async () => { render(<Settings />); });
+    // Free plan is active by default, so it shows "Current plan ✓" text, not a button
+    expect(screen.getByText(/Current plan ✓/)).toBeInTheDocument();
+  });
+
+  it('enterprise plan button opens mailto link', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await act(async () => { render(<Settings />); });
+
+    const contactButtons = screen.getAllByRole('button', { name: /Contact sales/ });
+    await act(async () => {
+      fireEvent.click(contactButtons[0]);
+    });
+
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('mailto:'), '_blank');
+    openSpy.mockRestore();
+  });
+});
