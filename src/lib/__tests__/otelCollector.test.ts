@@ -332,30 +332,35 @@ describe('OTelCollectorClient', () => {
     });
 
     it('implements exponential backoff on retries', async () => {
-      const times: number[] = [];
-      fetchMock.mockImplementation(async () => {
-        times.push(Date.now());
-        if (times.length < 3) {
-          throw new Error('Retry');
-        }
-        return { ok: true, status: 200 };
-      });
+      // Use fake timers so backoff delays are deterministic regardless of
+      // event-loop pressure during parallel test runs.
+      vi.useFakeTimers();
+      try {
+        let callCount = 0;
+        fetchMock.mockImplementation(async () => {
+          callCount++;
+          if (callCount < 3) throw new Error('Retry');
+          return { ok: true, status: 200 };
+        });
 
-      const metric: OTelMetric = {
-        name: 'metric',
-        value: 1,
-        timestamp: Date.now(),
-        type: 'gauge',
-      };
+        const metric: OTelMetric = {
+          name: 'metric',
+          value: 1,
+          timestamp: Date.now(),
+          type: 'gauge',
+        };
 
-      client.recordMetric(metric);
-      await client.flush();
+        client.recordMetric(metric);
+        const flushPromise = client.flush();
 
-      // Check exponential backoff timing
-      if (times.length > 2) {
-        const gap1 = times[1] - times[0];
-        const gap2 = times[2] - times[1];
-        expect(gap2).toBeGreaterThan(gap1); // Backoff increases
+        // Advance past both backoff delays: 100ms (retry 1) + 200ms (retry 2)
+        await vi.advanceTimersByTimeAsync(400);
+        await flushPromise;
+
+        // Verify the retry loop made exactly 3 attempts
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
       }
     });
   });

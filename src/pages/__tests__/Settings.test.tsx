@@ -799,3 +799,146 @@ describe('Settings — Stripe checkout fallback', () => {
     openSpy.mockRestore();
   });
 });
+
+// ─── Additional branch coverage ───────────────────────────────────────────
+
+describe('Settings — formatRelativeMinutes branches', () => {
+  afterEach(() => {
+    mockProbeAuditRows.length = 0;
+  });
+
+  it('shows "just now" for a timestamp less than 1 minute ago', async () => {
+    const recentTs = new Date(Date.now() - 30_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: recentTs,
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-recent', generated_at: recentTs },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByText('just now')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "just now" for a future timestamp', async () => {
+    const futureTs = new Date(Date.now() + 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-01T00:00:00Z',
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-future', generated_at: futureTs },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByText('just now')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "Xm ago" for a timestamp a few minutes ago', async () => {
+    const minsAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: minsAgo,
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-mins', generated_at: minsAgo },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByText('5m ago')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "Xh ago" for a timestamp a few hours ago', async () => {
+    const hoursAgo = new Date(Date.now() - 3 * 60 * 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: hoursAgo,
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-hours', generated_at: hoursAgo },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      expect(screen.getByText('3h ago')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "n/a" for an invalid timestamp string in generatedAt', async () => {
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: '2026-04-01T00:00:00Z',
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-inv', generated_at: 'not-a-valid-date' },
+    });
+    await act(async () => { render(<Settings />); });
+    await waitFor(() => {
+      // formatRelativeMinutes returns 'n/a' for unparseable timestamps
+      expect(screen.getByText('n/a')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+});
+
+describe('Settings — localStorage edge cases', () => {
+  afterEach(() => {
+    localStorage.removeItem('sentinelRetention');
+    localStorage.removeItem('sentinelNotifPrefs');
+    mockProbeAuditRows.length = 0;
+    vi.clearAllMocks();
+  });
+
+  it('falls back to DEFAULT_RETENTION when sentinelRetention contains invalid JSON', async () => {
+    localStorage.setItem('sentinelRetention', '{invalid-json');
+    await act(async () => { render(<Settings />); });
+    // Default scans retention is 90 days
+    const [scanInput] = screen.getAllByRole('spinbutton', { name: /scan results retention/i });
+    expect(scanInput).toHaveValue(90);
+  });
+
+  it('loads sentinelRetention from localStorage when valid JSON is stored', async () => {
+    localStorage.setItem('sentinelRetention', JSON.stringify({ scans: 45 }));
+    await act(async () => { render(<Settings />); });
+    const [scanInput] = screen.getAllByRole('spinbutton', { name: /scan results retention/i });
+    expect(scanInput).toHaveValue(45);
+  });
+
+  it('notifPrefs falls back to defaults when localStorage contains invalid JSON', async () => {
+    localStorage.setItem('sentinelNotifPrefs', '{broken-json');
+    await act(async () => { render(<Settings />); });
+    // email channel enabled by default → title 'Disable Email notifications'
+    expect(screen.getByTitle('Disable Email notifications')).toBeInTheDocument();
+  });
+});
+
+describe('Settings — saveAgentUrl with empty URL', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not call probe when agent URL is whitespace only', async () => {
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: true,
+      health: { status: 'ok', uptime: 100, jobsProcessed: 5, jobsFailed: 0, lastJobAt: null, lastError: null, timestamp: new Date().toISOString() },
+      error: null,
+      via: 'direct',
+      statusCode: 200,
+    });
+    await act(async () => { render(<Settings />); });
+    const urlInput = screen.getByPlaceholderText('http://your-vps:9090/health');
+    await act(async () => {
+      fireEvent.change(urlInput, { target: { value: '   ' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Check'));
+    });
+    expect(mockProbeAgentHealth).not.toHaveBeenCalled();
+  });
+});
+
+describe('Settings — company input interaction', () => {
+  beforeEach(async () => {
+    await act(async () => { render(<Settings />); });
+  });
+
+  it('company input updates state when changed', async () => {
+    const companyInput = screen.getByLabelText('Company') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(companyInput, { target: { value: 'New Corp Ltd' } });
+    });
+    expect(companyInput).toHaveValue('New Corp Ltd');
+  });
+});
