@@ -1024,3 +1024,239 @@ describe('Settings — SettingsSubscription overview stats', () => {
     openSpy.mockRestore();
   });
 });
+
+// ─── Batch G: SettingsSecurity branch coverage ────────────────────────────
+
+describe('Settings — SettingsSecurity hasChanges and unsaved changes banner', () => {
+  afterEach(() => {
+    mockAuthProfile.full_name = 'Jane Doe';
+    mockAuthProfile.company = 'Acme Corp';
+    mockAuthProfile.sla_config = null;
+  });
+
+  it('shows "Unsaved changes" banner when full_name is modified', async () => {
+    await act(async () => { render(<Settings />); });
+
+    const nameInput = screen.getByDisplayValue('Jane Doe');
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: 'New Name' } });
+    });
+
+    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it('shows "Unsaved changes" banner when company is modified', async () => {
+    await act(async () => { render(<Settings />); });
+
+    const companyInput = screen.getByDisplayValue('Acme Corp');
+    await act(async () => {
+      fireEvent.change(companyInput, { target: { value: 'New Corp' } });
+    });
+
+    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it('save button shows "Saved!" after successful security save', async () => {
+    await act(async () => { render(<Settings />); });
+
+    const saveBtn = screen.getByRole('button', { name: /save security settings/i });
+    await act(async () => { fireEvent.click(saveBtn); });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Security saved!/i })).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+});
+
+describe('Settings — SettingsSecurity agent health display', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows agent online panel with lastJobAt and lastError when probe returns health data', async () => {
+    const lastJobAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: true,
+      health: {
+        status: 'ok',
+        uptime: 7200,
+        jobsProcessed: 42,
+        jobsFailed: 1,
+        lastJobAt,
+        lastError: 'timeout on job 41',
+        timestamp: new Date().toISOString(),
+      },
+      via: 'direct',
+      error: null,
+      statusCode: null,
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    const checkBtn = screen.getByRole('button', { name: /check/i });
+    await act(async () => { fireEvent.click(checkBtn); });
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent online')).toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    // lastJobAt is rendered in the agent health panel
+    expect(screen.getByText(/Last job:/i)).toBeInTheDocument();
+    // lastError is shown
+    expect(screen.getByText(/timeout on job 41/i)).toBeInTheDocument();
+  });
+
+  it('shows agent online panel with no lastJobAt/lastError (null branches)', async () => {
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: true,
+      health: {
+        status: 'ok',
+        uptime: 3600,
+        jobsProcessed: 5,
+        jobsFailed: 0,
+        lastJobAt: null,
+        lastError: null,
+        timestamp: new Date().toISOString(),
+      },
+      via: 'direct',
+      error: null,
+      statusCode: null,
+    });
+
+    await act(async () => { render(<Settings />); });
+    const checkBtn = screen.getByRole('button', { name: /check/i });
+    await act(async () => { fireEvent.click(checkBtn); });
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent online')).toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    // No "Last job:" text when lastJobAt is null
+    expect(screen.queryByText(/Last job:/i)).toBeNull();
+    // No error text when lastError is null
+    expect(screen.queryByText(/⚠/)).toBeNull();
+  });
+
+  it('shows gateway probe error message when via=gateway and error is present', async () => {
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: false,
+      health: null,
+      via: 'gateway',
+      error: 'connection refused',
+      statusCode: null,
+    });
+
+    await act(async () => { render(<Settings />); });
+    const checkBtn = screen.getByRole('button', { name: /check/i });
+    await act(async () => { fireEvent.click(checkBtn); });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Gateway probe failed: connection refused/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+});
+
+describe('Settings — SettingsSecurity probeSmoke status variants', () => {
+  afterEach(() => {
+    mockProbeAuditRows.length = 0;
+  });
+
+  it('shows "Fail" badge when probeSmoke status is error', async () => {
+    const ts = new Date(Date.now() - 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'failure',
+      created_at: ts,
+      metadata: { status: 'error', reachable: false, http_status: 503, request_id: 'req-fail', generated_at: ts },
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    await waitFor(() => {
+      expect(screen.getByText('Fail')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "OK" badge when probeSmoke status is ok', async () => {
+    const ts = new Date(Date.now() - 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'success',
+      created_at: ts,
+      metadata: { status: 'ok', reachable: true, http_status: 200, request_id: 'req-ok', generated_at: ts },
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    await waitFor(() => {
+      expect(screen.getByText('OK')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+
+  it('shows "no" for reachable=false in probe smoke panel', async () => {
+    const ts = new Date(Date.now() - 60_000).toISOString();
+    mockProbeAuditRows.push({
+      status: 'failure',
+      created_at: ts,
+      metadata: { status: 'error', reachable: false, http_status: null, request_id: null, generated_at: ts },
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    await waitFor(() => {
+      expect(screen.getByText('no')).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
+});
+
+describe('Settings — SettingsSecurity retention preset buttons', () => {
+  it('clicking 365-day preset shows "1yr" active style', async () => {
+    await act(async () => { render(<Settings />); });
+
+    const yrButton = screen.getAllByRole('button', { name: '1yr' })[0];
+    await act(async () => { fireEvent.click(yrButton); });
+
+    // After click the button should have the active style class
+    expect(yrButton.className).toMatch(/bg-slate-600/);
+  });
+
+  it('changing retention input directly updates displayed value', async () => {
+    await act(async () => { render(<Settings />); });
+
+    const retentionInputs = screen.getAllByTitle(/retention in days/i);
+    const firstInput = retentionInputs[0] as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(firstInput, { target: { value: '120' } });
+    });
+
+    expect(firstInput.value).toBe('120');
+  });
+});
+
+describe('Settings — SettingsSecurity Enter key submits agent URL', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('pressing Enter in agent URL input triggers health check', async () => {
+    mockProbeAgentHealth.mockResolvedValue({
+      reachable: true,
+      health: {
+        status: 'ok', uptime: 100, jobsProcessed: 1, jobsFailed: 0,
+        lastJobAt: null, lastError: null, timestamp: new Date().toISOString(),
+      },
+      via: 'direct',
+      error: null,
+      statusCode: null,
+    });
+
+    await act(async () => { render(<Settings />); });
+
+    const urlInput = screen.getByPlaceholderText(/your-vps/i) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.keyDown(urlInput, { key: 'Enter', code: 'Enter' });
+    });
+
+    await waitFor(() => {
+      expect(mockProbeAgentHealth).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+});
