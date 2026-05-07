@@ -294,4 +294,26 @@ describe('RemediationService — action execution branch coverage', () => {
     expect(result.status).toBe('failed');
     expect(result.errorMessage).toBe('sub crash');
   });
+
+  it('executeAction falls back to generic error message when thrown error has no message', async () => {
+    vi.spyOn(RemediationService, 'executeDisableAsset').mockRejectedValueOnce({});
+
+    const result = await RemediationService.executeAction(
+      makeAction('disable_asset', { assetId: 'srv-crash' }),
+      'user-1',
+      3
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.errorMessage).toBe('Unknown error during action execution');
+  });
+
+  it('executeNotifyTeam uses default includeFindings=false when omitted', async () => {
+    const result = await RemediationService.executeNotifyTeam(
+      makeAction('notify_security_team', { teamId: 'sec-team' })
+    );
+
+    expect(result.status).toBe('succeeded');
+    expect(result.output?.includeFindings).toBe(false);
+  });
 });

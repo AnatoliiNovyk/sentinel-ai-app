@@ -203,6 +203,40 @@ describe('RemediationService workflow branches', () => {
     expect(result.result?.failureCount).toBe(1);
   });
 
+  it('executeWorkflow sequential mode continues after failure when stopOnFirstFailure=false', async () => {
+    vi.spyOn(RemediationService, 'getWorkflow').mockResolvedValue({
+      success: true,
+      workflow: makeWorkflow({ executeSequentially: true, stopOnFirstFailure: false }),
+    });
+
+    const actionSpy = vi
+      .spyOn(RemediationService, 'executeAction')
+      .mockResolvedValueOnce({
+        actionIndex: 0,
+        actionType: 'disable_asset',
+        status: 'failed',
+        errorMessage: 'boom',
+        executionTimeMs: 1,
+      })
+      .mockResolvedValueOnce({
+        actionIndex: 1,
+        actionType: 'notify_security_team',
+        status: 'succeeded',
+        executionTimeMs: 1,
+      });
+
+    const result = await RemediationService.executeWorkflow('user-1', {
+      workflowId: 'wf-1',
+      triggerReason: 'manual',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.result?.overallStatus).toBe('partially_succeeded');
+    expect(result.result?.failureCount).toBe(1);
+    expect(result.result?.successCount).toBe(1);
+    expect(actionSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('getExecutionStats returns rounded average and status counts', async () => {
     const events = [
       { overall_status: 'succeeded', execution_time_ms: 110 },
