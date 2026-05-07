@@ -147,6 +147,83 @@ describe('App', () => {
       expect(await screen.findByText('Reports Page')).toBeInTheDocument();
     });
 
+    it('renders Projects route for authenticated user', async () => {
+      window.history.pushState({}, '', '/projects');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Projects Page')).toBeInTheDocument();
+    });
+
+    it('renders Scans route for authenticated user', async () => {
+      window.history.pushState({}, '', '/scans');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Scans Page')).toBeInTheDocument();
+    });
+
+    it('renders Compliance route for authenticated user', async () => {
+      window.history.pushState({}, '', '/compliance');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Compliance Page')).toBeInTheDocument();
+    });
+
+    it('renders Scheduler route for authenticated user', async () => {
+      window.history.pushState({}, '', '/scheduler');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Scheduler Page')).toBeInTheDocument();
+    });
+
+    it('renders Attack Surface Map route for authenticated user', async () => {
+      window.history.pushState({}, '', '/attack-map');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Attack Map Page')).toBeInTheDocument();
+    });
+
+    it('renders Dark Web Monitor route for authenticated user', async () => {
+      window.history.pushState({}, '', '/dark-web');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Dark Web Page')).toBeInTheDocument();
+    });
+
+    it('renders Passive Recon route for authenticated user', async () => {
+      window.history.pushState({}, '', '/recon');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Passive Recon Page')).toBeInTheDocument();
+    });
+
+    it('renders Supply Chain route for authenticated user', async () => {
+      window.history.pushState({}, '', '/supply-chain');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Supply Chain Page')).toBeInTheDocument();
+    });
+
+    it('renders Kill Chain route for authenticated user', async () => {
+      window.history.pushState({}, '', '/kill-chain');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Kill Chain Page')).toBeInTheDocument();
+    });
+
+    it('renders Integrations route for authenticated user', async () => {
+      window.history.pushState({}, '', '/integrations');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Integrations Page')).toBeInTheDocument();
+    });
+
+    it('renders API docs route for authenticated user', async () => {
+      window.history.pushState({}, '', '/api');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Api Docs Page')).toBeInTheDocument();
+    });
+
     it('renders Notifications route for authenticated user', async () => {
       window.history.pushState({}, '', '/notifications');
       mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
@@ -166,6 +243,35 @@ describe('App', () => {
       mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
       render(<App />);
       expect(await screen.findByText('Activity Page')).toBeInTheDocument();
+    });
+
+    it('renders Settings route for authenticated user', async () => {
+      window.history.pushState({}, '', '/settings');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Settings Page')).toBeInTheDocument();
+    });
+
+    it('renders Landing route for authenticated user', async () => {
+      window.history.pushState({}, '', '/landing');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Landing Page')).toBeInTheDocument();
+    });
+
+    it('redirects authenticated user away from auth route to landing', async () => {
+      window.history.pushState({}, '', '/auth');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Landing Page')).toBeInTheDocument();
+      expect(screen.queryByText('Auth Page')).not.toBeInTheDocument();
+    });
+
+    it('renders not found route for unknown authenticated path', async () => {
+      window.history.pushState({}, '', '/unknown-private-path');
+      mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, loading: false });
+      render(<App />);
+      expect(await screen.findByText('Not Found Page')).toBeInTheDocument();
     });
   });
 });
