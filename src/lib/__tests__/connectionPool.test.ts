@@ -393,4 +393,39 @@ describe('SupabaseConnectionPool', () => {
       expect(pool.getConnectionCount()).toBe(2);
     });
   });
+
+  // ─── Batch N: connectionPool branch coverage ──────────────────────────
+
+  describe('connectionPool — edge case branches', () => {
+    it('checkinConnection handles non-existent connection gracefully', () => {
+      pool.checkinConnection('non-existent-conn');
+      expect(pool.getConnectionCount()).toBe(0);
+      const metrics = pool.getMetrics();
+      expect(metrics.activeConnections).toBe(0);
+    });
+
+    it('cacheQuery with LRU eviction when cache is full', () => {
+      const limitedPool = new SupabaseConnectionPool(5 * 60 * 1000, 2, 50);
+      limitedPool.cacheQuery('SELECT 1', [], { data: 1 });
+      limitedPool.cacheQuery('SELECT 2', [], { data: 2 });
+      limitedPool.getCachedQuery('SELECT 1', []);
+      limitedPool.getCachedQuery('SELECT 1', []);
+      limitedPool.cacheQuery('SELECT 3', [], { data: 3 });
+      expect(limitedPool.getCacheSize()).toBeLessThanOrEqual(2);
+      expect(limitedPool.getCachedQuery('SELECT 1', [])).not.toBeNull();
+      const evicted = limitedPool.getCachedQuery('SELECT 2', []);
+      expect(evicted).toBeNull();
+      const metrics = limitedPool.getMetrics();
+      expect(metrics.evictionCount).toBeGreaterThan(0);
+      limitedPool.clear();
+    });
+
+    it('handles caching with empty cache', () => {
+      const result = { data: [{ test: 'data' }] };
+      pool.cacheQuery('SELECT * FROM test', [], result);
+      expect(pool.getCacheSize()).toBe(1);
+      const cached = pool.getCachedQuery('SELECT * FROM test', []);
+      expect(cached?.result).toEqual(result);
+    });
+  });
 });
