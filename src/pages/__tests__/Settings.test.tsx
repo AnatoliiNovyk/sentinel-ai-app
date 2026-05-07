@@ -1450,3 +1450,141 @@ describe('Settings — SettingsSecurity Enter key submits agent URL', () => {
     }, { timeout: 3000 });
   });
 });
+
+// ─── Batch P: SettingsSecurity branch coverage ────────────────────────────
+
+describe('Settings — SettingsSecurity edge branches (Batch P)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockAuthState.user = { id: 'user-1' };
+    mockAuthState.profileOverride = undefined;
+  });
+
+  it('shows mixed-content browser policy message for direct HTTP agent error', async () => {
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: false,
+      health: null,
+      via: 'direct',
+      error: 'connection refused',
+      statusCode: null,
+    });
+
+    await act(async () => { render(<Settings />); });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Blocked by browser policy/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows timeout message when probe rejects with AbortError', async () => {
+    const abortError = new DOMException('The operation was aborted.', 'AbortError');
+    mockProbeAgentHealth.mockRejectedValueOnce(abortError);
+
+    await act(async () => { render(<Settings />); });
+    const urlInput = screen.getByPlaceholderText(/your-vps/i) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(urlInput, { target: { value: 'https://95.67.75.146:9090/health' } });
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Request timeout while checking agent health/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows HTTP status message when probe has no error but returns statusCode', async () => {
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: false,
+      health: null,
+      via: 'direct',
+      error: null,
+      statusCode: 503,
+    });
+
+    await act(async () => { render(<Settings />); });
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent unreachable: HTTP 503/i)).toBeInTheDocument();
+    });
+  });
+
+  it('does not trigger health check on non-Enter key in agent URL input', async () => {
+    mockProbeAgentHealth.mockResolvedValueOnce({
+      reachable: true,
+      health: {
+        status: 'ok', uptime: 100, jobsProcessed: 1, jobsFailed: 0,
+        lastJobAt: null, lastError: null, timestamp: new Date().toISOString(),
+      },
+      via: 'direct',
+      error: null,
+      statusCode: 200,
+    });
+
+    await act(async () => { render(<Settings />); });
+    const urlInput = screen.getByPlaceholderText(/your-vps/i) as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.keyDown(urlInput, { key: 'Escape', code: 'Escape' });
+    });
+
+    expect(mockProbeAgentHealth).not.toHaveBeenCalled();
+  });
+
+  it('returns early from save when user is null', async () => {
+    mockAuthState.user = null;
+
+    await act(async () => { render(<Settings />); });
+    const saveSecurityBtn = screen.getByRole('button', { name: /save security settings/i });
+
+    await act(async () => {
+      fireEvent.click(saveSecurityBtn);
+    });
+
+    expect(mockUpdateEq).not.toHaveBeenCalled();
+  });
+
+  it('shows saving state while security save is in-flight', async () => {
+    let resolveUpdate: (() => void) | null = null;
+    mockUpdateEq.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveUpdate = () => resolve({ data: null, error: null });
+      })
+    );
+
+    await act(async () => { render(<Settings />); });
+    const saveSecurityBtn = screen.getByRole('button', { name: /save security settings/i });
+
+    await act(async () => {
+      fireEvent.click(saveSecurityBtn);
+    });
+
+    expect(screen.getByRole('button', { name: /saving security/i })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveUpdate?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /security saved/i })).toBeInTheDocument();
+    });
+  });
+
+  it('clamps retention input values to min/max bounds', async () => {
+    await act(async () => { render(<Settings />); });
+    const retentionInputs = screen.getAllByTitle(/retention in days/i);
+    const firstInput = retentionInputs[0] as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(firstInput, { target: { value: '1' } });
+    });
+    expect(firstInput.value).toBe('7');
+
+    await act(async () => {
+      fireEvent.change(firstInput, { target: { value: '99999' } });
+    });
+    expect(firstInput.value).toBe('3650');
+  });
+
+});
