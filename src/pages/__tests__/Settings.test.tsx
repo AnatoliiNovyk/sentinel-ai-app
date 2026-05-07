@@ -24,6 +24,23 @@ const { mockUpdateEq, mockProbeAuditRows, mockAuthProfile } = vi.hoisted(() => (
   },
 }));
 
+const { mockAuthState } = vi.hoisted(() => ({
+  mockAuthState: {
+    user: { id: 'user-1' } as { id: string; app_metadata?: { org_id?: string } } | null,
+    profileOverride: undefined as {
+      id: string;
+      email?: string | null;
+      full_name: string;
+      company: string | null;
+      plan: string;
+      sla_config: unknown;
+      avatar_url: string | null;
+      created_at: string;
+      sla_warned_at: string | null;
+    } | null | undefined,
+  },
+}));
+
 const { mockProbeAgentHealth } = vi.hoisted(() => ({
   mockProbeAgentHealth: vi.fn(),
 }));
@@ -79,9 +96,11 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
 });
 
 vi.mock('../../context/useAuth', () => {
-  const _user = { id: 'user-1' };
   return {
-    useAuth: () => ({ user: _user, profile: mockAuthProfile }),
+    useAuth: () => ({
+      user: mockAuthState.user,
+      profile: mockAuthState.profileOverride === undefined ? mockAuthProfile : mockAuthState.profileOverride,
+    }),
   };
 });
 
@@ -95,6 +114,13 @@ vi.mock('../../lib/agentHealth', () => ({
 
 afterEach(async () => {
   mockProbeAuditRows.length = 0;
+  mockAuthState.user = { id: 'user-1' };
+  mockAuthState.profileOverride = undefined;
+  mockAuthProfile.email = 'test@example.com';
+  mockAuthProfile.full_name = 'Jane Doe';
+  mockAuthProfile.company = 'Acme Corp';
+  mockAuthProfile.plan = 'free';
+  mockAuthProfile.sla_config = null;
   // Flush any pending async state updates to prevent act() warnings
   await act(async () => {});
 });
@@ -901,6 +927,85 @@ describe('Settings — localStorage edge cases', () => {
     await act(async () => { render(<Settings />); });
     // email channel enabled by default → title 'Disable Email notifications'
     expect(screen.getByTitle('Disable Email notifications')).toBeInTheDocument();
+  });
+
+  it('notifPrefs merges defaults when saved settings omit channels', async () => {
+    localStorage.setItem('sentinelNotifPrefs', JSON.stringify({ minSeverity: 'critical', digest: 'weekly' }));
+    await act(async () => { render(<Settings />); });
+
+    expect(screen.getByTitle('Disable Email notifications')).toBeInTheDocument();
+    expect(screen.getByTitle('Disable In-app notifications')).toBeInTheDocument();
+    expect(screen.getByTitle('Enable Webhook delivery')).toBeInTheDocument();
+
+    const criticalOnlyButton = screen.getByRole('button', { name: 'Critical only' });
+    const weeklyDigestButton = screen.getByRole('button', { name: 'Weekly digest' });
+
+    expect(criticalOnlyButton.className).toMatch(/bg-red-500\/20/);
+    expect(weeklyDigestButton.className).toMatch(/bg-emerald-500\/20/);
+  });
+});
+
+describe('Settings — SettingsProfile null auth fallbacks', () => {
+  it('renders empty profile inputs and no unsaved badge when profile is null', async () => {
+    mockAuthState.profileOverride = null;
+
+    await act(async () => { render(<Settings />); });
+
+    expect(screen.getByLabelText('Email')).toHaveValue('');
+    expect(screen.getByLabelText('Full name')).toHaveValue('');
+    expect(screen.getByLabelText('Company')).toHaveValue('');
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('does not attempt profile save when user is missing', async () => {
+    localStorage.removeItem('sentinelNotifPrefs');
+    mockAuthState.user = null;
+
+    await act(async () => { render(<Settings />); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    });
+
+    expect(mockUpdateEq).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sentinelNotifPrefs')).toBeNull();
+  });
+
+  it('treats null company as empty string without unsaved state', async () => {
+    mockAuthState.profileOverride = {
+      ...mockAuthProfile,
+      company: null,
+    };
+
+    await act(async () => { render(<Settings />); });
+
+    expect(screen.getByLabelText('Company')).toHaveValue('');
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+});
+
+describe('Settings — SettingsProfile saving state', () => {
+  it('shows "Saving..." while profile update is pending', async () => {
+    let resolveUpdate: ((value: { data: null; error: null }) => void) | undefined;
+    mockUpdateEq.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveUpdate = resolve;
+    }));
+
+    await act(async () => { render(<Settings />); });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Pending Save' } });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByRole('button', { name: /saving/i })).toBeInTheDocument();
+
+    resolveUpdate?.({ data: null, error: null });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /saved!/i })).toBeInTheDocument();
+    });
   });
 });
 
