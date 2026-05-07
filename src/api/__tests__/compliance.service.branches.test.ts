@@ -58,6 +58,16 @@ describe('ComplianceService branch coverage', () => {
     expect(result.error).toBe('rules failed');
   });
 
+  it('getAlertMetrics prefers eventsError when rulesError is empty', async () => {
+    setTableResult('alert_rules', { data: [], error: null });
+    setTableResult('alert_trigger_events', { data: null, error: { message: 'events failed' } });
+
+    const result = await ComplianceService.getAlertMetrics(userId, projectId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('events failed');
+  });
+
   it('getAlertMetrics calculates false positive rate and triggered rules', async () => {
     setTableResult('alert_rules', {
       data: [{ id: 'r1' }, { id: 'r2' }],
@@ -91,6 +101,16 @@ describe('ComplianceService branch coverage', () => {
     expect(result.error).toBe('wf failed');
   });
 
+  it('getRemediationMetrics uses eventsError when workflowsError is absent', async () => {
+    setTableResult('remediation_workflows', { data: [], error: null });
+    setTableResult('remediation_events', { data: null, error: { message: 'events failed' } });
+
+    const result = await ComplianceService.getRemediationMetrics(userId, projectId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('events failed');
+  });
+
   it('getRemediationMetrics computes success rate and most used action type', async () => {
     setTableResult('remediation_workflows', {
       data: [
@@ -118,6 +138,26 @@ describe('ComplianceService branch coverage', () => {
     expect(result.metrics?.mostUsedActionType).toBe('disable_asset');
   });
 
+  it('getRemediationMetrics covers fallback branches for missing action fields and counters', async () => {
+    setTableResult('remediation_workflows', {
+      data: [{ actions: null }, { actions: [{}] }],
+      error: null,
+    });
+    setTableResult('remediation_events', {
+      data: [{ total_actions: undefined, success_count: undefined, failure_count: undefined, execution_time_ms: undefined }],
+      error: null,
+    });
+
+    const result = await ComplianceService.getRemediationMetrics(userId, projectId);
+
+    expect(result.success).toBe(true);
+    expect(result.metrics?.actionsExecuted).toBe(0);
+    expect(result.metrics?.successfulActions).toBe(0);
+    expect(result.metrics?.failedActions).toBe(0);
+    expect(result.metrics?.averageExecutionTime).toBe(0);
+    expect(result.metrics?.mostUsedActionType).toBe('unknown');
+  });
+
   it('getSecurityPostureMetrics returns DB error branch', async () => {
     setTableResult('vulnerabilities', { data: null, error: { message: 'vuln failed' } });
 
@@ -125,6 +165,16 @@ describe('ComplianceService branch coverage', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('vuln failed');
+  });
+
+  it('getSecurityPostureMetrics uses remediationError when vulnError is absent', async () => {
+    setTableResult('vulnerabilities', { data: [], error: null });
+    setTableResult('remediation_events', { data: null, error: { message: 'rem failed' } });
+
+    const result = await ComplianceService.getSecurityPostureMetrics(userId, projectId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('rem failed');
   });
 
   it('getSecurityPostureMetrics computes severity, remediation rate and MTTR', async () => {
@@ -160,6 +210,53 @@ describe('ComplianceService branch coverage', () => {
     expect(result.metrics?.averageTimeToRemediate).toBe(3);
   });
 
+  it('getSecurityPostureMetrics covers unknown severity and default low severity branches', async () => {
+    setTableResult('vulnerabilities', {
+      data: [
+        { severity: null, status: 'open' },
+        { severity: 'informational', status: 'closed' },
+      ],
+      error: null,
+    });
+    setTableResult('remediation_events', { data: [], error: null });
+
+    const result = await ComplianceService.getSecurityPostureMetrics(userId, projectId);
+
+    expect(result.success).toBe(true);
+    expect(result.metrics?.lowVulnerabilities).toBe(1);
+    expect(result.metrics?.criticalVulnerabilities).toBe(0);
+    expect(result.metrics?.highVulnerabilities).toBe(0);
+    expect(result.metrics?.mediumVulnerabilities).toBe(0);
+  });
+
+  it('getFrameworkMetrics covers compliant path and remediation fallback path', async () => {
+    const remSpy = vi
+      .spyOn(ComplianceService, 'getRemediationMetrics')
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValue({
+        success: true,
+        metrics: {
+          workflowsCreated: 1,
+          workflowsExecuted: 1,
+          actionsExecuted: 1,
+          successfulActions: 1,
+          failedActions: 0,
+          averageExecutionTime: 10,
+          successRate: 85,
+          mostUsedActionType: 'disable_asset',
+        },
+      });
+
+    const result = await ComplianceService.getFrameworkMetrics(userId, projectId);
+
+    expect(result.success).toBe(true);
+    expect(result.metrics?.[0]?.compliancePercentage).toBe(0);
+    expect(result.metrics?.[0]?.status).toBe('at-risk');
+    expect(result.metrics?.[1]?.status).toBe('compliant');
+
+    remSpy.mockRestore();
+  });
+
   it('getFrameworkMetrics returns false on unexpected error', async () => {
     vi.spyOn(ComplianceService, 'getRemediationMetrics').mockRejectedValueOnce(new Error('boom'));
 
@@ -189,6 +286,55 @@ describe('ComplianceService branch coverage', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('Failed to fetch dashboard metrics');
+  });
+
+  it('getDashboard uses framework and score fallbacks when optional payloads are missing', async () => {
+    vi.spyOn(ComplianceService, 'getAlertMetrics').mockResolvedValueOnce({
+      success: true,
+      metrics: {
+        rulesCreated: 0,
+        rulesTriggered: 0,
+        alertsGenerated: 0,
+        falsePositivesRate: 0,
+        averageAlertResolutionTime: 0,
+        highestSeverityLevel: 'unknown',
+      },
+    });
+    vi.spyOn(ComplianceService, 'getRemediationMetrics').mockResolvedValueOnce({
+      success: true,
+      metrics: {
+        workflowsCreated: 0,
+        workflowsExecuted: 0,
+        actionsExecuted: 0,
+        successfulActions: 0,
+        failedActions: 0,
+        averageExecutionTime: 0,
+        successRate: 0,
+        mostUsedActionType: 'N/A',
+      },
+    });
+    vi.spyOn(ComplianceService, 'getSecurityPostureMetrics').mockResolvedValueOnce({
+      success: true,
+      metrics: {
+        totalVulnerabilities: 0,
+        criticalVulnerabilities: 0,
+        highVulnerabilities: 0,
+        mediumVulnerabilities: 0,
+        lowVulnerabilities: 0,
+        vulnerabilitiesClosed: 0,
+        averageTimeToRemediate: 0,
+        remediationRate: 0,
+        trendPercentage: 0,
+      },
+    });
+    vi.spyOn(ComplianceService, 'getFrameworkMetrics').mockResolvedValueOnce({ success: true });
+    vi.spyOn(ComplianceService, 'getComplianceScore').mockResolvedValueOnce({ success: true });
+
+    const result = await ComplianceService.getDashboard(userId, projectId);
+
+    expect(result.success).toBe(true);
+    expect(result.dashboard?.frameworks).toEqual([]);
+    expect(result.dashboard?.recommendation).toContain('Critical');
   });
 
   it('generateReport returns failure when dashboard cannot be generated', async () => {
