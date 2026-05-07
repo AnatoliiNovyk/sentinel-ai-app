@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import Dashboard from '../Dashboard';
+import { AgentProbeSection, ProjectHealthSection, TopRiskyProjects } from '../dashboard/DashboardStats';
+import type { Project, Vulnerability } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
@@ -923,5 +925,123 @@ describe('Dashboard — SLA breach debounce effect', () => {
     await waitFor(() => expect(screen.getByText('Security posture')).toBeInTheDocument(), { timeout: 5000 });
     // Verify dashboard loads and render findings (this tests the sort branch)
     expect(screen.getByText('Security posture')).toBeInTheDocument();
+  });
+});
+
+describe('DashboardStats — direct branch coverage', () => {
+  it('ProjectHealthSection keeps projects when riskFilter is unexpected (fallback return true)', () => {
+    const setRiskFilter = vi.fn();
+    const manageProjects = vi.fn();
+    const projects = [
+      { id: 'p-1', name: 'Fallback Project', risk_score: 50 } as unknown as Project,
+    ];
+
+    render(
+      <ProjectHealthSection
+        projects={projects}
+        openVulns={[] as Vulnerability[]}
+        riskFilter={'unexpected' as unknown as 'all' | 'critical' | 'high' | 'medium' | 'low'}
+        setRiskFilter={setRiskFilter}
+        onManageProjects={manageProjects}
+      />,
+    );
+
+    expect(screen.getByText('Fallback Project')).toBeInTheDocument();
+  });
+
+  it('TopRiskyProjects executes sort callback when multiple projects have open findings', () => {
+    const onViewAll = vi.fn();
+    const projects = [
+      { id: 'p-a', name: 'Project A' } as unknown as Project,
+      { id: 'p-b', name: 'Project B' } as unknown as Project,
+    ];
+    const openVulns = [
+      { id: 'v-a1', project_id: 'p-a', severity: 'high' } as unknown as Vulnerability,
+      { id: 'v-b1', project_id: 'p-b', severity: 'critical' } as unknown as Vulnerability,
+    ];
+
+    render(
+      <TopRiskyProjects
+        openVulns={openVulns}
+        projects={projects}
+        onViewAll={onViewAll}
+      />,
+    );
+
+    expect(screen.getByText('Top risky projects')).toBeInTheDocument();
+    expect(screen.getByText('Project A')).toBeInTheDocument();
+    expect(screen.getByText('Project B')).toBeInTheDocument();
+  });
+
+  it('AgentProbeSection shows n/a for invalid generatedAt timestamp', () => {
+    render(
+      <AgentProbeSection
+        probeSmokeStatus={{
+          status: 'ok',
+          reachable: true,
+          httpStatus: 200,
+          requestId: 'req-invalid-ts',
+          probedUrl: null,
+          error: null,
+          generatedAt: 'not-a-date',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('n/a')).toBeInTheDocument();
+  });
+
+  it('AgentProbeSection shows just now for a recent generatedAt', () => {
+    render(
+      <AgentProbeSection
+        probeSmokeStatus={{
+          status: 'ok',
+          reachable: true,
+          httpStatus: 200,
+          requestId: 'req-recent-ts',
+          probedUrl: null,
+          error: null,
+          generatedAt: new Date(Date.now() - 20_000).toISOString(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText('just now')).toBeInTheDocument();
+  });
+
+  it('AgentProbeSection shows Xm ago for minutes-old generatedAt', () => {
+    render(
+      <AgentProbeSection
+        probeSmokeStatus={{
+          status: 'ok',
+          reachable: true,
+          httpStatus: 200,
+          requestId: 'req-mins-ts',
+          probedUrl: null,
+          error: null,
+          generatedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText('5m ago')).toBeInTheDocument();
+  });
+
+  it('AgentProbeSection shows Xh ago for hours-old generatedAt', () => {
+    render(
+      <AgentProbeSection
+        probeSmokeStatus={{
+          status: 'ok',
+          reachable: true,
+          httpStatus: 200,
+          requestId: 'req-hours-ts',
+          probedUrl: null,
+          error: null,
+          generatedAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText('3h ago')).toBeInTheDocument();
   });
 });
