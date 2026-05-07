@@ -37,6 +37,36 @@ describe('SkeletonCardGrid', () => {
     render(<SkeletonCardGrid />);
     expect(screen.getByRole('generic', { busy: true })).toBeInTheDocument();
   });
+
+  it('renders 3-column layout by default (cols=3)', () => {
+    const { container } = render(<SkeletonCardGrid cols={3} />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).toMatch(/md:grid-cols-2/);
+    expect(grid.className).toMatch(/lg:grid-cols-3/);
+  });
+
+  it('renders 2-column layout (cols=2)', () => {
+    const { container } = render(<SkeletonCardGrid cols={2} />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).toMatch(/md:grid-cols-2/);
+    expect(grid.className).not.toMatch(/lg:grid-cols-3/);
+  });
+
+  it('renders 1-column layout (cols=1)', () => {
+    const { container } = render(<SkeletonCardGrid cols={1} />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).not.toMatch(/md:grid-cols-2/);
+    expect(grid.className).not.toMatch(/lg:grid-cols-3/);
+  });
+
+  it('applies custom height class', () => {
+    const { container } = render(<SkeletonCardGrid height="h-48" />);
+    const cards = container.querySelectorAll('[class*="h-48"]');
+    expect(cards.length).toBeGreaterThan(0);
+  });
 });
 
 describe('SkeletonList', () => {
