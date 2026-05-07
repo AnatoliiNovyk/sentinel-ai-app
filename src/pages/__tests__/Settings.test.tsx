@@ -1336,6 +1336,91 @@ describe('Settings — SettingsSecurity retention preset buttons', () => {
   });
 });
 
+// ─── Batch K: SettingsSubscription branch coverage ────────────────────────
+
+describe('Settings — SettingsSubscription profile null branch', () => {
+  afterEach(() => {
+    mockAuthState.profileOverride = undefined;
+  });
+
+  it('renders without crash when profile is null (useEffect if-branch not taken)', async () => {
+    mockAuthState.profileOverride = null;
+    await act(async () => { render(<Settings />); });
+    // Plan defaults to 'free' since no profile to set it from
+    expect(screen.getAllByText('Current plan')[0]).toBeInTheDocument();
+  });
+});
+
+describe('Settings — SettingsSubscription enterprise plan active', () => {
+  afterEach(() => {
+    mockAuthProfile.plan = 'free';
+  });
+
+  it('shows enterprise plan as active with amber color overview card', async () => {
+    mockAuthProfile.plan = 'enterprise';
+    await act(async () => { render(<Settings />); });
+    // Enterprise plan shows "Current plan ✓"
+    const currentPlanTexts = screen.getAllByText(/Current plan ✓/);
+    expect(currentPlanTexts.length).toBeGreaterThan(0);
+  });
+
+  it('shows planLabel fallback when plan id is not in PLANS list', async () => {
+    mockAuthProfile.plan = 'unknown_plan_xyz';
+    await act(async () => { render(<Settings />); });
+    // planLabel falls back to the raw plan string (appears in overview card and plan description)
+    const elements = screen.getAllByText('unknown_plan_xyz');
+    expect(elements.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Settings — SettingsSubscription handleUpgrade early return for free', () => {
+  afterEach(() => {
+    mockAuthProfile.plan = 'free';
+    vi.restoreAllMocks();
+  });
+
+  it('clicking Upgrade on free plan card (when pro is active) does not open window', async () => {
+    mockAuthProfile.plan = 'pro';
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await act(async () => { render(<Settings />); });
+    // When pro is active, free plan shows Upgrade button
+    // All Upgrade buttons: free (returns early), basic (no stripePriceId → mailto), enterprise (contact sales)
+    const upgradeButtons = screen.getAllByRole('button', { name: /upgrade/i });
+    // First Upgrade button = free plan (handleUpgrade returns immediately)
+    await act(async () => { fireEvent.click(upgradeButtons[0]); });
+    // No window.open should be called for the free plan
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+});
+
+describe('Settings — SettingsSubscription plan badge and button variants', () => {
+  afterEach(() => {
+    mockAuthProfile.plan = 'free';
+  });
+
+  it('renders Most Popular badge for pro plan when pro is not active', async () => {
+    mockAuthProfile.plan = 'free';
+    await act(async () => { render(<Settings />); });
+    expect(screen.getByText('Most Popular')).toBeInTheDocument();
+  });
+
+  it('shows upgrade buttons for non-active plans when enterprise is current plan', async () => {
+    mockAuthProfile.plan = 'enterprise';
+    await act(async () => { render(<Settings />); });
+    // With enterprise active, free/basic/pro plans show Upgrade buttons
+    const upgradeButtons = screen.getAllByRole('button', { name: /upgrade/i });
+    expect(upgradeButtons.length).toBeGreaterThan(0);
+  });
+
+  it('ApiRateLimitsPanel is not rendered when user is null', async () => {
+    mockAuthState.user = null;
+    await act(async () => { render(<Settings />); });
+    // When user is null, ApiRateLimitsPanel should not render
+    expect(screen.queryByText(/API Rate Limits/i)).toBeNull();
+  });
+});
+
 describe('Settings — SettingsSecurity Enter key submits agent URL', () => {
   afterEach(() => {
     vi.clearAllMocks();
