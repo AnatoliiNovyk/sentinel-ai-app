@@ -9,6 +9,7 @@ const {
   mockDispatchScan,
   mockCallAiGateway,
   mockVulnUpdate,
+  mockProbeAgentHealth,
 } = vi.hoisted(() => ({
   mockGetProjects: vi.fn(),
   mockGetProjectScans: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockDispatchScan: vi.fn(),
   mockCallAiGateway: vi.fn(),
   mockVulnUpdate: vi.fn(),
+  mockProbeAgentHealth: vi.fn(),
 }));
 
 vi.mock('../../lib/aiGateway', () => ({
@@ -40,6 +42,10 @@ vi.mock('../../api/scans.service', () => ({
     getScanVulnerabilities: mockGetScanVulnerabilities,
     dispatchScan: mockDispatchScan,
   },
+}));
+
+vi.mock('../../lib/agentHealth', () => ({
+  probeAgentHealth: mockProbeAgentHealth,
 }));
 
 
@@ -118,6 +124,7 @@ describe('Scans integration flow', () => {
     ]);
 
     mockDispatchScan.mockResolvedValue({});
+    mockProbeAgentHealth.mockResolvedValue({ reachable: false, health: null, error: 'offline', via: 'direct' });
     mockCallAiGateway.mockResolvedValue({
       content: JSON.stringify({ explanation: 'Fix it', remediation: 'Update package', code: 'npm update' }),
       provider: 'mock',
@@ -153,7 +160,7 @@ describe('Scans integration flow', () => {
 
     await waitFor(
       () => {
-        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1', null);
+        expect(mockDispatchScan).toHaveBeenCalledWith('project-1', 'Nmap:Intense', 'example.com', 'org-1', false);
       },
       { timeout: 6000 },
     );

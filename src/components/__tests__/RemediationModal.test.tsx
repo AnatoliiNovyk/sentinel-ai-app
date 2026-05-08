@@ -54,6 +54,11 @@ describe('RemediationModal — rendering', () => {
     expect(screen.getByText('Manual')).toBeInTheDocument();
   });
 
+  it('falls back to manual type badge when remediation_type is empty', () => {
+    render(<RemediationModal vuln={makeVuln({ remediation_type: '' as never })} onClose={vi.fn()} />);
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+  });
+
   it('shows "Terraform" type badge for terraform remediation', () => {
     render(<RemediationModal vuln={makeVuln({ remediation_type: 'terraform' })} onClose={vi.fn()} />);
     expect(screen.getByText('Terraform')).toBeInTheDocument();
@@ -62,6 +67,16 @@ describe('RemediationModal — rendering', () => {
   it('shows "AWS CLI" type badge for aws-cli remediation', () => {
     render(<RemediationModal vuln={makeVuln({ remediation_type: 'aws-cli' })} onClose={vi.fn()} />);
     expect(screen.getByText('AWS CLI')).toBeInTheDocument();
+  });
+
+  it('shows "Terraform" type badge for hcl remediation', () => {
+    render(<RemediationModal vuln={makeVuln({ remediation_type: 'hcl' })} onClose={vi.fn()} />);
+    expect(screen.getByText('Terraform')).toBeInTheDocument();
+  });
+
+  it('renders unknown severity without mapped color class fallback errors', () => {
+    render(<RemediationModal vuln={makeVuln({ severity: 'unknown' as never })} onClose={vi.fn()} />);
+    expect(screen.getByText('unknown')).toBeInTheDocument();
   });
 
   it('shows CVE link when cve_id is set', () => {
@@ -150,6 +165,37 @@ describe('RemediationModal — Auto-Remediation Playbook', () => {
     fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
     expect(screen.getByText(/Preview-only commands/i)).toBeInTheDocument();
   });
+
+  it('uses dig-based iptables target for hostname assets with port and cidr suffixes', () => {
+    render(
+      <RemediationModal
+        vuln={makeVuln({ asset: 'api.example.com:443/32', cve_id: '' })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+
+    expect(screen.getByText(/\$\(dig \+short api\.example\.com \| head -1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/ufw deny from api\.example\.com to any/i)).toBeInTheDocument();
+  });
+
+  it('falls back to TARGET when asset is blank', () => {
+    render(<RemediationModal vuln={makeVuln({ asset: '', cve_id: '' })} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+
+    expect(screen.getByText(/iptables -I INPUT -s \$\(dig \+short TARGET \| head -1\) -j DROP/i)).toBeInTheDocument();
+    expect(screen.getByText(/ufw deny from TARGET to any/i)).toBeInTheDocument();
+  });
+
+  it('falls back to TARGET when asset is null', () => {
+    render(<RemediationModal vuln={makeVuln({ asset: null as never, cve_id: '' })} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Auto-Remediation Playbook'));
+
+    expect(screen.getByText(/ufw deny from TARGET to any/i)).toBeInTheDocument();
+  });
 });
 
 
@@ -208,6 +254,33 @@ describe('RemediationModal — aws-cli steps', () => {
     render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
     expect(screen.getByText('Check kubectl context')).toBeInTheDocument();
     expect(screen.getByText('Verify rollout')).toBeInTheDocument();
+  });
+
+  it('uses remediation fallback command for aws-cli when code is empty', () => {
+    const vuln = makeVuln({ remediation_type: 'aws-cli', remediation_code: '', remediation: 'aws fix command' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('aws fix command')).toBeInTheDocument();
+  });
+
+  it('shows kubectl default apply command for kubernetes type when code is empty', () => {
+    const vuln = makeVuln({ remediation_type: 'kubernetes', remediation_code: '' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('kubectl apply -f remediation.yaml')).toBeInTheDocument();
+  });
+
+  it('uses remediation fallback command for bash when code is empty', () => {
+    const vuln = makeVuln({ remediation_type: 'bash', remediation_code: '', remediation: 'bash fallback command' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('bash fallback command')).toBeInTheDocument();
+  });
+});
+
+describe('RemediationModal — manual remediation variants', () => {
+  it('renders code change step for manual remediation when remediation_code exists', () => {
+    const vuln = makeVuln({ remediation_type: 'manual', remediation_code: 'patch-config --apply' });
+    render(<RemediationModal vuln={vuln} onClose={vi.fn()} />);
+    expect(screen.getByText('Apply the code change')).toBeInTheDocument();
+    expect(screen.getByText('patch-config --apply')).toBeInTheDocument();
   });
 });
 
