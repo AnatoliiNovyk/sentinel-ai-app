@@ -115,4 +115,24 @@ describe('ScanStats', () => {
     expect(container.querySelector('.text-blue-500')).toBeInTheDocument();
     expect(container.querySelector('.text-slate-400')).toBeInTheDocument();
   });
+
+  it('does not render a separate "Info" severity card', () => {
+    render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+    expect(screen.queryByText('Info')).not.toBeInTheDocument();
+  });
+
+  it('applies correct border class to each severity card', () => {
+    const { container } = render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+    expect(container.querySelector('.border-red-500\\/20')).toBeInTheDocument();
+    expect(container.querySelector('.border-orange-500\\/20')).toBeInTheDocument();
+    expect(container.querySelector('.border-yellow-500\\/20')).toBeInTheDocument();
+    expect(container.querySelector('.border-blue-500\\/20')).toBeInTheDocument();
+    expect(container.querySelector('.border-slate-700')).toBeInTheDocument();
+  });
+
+  it('displays correct medium and low counts', () => {
+    render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
 });
