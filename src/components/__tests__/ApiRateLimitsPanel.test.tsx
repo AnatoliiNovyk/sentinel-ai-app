@@ -109,4 +109,64 @@ describe('ApiRateLimitsPanel — warning state', () => {
       expect(container.querySelector('[class*="red-500"]')).toBeInTheDocument(),
     );
   });
+
+  it('shows nearing-limit warning when usage is above 75% but below limit', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(8) // scans_per_month: 8/10 = 80%
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Nearing limit\. Consider upgrading your plan\./i)).toBeInTheDocument(),
+    );
+  });
+});
+
+describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {
+  beforeEach(() => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage.mockResolvedValue(0);
+  });
+
+  it('calls getCurrentUsage for all 4 metric keys with the current user id', async () => {
+    const callsBefore = mockGetCurrentUsage.mock.calls.length;
+    render(<ApiRateLimitsPanel userId="user-42" planId="free" />);
+
+    await waitFor(() =>
+      expect(mockGetCurrentUsage.mock.calls.length).toBe(callsBefore + 4),
+    );
+
+    expect(mockGetCurrentUsage).toHaveBeenCalledWith('user-42', 'scans_per_month');
+    expect(mockGetCurrentUsage).toHaveBeenCalledWith('user-42', 'reports_per_day');
+    expect(mockGetCurrentUsage).toHaveBeenCalledWith('user-42', 'chat_messages_per_hour');
+    expect(mockGetCurrentUsage).toHaveBeenCalledWith('user-42', 'api_calls_per_second');
+  });
+
+  it('shows upgrade CTA for free plan', async () => {
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /View Plans/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('shows upgrade CTA for basic plan', async () => {
+    render(<ApiRateLimitsPanel userId="user-1" planId="basic" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /View Plans/i })).toBeInTheDocument(),
+    );
+  });
+
+  it('hides upgrade CTA for non-free/basic plans', async () => {
+    render(<ApiRateLimitsPanel userId="user-1" planId="pro" />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /View Plans/i })).not.toBeInTheDocument(),
+    );
+  });
 });
