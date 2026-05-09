@@ -270,6 +270,33 @@ describe('AgentLogsPanel — copyLog', () => {
   });
 });
 
+describe('AgentLogsPanel — additional coverage', () => {
+  it('shows "Loading logs..." text during initial fetch', () => {
+    // Make fetch never resolve so loading state persists
+    mockLimit.mockReturnValue(new Promise(() => {}));
+    render(<AgentLogsPanel projectId="proj-1" />);
+    expect(screen.getByText('Loading logs...')).toBeInTheDocument();
+  });
+
+  it('shows "0 lines" when fetch returns empty array', async () => {
+    mockFetchReturns([]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('0 lines')).toBeInTheDocument());
+  });
+
+  it('filters to warn logs when warn pill clicked', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'info', message: 'Info line' }),
+      makeLog({ level: 'warn', message: 'Warn line' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByRole('button', { name: /^warn$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^warn$/i }));
+    expect(screen.getByText(/Warn line/)).toBeInTheDocument();
+    expect(screen.queryByText(/Info line/)).not.toBeInTheDocument();
+  });
+});
+
 describe('AgentLogsPanel — realtime INSERT', () => {
   beforeEach(() => {
     mockChannel.on.mockClear();
