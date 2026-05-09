@@ -311,6 +311,20 @@ describe('Activity — search and filter interactions', () => {
     });
   });
 
+  it('search input matches project name via project map', async () => {
+    render(<ActivityPage />);
+    await screen.findByText('Scan started for target example.com');
+
+    fireEvent.change(screen.getByPlaceholderText('Search logs…'), {
+      target: { value: 'alpha project' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Scan started for target example.com')).toBeInTheDocument();
+      expect(screen.queryByText('Edge function unreachable')).not.toBeInTheDocument();
+    });
+  });
+
   it('stat card "Error" click sets level filter (re-fetches)', async () => {
     render(<ActivityPage />);
     await screen.findByText('Scan started for target example.com');
@@ -417,6 +431,25 @@ describe('Activity — load more and navigation', () => {
     );
   });
 
+  it('renders only the first 50 log rows when PAGE_SIZE+1 items are returned', async () => {
+    const manyLogs = Array.from({ length: 51 }, (_, i) => ({
+      id: `log-bulk-${i}`,
+      user_id: 'user-1',
+      project_id: null,
+      scan_id: null,
+      level: 'info',
+      message: `Bulk log entry ${i}`,
+      created_at: new Date().toISOString(),
+    }));
+    mockRange.mockReturnValue({ data: manyLogs, error: null });
+
+    render(<ActivityPage />);
+
+    expect(await screen.findByText('Bulk log entry 0')).toBeInTheDocument();
+    expect(screen.getByText('Bulk log entry 49')).toBeInTheDocument();
+    expect(screen.queryByText('Bulk log entry 50')).not.toBeInTheDocument();
+  });
+
   it('clicking "Load more" triggers additional fetch', async () => {
     const manyLogs = Array.from({ length: 51 }, (_, i) => ({
       id: `log-bulk-${i}`,
@@ -443,6 +476,29 @@ describe('Activity — load more and navigation', () => {
     const projectBtn = screen.getAllByTitle('Open project')[0];
     fireEvent.click(projectBtn);
     expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/projects'));
+  });
+
+  it('falls back to truncated project id when project is missing from the map', async () => {
+    mockProjectsEq.mockResolvedValue({ data: [], error: null });
+    mockRange.mockReturnValue({
+      data: [
+        {
+          id: 'log-missing-project',
+          user_id: 'user-1',
+          project_id: 'proj-missing-123456',
+          scan_id: null,
+          level: 'info',
+          message: 'Log with unknown project',
+          created_at: new Date().toISOString(),
+        },
+      ],
+      error: null,
+    });
+
+    render(<ActivityPage />);
+
+    expect(await screen.findByText('Log with unknown project')).toBeInTheDocument();
+    expect(screen.getByText('proj-mis')).toBeInTheDocument();
   });
 });
 
@@ -520,6 +576,29 @@ describe('Activity — anomaly edge cases', () => {
     fireEvent.click(screen.getByText('Anomalies'));
     await waitFor(() =>
       expect(screen.getByText('Elevated warning rate')).toBeInTheDocument(),
+    );
+  });
+
+  it('shows no-success anomaly when recent logs exist without successful operations', async () => {
+    const now = new Date();
+    const recentLogs = Array.from({ length: 5 }, (_, i) => ({
+      id: `recent-no-success-${i}`,
+      user_id: 'user-1',
+      project_id: null,
+      scan_id: null,
+      level: i < 3 ? 'error' : 'warn',
+      message: `Recent non-success log ${i}`,
+      created_at: new Date(now.getTime() - i * 600000).toISOString(),
+    }));
+    mockRange.mockReturnValue({ data: recentLogs, error: null });
+
+    render(<ActivityPage />);
+    await waitFor(() =>
+      expect(screen.getAllByText(/Recent non-success log/i).length).toBeGreaterThanOrEqual(1),
+    );
+    fireEvent.click(screen.getByText('Anomalies'));
+    await waitFor(() =>
+      expect(screen.getByText('No successful operations')).toBeInTheDocument(),
     );
   });
 });
@@ -639,6 +718,22 @@ describe('Activity — loading and realtime callbacks', () => {
     });
 
     expect(screen.getByText('Realtime inserted log')).toBeInTheDocument();
+  });
+
+  it('removes the realtime channel when the component unmounts', async () => {
+    const onMock = vi.fn().mockReturnThis();
+    const subscribeMock = vi.fn().mockReturnThis();
+    mockChannel.mockReturnValue({ on: onMock, subscribe: subscribeMock });
+
+    const { unmount } = render(<ActivityPage />);
+    await screen.findByText('Scan started for target example.com');
+    const callsBeforeUnmount = mockRemoveChannel.mock.calls.length;
+
+    unmount();
+
+    await waitFor(() =>
+      expect(mockRemoveChannel.mock.calls.length).toBe(callsBeforeUnmount + 1),
+    );
   });
 });
 
