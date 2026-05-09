@@ -161,3 +161,58 @@ describe('ErrorBoundary — static API', () => {
     expect(ErrorBoundary.getDerivedStateFromError(err)).toEqual({ error: err });
   });
 });
+
+describe('ErrorBoundary — icons and styling', () => {
+  it('renders AlertTriangle icon in fallback UI', () => {
+    const { container } = render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    const alertIcon = container.querySelector('svg.lucide-alert-triangle');
+    expect(alertIcon).toBeInTheDocument();
+  });
+
+  it('renders RefreshCw icon on Try again button', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    const button = screen.getByRole('button', { name: /try again/i });
+    const svgInButton = button.querySelector('svg');
+    expect(svgInButton).toBeInTheDocument();
+  });
+
+  it('applies correct styling to error container (min-h-[300px] and max-w-md)', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    const errorText = screen.getByText(/something went wrong/i);
+    const textBlock = errorText.parentElement;
+    expect(textBlock).not.toBeNull();
+    if (!textBlock) throw new Error('Expected text block to exist');
+
+    const innerDiv = textBlock.parentElement;
+    expect(innerDiv).not.toBeNull();
+    if (!innerDiv) throw new Error('Expected inner wrapper to exist');
+
+    const outerDiv = innerDiv.parentElement;
+    expect(outerDiv).not.toBeNull();
+    if (!outerDiv) throw new Error('Expected outer container to exist');
+
+    expect(outerDiv).toHaveClass('min-h-[300px]');
+    expect(outerDiv).toHaveClass('flex');
+    expect(outerDiv).toHaveClass('items-center');
+    expect(outerDiv).toHaveClass('justify-center');
+    expect(outerDiv).toHaveClass('p-8');
+
+    expect(innerDiv).toHaveClass('max-w-md');
+    expect(innerDiv).toHaveClass('w-full');
+    expect(innerDiv).toHaveClass('bg-slate-900');
+    expect(innerDiv).toHaveClass('border');
+    expect(innerDiv).toHaveClass('rounded-xl');
+  });
+});
