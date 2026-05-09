@@ -8,7 +8,7 @@ Element.prototype.scrollIntoView = vi.fn() as typeof Element.prototype.scrollInt
 
 // ── Supabase mocks ────────────────────────────────────────────────────────────
 
-const { mockLimit, mockOrder, mockEq, mockSelect, mockChannel } = vi.hoisted(() => {
+const { mockLimit, mockOrder, mockEq, mockSelect, mockChannel, mockRemoveChannel } = vi.hoisted(() => {
   const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null });
   const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit });
   const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
@@ -17,14 +17,15 @@ const { mockLimit, mockOrder, mockEq, mockSelect, mockChannel } = vi.hoisted(() 
     on: vi.fn().mockReturnThis(),
     subscribe: vi.fn().mockReturnThis(),
   };
-  return { mockLimit, mockOrder, mockEq, mockSelect, mockChannel };
+  const mockRemoveChannel = vi.fn();
+  return { mockLimit, mockOrder, mockEq, mockSelect, mockChannel, mockRemoveChannel };
 });
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: () => ({ select: mockSelect }),
     channel: vi.fn().mockReturnValue(mockChannel),
-    removeChannel: vi.fn(),
+    removeChannel: mockRemoveChannel,
   },
 }));
 
@@ -70,6 +71,12 @@ describe('AgentLogsPanel — static render', () => {
 });
 
 describe('AgentLogsPanel — after fetch', () => {
+  it('shows singular line label when exactly one log is loaded', async () => {
+    mockFetchReturns([makeLog({ message: 'Only one line' })]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => expect(screen.getByText('1 line')).toBeInTheDocument());
+  });
+
   it('shows log count after loading', async () => {
     mockFetchReturns([makeLog(), makeLog()]);
     render(<AgentLogsPanel projectId="proj-1" />);
@@ -183,6 +190,32 @@ describe('AgentLogsPanel — level filter', () => {
       expect(screen.getByText(/No logs yet/i)).toBeInTheDocument(),
     );
   });
+
+  it('renders no log rows when selected level has no matching logs', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'info', message: 'Info only line' }),
+      makeLog({ level: 'success', message: 'Success only line' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+
+    await waitFor(() => screen.getByRole('button', { name: /^warn$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^warn$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Info only line/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Success only line/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders fallback [LOG] prefix for unknown level', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'trace' as never, message: 'Unknown level line' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+
+    await waitFor(() => expect(screen.getByText(/Unknown level line/)).toBeInTheDocument());
+    expect(screen.getByText('[LOG]')).toBeInTheDocument();
+  });
 });
 
 describe('AgentLogsPanel — copyLog', () => {
@@ -218,11 +251,29 @@ describe('AgentLogsPanel — copyLog', () => {
     // Button still present
     expect(container.querySelector('[aria-label="Copy log"]')).toBeInTheDocument();
   });
+
+  it('copies only visible logs after level filtering', async () => {
+    mockFetchReturns([
+      makeLog({ level: 'info', message: 'Info should be hidden' }),
+      makeLog({ level: 'error', message: 'Error should be copied' }),
+    ]);
+    render(<AgentLogsPanel projectId="proj-1" />);
+
+    await waitFor(() => screen.getByRole('button', { name: /^error$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^error$/i }));
+    fireEvent.click(screen.getByLabelText('Copy log'));
+
+    expect(clipboardWriteText).toHaveBeenCalledOnce();
+    const copiedText = clipboardWriteText.mock.calls[0][0] as string;
+    expect(copiedText).toContain('Error should be copied');
+    expect(copiedText).not.toContain('Info should be hidden');
+  });
 });
 
 describe('AgentLogsPanel — realtime INSERT', () => {
   beforeEach(() => {
     mockChannel.on.mockClear();
+    mockRemoveChannel.mockClear();
   });
 
   it('registers INSERT realtime handler', async () => {
@@ -249,5 +300,18 @@ describe('AgentLogsPanel — realtime INSERT', () => {
       handler?.({ new: makeLog({ message: 'Realtime log' }) });
     });
     await waitFor(() => expect(screen.getByText(/Realtime log/)).toBeInTheDocument());
+  });
+
+  it('cleans up realtime channel on unmount', async () => {
+    mockFetchReturns([makeLog({ message: 'Existing log' })]);
+    const { unmount } = render(<AgentLogsPanel projectId="proj-1" />);
+    await waitFor(() => screen.getByText(/Existing log/));
+
+    const callsBeforeUnmount = mockRemoveChannel.mock.calls.length;
+    unmount();
+
+    await waitFor(() =>
+      expect(mockRemoveChannel.mock.calls.length).toBe(callsBeforeUnmount + 1),
+    );
   });
 });
