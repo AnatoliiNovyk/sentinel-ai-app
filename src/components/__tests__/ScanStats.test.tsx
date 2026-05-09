@@ -75,4 +75,44 @@ describe('ScanStats', () => {
       expect((bar as HTMLDivElement).style.width).toBe('0%');
     });
   });
+
+  it('Total card does not render progress bar or percentage text', () => {
+    render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    const percentageTexts = screen.queryAllByText(/% of total/i);
+    expect(percentageTexts.length).toBe(4);
+  });
+
+  it('sets correct width percentage for each card progress bar', () => {
+    const stats = { critical: 10, high: 20, medium: 30, low: 20, info: 20 };
+    const { container } = render(<ScanStats stats={stats} totalVulnerabilities={100} />);
+
+    const bars = container.querySelectorAll('div.h-full.rounded-full');
+    expect(bars[0]).toHaveStyle('width: 10%');
+    expect(bars[1]).toHaveStyle('width: 20%');
+    expect(bars[2]).toHaveStyle('width: 30%');
+    expect(bars[3]).toHaveStyle('width: 20%');
+  });
+
+  it('renders grid layout with responsive columns (2 md:5)', () => {
+    const { container } = render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    const grid = container.querySelector('.grid');
+    expect(grid).toBeInTheDocument();
+    expect(grid).toHaveClass('grid-cols-2');
+    expect(grid).toHaveClass('md:grid-cols-5');
+
+    const cards = container.querySelectorAll('div.bg-slate-800\\/40');
+    expect(cards.length).toBe(5);
+  });
+
+  it('renders correct icons for each severity level', () => {
+    const { container } = render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    expect(container.querySelector('.text-red-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-orange-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-yellow-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-blue-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-slate-400')).toBeInTheDocument();
+  });
 });
