@@ -75,4 +75,27 @@ describe('Sparkline', () => {
     const svg = container.querySelector('svg');
     expect(svg).toBeInTheDocument();
   });
+
+  it('uses fillColor for gradient stops when provided', () => {
+    const { container } = render(<Sparkline data={DATA} color="#ff0000" fillColor="#0000ff" />);
+    const stops = container.querySelectorAll('stop');
+    expect(stops.length).toBe(2);
+    expect(stops[0].getAttribute('stop-color')).toBe('#0000ff');
+    expect(stops[1].getAttribute('stop-color')).toBe('#0000ff');
+  });
+
+  it('does not produce NaN coordinates for flat data', () => {
+    const { container } = render(<Sparkline data={[7, 7, 7, 7]} />);
+    const paths = container.querySelectorAll('path');
+    const lineD = paths[1].getAttribute('d') ?? '';
+    expect(lineD).not.toContain('NaN');
+    expect(lineD).not.toContain('Infinity');
+  });
+
+  it('applies strokeWidth as drawing pad in coordinates', () => {
+    const { container } = render(<Sparkline data={[0, 10]} width={100} height={40} strokeWidth={4} />);
+    const paths = container.querySelectorAll('path');
+    const lineD = paths[1].getAttribute('d') ?? '';
+    expect(lineD.startsWith('M 4 ')).toBe(true);
+  });
 });
