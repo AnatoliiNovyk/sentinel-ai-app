@@ -67,6 +67,12 @@ describe('SkeletonCardGrid', () => {
     const cards = container.querySelectorAll('[class*="h-48"]');
     expect(cards.length).toBeGreaterThan(0);
   });
+
+  it('renders zero cards when count is 0', () => {
+    const { container } = render(<SkeletonCardGrid count={0} />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid.children.length).toBe(0);
+  });
 });
 
 describe('SkeletonList', () => {
@@ -81,6 +87,19 @@ describe('SkeletonList', () => {
     const list = container.firstChild as HTMLElement;
     expect(list.children.length).toBe(2);
   });
+
+  it('has loading aria-label and busy state', () => {
+    const { container } = render(<SkeletonList />);
+    const list = container.firstChild as HTMLElement;
+    expect(list).toHaveAttribute('aria-label', 'Loading…');
+    expect(list).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('renders zero list items when count is 0', () => {
+    const { container } = render(<SkeletonList count={0} />);
+    const list = container.firstChild as HTMLElement;
+    expect(list.children.length).toBe(0);
+  });
 });
 
 describe('SkeletonSidebar', () => {
@@ -94,5 +113,18 @@ describe('SkeletonSidebar', () => {
     const { container } = render(<SkeletonSidebar count={3} />);
     const sidebar = container.firstChild as HTMLElement;
     expect(sidebar.children.length).toBe(3);
+  });
+
+  it('has loading aria-label and busy state', () => {
+    const { container } = render(<SkeletonSidebar />);
+    const sidebar = container.firstChild as HTMLElement;
+    expect(sidebar).toHaveAttribute('aria-label', 'Loading…');
+    expect(sidebar).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('renders zero sidebar items when count is 0', () => {
+    const { container } = render(<SkeletonSidebar count={0} />);
+    const sidebar = container.firstChild as HTMLElement;
+    expect(sidebar.children.length).toBe(0);
   });
 });
