@@ -71,6 +71,23 @@ describe('CommandPalette — filtering', () => {
     });
     expect(screen.getByText('Active Recon')).toBeInTheDocument();
   });
+
+  it('can filter by description text', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: 'preferences' },
+    });
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+  });
+
+  it('shows singular footer count when exactly one result matches', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: 'nmap' },
+    });
+    expect(screen.getByText('1 result')).toBeInTheDocument();
+  });
 });
 
 describe('CommandPalette — item click navigation', () => {
@@ -173,5 +190,19 @@ describe('CommandPalette — keyboard', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     // Should be back to first item = '/'
     expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('Enter does nothing when there are no filtered results', () => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+    const input = screen.getByPlaceholderText(/search pages/i);
+
+    fireEvent.change(input, {
+      target: { value: 'definitely-no-match' },
+    });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
