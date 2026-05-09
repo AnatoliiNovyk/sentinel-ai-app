@@ -122,6 +122,18 @@ describe('ScanDiff', () => {
       expect(screen.getByRole('button', { name: /^1\s+Fixed$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^1\s+Persisted$/i })).toBeInTheDocument();
     });
+
+    it('treats case difference as same fingerprint (persisted)', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'SQL Injection', 'api.example.com'),
+        makeVuln('v2', 'scan-old', 'sql injection', 'api.example.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      expect(screen.getByText('persisted')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^0\s+New$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^0\s+Fixed$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^1\s+Persisted$/i })).toBeInTheDocument();
+    });
   });
 
   describe('trend indicator', () => {
@@ -257,6 +269,26 @@ describe('ScanDiff', () => {
       const persistedBtn = screen.getByRole('button', { name: /^persisted$/i });
       fireEvent.click(persistedBtn);
       expect(screen.getByText(/no entries match the current filters/i)).toBeInTheDocument();
+    });
+
+    it('shows "No findings to diff" when both scans exist but have no vulnerabilities', () => {
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={[]} />);
+      expect(screen.getByText('No findings to diff.')).toBeInTheDocument();
+    });
+
+    it('toggles stat-card filter off when clicking same status card twice', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New finding', 'host1.com'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host2.com'),
+      ];
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+
+      const newStatCard = screen.getByRole('button', { name: /^1\s+New$/i });
+      fireEvent.click(newStatCard);
+      expect(screen.queryByText('Fixed finding')).not.toBeInTheDocument();
+
+      fireEvent.click(newStatCard);
+      expect(screen.getByText('Fixed finding')).toBeInTheDocument();
     });
   });
 });
