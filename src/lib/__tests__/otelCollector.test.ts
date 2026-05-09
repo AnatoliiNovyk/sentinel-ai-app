@@ -334,6 +334,7 @@ describe('OTelCollectorClient', () => {
     it('implements exponential backoff on retries', async () => {
       // Use fake timers so backoff delays are deterministic regardless of
       // event-loop pressure during parallel test runs.
+      await client.shutdown();
       vi.useFakeTimers();
       try {
         let callCount = 0;

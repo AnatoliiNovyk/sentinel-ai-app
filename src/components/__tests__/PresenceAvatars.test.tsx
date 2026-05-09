@@ -70,3 +70,46 @@ describe('PresenceAvatars — rendering', () => {
     expect(mockGetMembersViewing).toHaveBeenCalledWith('scan', 'scan-99');
   });
 });
+
+describe('PresenceAvatars — branch coverage (c8 ignore paths)', () => {
+  it('shows "1 viewing" for a single member', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'zara0001', context_type: 'project', context_id: 'proj-1' },
+    ]);
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByText('1 viewing')).toBeInTheDocument();
+    expect(screen.getByText('Z')).toBeInTheDocument();
+  });
+
+  it('renders avatar title attribute with first 8 chars of user_id', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'abcdefghijk', context_type: 'project', context_id: 'proj-1' },
+    ]);
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByTitle('User abcdefgh')).toBeInTheDocument();
+  });
+
+  it('cycles AVATAR_COLORS via modulo when 9+ members are present', () => {
+    // 9 members → idx 8 wraps around to color index 0 (bg-red-500)
+    const members = Array.from({ length: 9 }, (_, i) => ({
+      id: `p-${i}`,
+      user_id: `user${i.toString().padStart(4, '0')}`,
+      context_type: 'project' as const,
+      context_id: 'proj-1',
+    }));
+    mockGetMembersViewing.mockReturnValue(members);
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByText('9 viewing')).toBeInTheDocument();
+    // All 9 avatars rendered — first avatar initial 'U' appears 9 times
+    expect(screen.getAllByText('U')).toHaveLength(9);
+  });
+
+  it('works with contextType="report"', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'reportuser', context_type: 'report', context_id: 'rpt-42' },
+    ]);
+    render(<PresenceAvatars contextType="report" contextId="rpt-42" />);
+    expect(screen.getByText('1 viewing')).toBeInTheDocument();
+    expect(mockGetMembersViewing).toHaveBeenCalledWith('report', 'rpt-42');
+  });
+});
