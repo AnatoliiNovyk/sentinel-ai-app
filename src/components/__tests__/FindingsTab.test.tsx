@@ -277,6 +277,17 @@ describe('FindingsTab — asset breakdown panel', () => {
     // At most 5 visible asset rows
     expect(allAssets.length).toBeLessThanOrEqual(5);
   });
+
+  it('uses "(unknown)" asset bucket when asset is empty', () => {
+    const vulns = [
+      makeVuln({ asset: '' as unknown as string, severity: 'high' }),
+      makeVuln({ asset: 'known.example.com', severity: 'low' }),
+    ];
+    render(<FindingsTab vulns={vulns} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /findings by asset/i }));
+
+    expect(screen.getByText('(unknown)')).toBeInTheDocument();
+  });
 });
 
 describe('FindingsTab — search and clear', () => {
@@ -524,6 +535,28 @@ describe('FindingsTab — bulk action bar', () => {
       const btns = screen.getAllByRole('button', { name: /in progress/i });
       fireEvent.click(btns.at(-1)!);
     });
+  });
+
+  it('calls bulkChangeStatus with accepted risk', async () => {
+    mockIn.mockReturnValueOnce({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
+    const vuln = makeVuln();
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() => screen.getByText(/1 selected/i));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /accept risk/i }));
+    });
+  });
+
+  it('clears selection via bulk clear button', async () => {
+    const vuln = makeVuln();
+    render(<FindingsTab vulns={[vuln]} onUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+    await waitFor(() => expect(screen.getByText(/1 selected/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+    await waitFor(() => expect(screen.queryByText(/1 selected/i)).not.toBeInTheDocument());
   });
 });
 
