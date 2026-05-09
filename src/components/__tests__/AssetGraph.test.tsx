@@ -111,4 +111,45 @@ describe('AssetGraph — with vulns', () => {
     // One line per asset node (2)
     expect(lines.length).toBe(2);
   });
+
+  it('aggregates stat cards by highest severity per unique asset', () => {
+    const vulns = [
+      makeVuln('db.example.com', 'low'),
+      makeVuln('db.example.com', 'critical'),
+      makeVuln('api.example.com', 'high'),
+      makeVuln('cache.example.com', 'info'),
+    ];
+
+    render(<AssetGraph projectName="TestProject" vulns={vulns} />);
+
+    const assetsCard = screen.getByText('Assets').previousElementSibling;
+    const criticalCard = screen.getAllByText('Critical')[0].previousElementSibling;
+    const highRiskCard = screen.getByText('High risk').previousElementSibling;
+    const safeCard = screen.getByText('Low/Safe').previousElementSibling;
+
+    expect(assetsCard).toHaveTextContent('3');
+    expect(criticalCard).toHaveTextContent('1');
+    expect(highRiskCard).toHaveTextContent('1');
+    expect(safeCard).toHaveTextContent('1');
+  });
+
+  it('renders expected asset icons for common label patterns and fallback', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[
+          makeVuln('db-main.internal', 'high'),
+          makeVuln('s3-bucket.internal', 'medium'),
+          makeVuln('ec2-node.internal', 'low'),
+          makeVuln('api-gw.internal', 'critical'),
+          makeVuln('mystery-host.internal', 'info'),
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-database')).toBeInTheDocument();
+    expect(container.querySelectorAll('.lucide-box').length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument();
+    expect(container.querySelectorAll('.lucide-globe').length).toBeGreaterThanOrEqual(1);
+  });
 });
