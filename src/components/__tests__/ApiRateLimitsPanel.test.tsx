@@ -124,6 +124,52 @@ describe('ApiRateLimitsPanel — warning state', () => {
       expect(screen.getByText(/Nearing limit\. Consider upgrading your plan\./i)).toBeInTheDocument(),
     );
   });
+
+  it('caps displayed percentage at 100% when usage exceeds limit', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(999) // scans_per_month: 999/10 -> should cap at 100
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('100%').length).toBeGreaterThan(0),
+    );
+  });
+
+  it('shows exceeded limit message when metric is over limit', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(11) // scans_per_month: exceeded
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Limit exceeded\. Upgrade to increase limits\./i)).toBeInTheDocument(),
+    );
+  });
+
+  it('falls back to 0 usage when a metric usage is undefined', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(undefined) // scans_per_month: undefined -> fallback to 0
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getAllByText(/\/\s*10/).length).toBeGreaterThan(0),
+    );
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+  });
 });
 
 describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {

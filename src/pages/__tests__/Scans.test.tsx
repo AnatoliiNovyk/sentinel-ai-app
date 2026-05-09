@@ -207,7 +207,11 @@ describe('Scans — mock mode warning', () => {
       probeHealth: { reachable: false },
     });
     render(<Scans />);
-    const dismissBtn = await screen.findByRole('button', { name: /dismiss mock warning/i });
+    await waitFor(() => {
+      expect(screen.getByText(/selected scan is a simulated run/i)).toBeInTheDocument();
+    }, { timeout: 6000 });
+
+    const dismissBtn = screen.getByRole('button', { name: /dismiss mock warning/i });
     await act(async () => { fireEvent.click(dismissBtn); });
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /dismiss mock warning/i })).not.toBeInTheDocument();
