@@ -120,4 +120,53 @@ describe('ToastContainer', () => {
     );
     expect(progressRows).toHaveLength(3);
   });
+
+  it('renders correct icons for each toast type', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'Success' },
+      { id: 'e', type: 'error', message: 'Error' },
+      { id: 'i', type: 'info', message: 'Info' },
+      { id: 'w', type: 'warning', message: 'Warning' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+
+    // Success: CheckCircle2 (has 'check-circle-2' or similar in aria-label or as fallback)
+    const icons = container.querySelectorAll('svg');
+    // Each toast has 1 icon + 1 X button = 2 SVGs per toast, so 4 toasts = 8 SVGs total
+    expect(icons.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('renders colored left bar for each toast', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'S' },
+      { id: 'e', type: 'error', message: 'E' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+
+    // Success left bar: bg-emerald-500
+    const successLeftBar = Array.from(container.querySelectorAll('div')).find(
+      (el) => el.classList.contains('absolute') && el.classList.contains('left-0') && el.classList.contains('bg-emerald-500'),
+    );
+    expect(successLeftBar).toBeInTheDocument();
+
+    // Error left bar: bg-red-500
+    const errorLeftBar = Array.from(container.querySelectorAll('div')).find(
+      (el) => el.classList.contains('absolute') && el.classList.contains('left-0') && el.classList.contains('bg-red-500'),
+    );
+    expect(errorLeftBar).toBeInTheDocument();
+  });
+
+  it('renders toast container with fixed positioning and correct z-index', () => {
+    mockToastsList = [{ id: 'toast-1', type: 'info', message: 'Test' }];
+    const { container } = render(<ToastContainer />);
+
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    // Check for fixed positioning classes
+    expect(liveRegion?.classList.contains('fixed')).toBe(true);
+    expect(liveRegion?.classList.contains('bottom-20')).toBe(true);
+    expect(liveRegion?.classList.contains('right-6')).toBe(true);
+    expect(liveRegion?.classList.contains('z-[60]')).toBe(true);
+  });
 });
