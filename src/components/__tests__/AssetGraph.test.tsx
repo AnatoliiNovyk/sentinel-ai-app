@@ -152,4 +152,63 @@ describe('AssetGraph — with vulns', () => {
     expect(container.querySelector('.lucide-server')).toBeInTheDocument();
     expect(container.querySelectorAll('.lucide-globe').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('does not include medium assets in Critical/High/Low-Safe counters', () => {
+    render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('mid-risk.example.com', 'medium')]}
+      />,
+    );
+
+    const assetsCard = screen.getByText('Assets').previousElementSibling;
+    const criticalCard = screen.getAllByText('Critical')[0].previousElementSibling;
+    const highRiskCard = screen.getByText('High risk').previousElementSibling;
+    const safeCard = screen.getByText('Low/Safe').previousElementSibling;
+
+    expect(assetsCard).toHaveTextContent('1');
+    expect(criticalCard).toHaveTextContent('0');
+    expect(highRiskCard).toHaveTextContent('0');
+    expect(safeCard).toHaveTextContent('0');
+  });
+
+  it('renders critical glow circle for critical asset nodes', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('critical-host.example.com', 'critical')]}
+      />,
+    );
+
+    expect(container.querySelector('circle.animate-pulse[filter="url(#glow)"]')).toBeInTheDocument();
+  });
+
+  it('shows asset title tooltip with aggregated finding count', () => {
+    render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[
+          makeVuln('api.example.com', 'high'),
+          makeVuln('api.example.com', 'low'),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('api.example.com · 2 finding(s) · high')).toBeInTheDocument();
+  });
+
+  it('renders cloud and file-code icon branches from asset labels', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[
+          makeVuln('cloud-infra.example.com', 'high'),
+          makeVuln('git-repo.example.com', 'low'),
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-cloud')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-file-code')).toBeInTheDocument();
+  });
 });
