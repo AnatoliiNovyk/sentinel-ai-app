@@ -109,6 +109,13 @@ describe('ReportViewer', () => {
       expect(onClose).toHaveBeenCalledOnce();
     });
 
+    it('does not call onClose when a non-Escape key is pressed', () => {
+      const onClose = vi.fn();
+      render(<ReportViewer report={makeReport()} onClose={onClose} />);
+      fireEvent.keyDown(window, { key: 'Enter' });
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
     it('calls onClose when clicking on backdrop overlay element', () => {
       const onClose = vi.fn();
       render(<ReportViewer report={makeReport()} onClose={onClose} />);
@@ -255,6 +262,13 @@ describe('ReportViewer', () => {
       fireEvent.click(overlay);
       expect(onClose).toHaveBeenCalled();
     });
+
+    it('does not call onClose when clicking inside the modal content', () => {
+      const onClose = vi.fn();
+      render(<ReportViewer report={makeReport()} onClose={onClose} />);
+      fireEvent.click(screen.getByText('Security Report Q1'));
+      expect(onClose).not.toHaveBeenCalled();
+    });
   });
 
   describe('share guard', () => {
@@ -271,8 +285,45 @@ describe('ReportViewer', () => {
       // Second click while sharing is in progress (button is disabled)
       fireEvent.click(shareBtn);
       // Only one supabase update should have been called
-      resolveShare();
+      await act(async () => {
+        resolveShare();
+      });
       expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns early when sharing state is already true', async () => {
+      vi.resetModules();
+      vi.doMock('react', async () => {
+        const actual = await vi.importActual<typeof import('react')>('react');
+        let stateCalls = 0;
+
+        return {
+          ...actual,
+          useState: <T,>(initial: T) => {
+            stateCalls += 1;
+            if (stateCalls === 3) {
+              return [true as T, vi.fn()] as const;
+            }
+            return actual.useState(initial);
+          },
+        };
+      });
+
+      const { default: ReportViewerWithSharingGuard } = await import('../ReportViewer');
+
+      render(
+        <ReportViewerWithSharingGuard
+          report={makeReport({ share_token: null })}
+          onClose={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByTitle('Generate public link'));
+
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(clipboardMock).not.toHaveBeenCalled();
+
+      vi.doUnmock('react');
+      vi.resetModules();
     });
   });
 
@@ -302,6 +353,24 @@ describe('ReportViewer', () => {
       fireEvent.click(screen.getByTitle('Copy Markdown'));
       act(() => { vi.advanceTimersByTime(2100); });
       expect(screen.queryByText('Copied!')).not.toBeInTheDocument();
+    });
+
+    it('clears share-link copied state after 2.5 seconds for existing public link', () => {
+      vi.useFakeTimers();
+      render(
+        <ReportViewer
+          report={makeReport({ share_token: 'existing-token-abc' })}
+          onClose={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByTitle('Copy share link'));
+      expect(screen.getByText('Link copied!')).toBeInTheDocument();
+
+      act(() => { vi.advanceTimersByTime(2600); });
+
+      expect(screen.queryByText('Link copied!')).not.toBeInTheDocument();
+      expect(screen.getByText('Share link')).toBeInTheDocument();
     });
   });
 });
