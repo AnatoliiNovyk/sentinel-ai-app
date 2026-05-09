@@ -6,7 +6,17 @@ import type { Project, ScanSchedule } from '../../lib/supabase';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-const { mockSelect, mockEq, mockOrder, mockUpdate, mockUpdateEq, mockDelete, mockDeleteEq } =
+const {
+  mockSelect,
+  mockEq,
+  mockOrder,
+  mockUpdate,
+  mockUpdateEq,
+  mockDelete,
+  mockDeleteEq,
+  mockInsert,
+  authState,
+} =
   vi.hoisted(() => ({
     mockSelect: vi.fn(),
     mockEq: vi.fn(),
@@ -15,6 +25,8 @@ const { mockSelect, mockEq, mockOrder, mockUpdate, mockUpdateEq, mockDelete, moc
     mockUpdateEq: vi.fn().mockResolvedValue({ data: null, error: null }),
     mockDelete: vi.fn(),
     mockDeleteEq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    mockInsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    authState: { user: { id: 'user-1' } as { id: string } | null },
   }));
 
 mockOrder.mockResolvedValue({ data: [], error: null });
@@ -32,14 +44,14 @@ vi.mock('../../lib/supabase', async (importOriginal) => {
         select: mockSelect,
         update: mockUpdate,
         delete: mockDelete,
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        insert: mockInsert,
       }),
     },
   };
 });
 
 vi.mock('../../context/useAuth', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
+  useAuth: () => authState,
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -89,6 +101,7 @@ async function renderPanel(projects: Project[]) {
 
 describe('SchedulesPanel — empty state', () => {
   beforeEach(() => {
+    authState.user = { id: 'user-1' };
     mockSchedulesReturn([]);
   });
 
@@ -111,6 +124,10 @@ describe('SchedulesPanel — empty state', () => {
 });
 
 describe('SchedulesPanel — with schedules', () => {
+  beforeEach(() => {
+    authState.user = { id: 'user-1' };
+  });
+
   it('renders schedule scanner and project name', async () => {
     mockSchedulesReturn([makeSchedule()]);
     await renderPanel([makeProject('proj-1', 'Prod API')]);
@@ -155,9 +172,41 @@ describe('SchedulesPanel — with schedules', () => {
     await renderPanel([makeProject()]);
     await waitFor(() => expect(screen.getByText(/37h/)).toBeInTheDocument());
   });
+
+  it('falls back to "project" label when project is not found', async () => {
+    mockSchedulesReturn([makeSchedule({ project_id: 'missing-project' })]);
+    await renderPanel([makeProject('proj-1', 'Prod API')]);
+    await waitFor(() => expect(screen.getByText(/on project/i)).toBeInTheDocument());
+  });
+
+  it('shows overdue badge when schedule is enabled and next run is in the past', async () => {
+    mockSchedulesReturn([
+      makeSchedule({
+        enabled: true,
+        next_run_at: '2000-01-01T00:00:00.000Z',
+      }),
+    ]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.getByText(/overdue/i)).toBeInTheDocument());
+  });
+
+  it('does not show overdue badge when schedule is paused even if next run is in the past', async () => {
+    mockSchedulesReturn([
+      makeSchedule({
+        enabled: false,
+        next_run_at: '2000-01-01T00:00:00.000Z',
+      }),
+    ]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument());
+  });
 });
 
 describe('SchedulesPanel — toggle & delete', () => {
+  beforeEach(() => {
+    authState.user = { id: 'user-1' };
+  });
+
   it('calls supabase update when Power button clicked', async () => {
     mockSchedulesReturn([makeSchedule({ enabled: true })]);
     await renderPanel([makeProject()]);
@@ -175,10 +224,19 @@ describe('SchedulesPanel — toggle & delete', () => {
       expect(screen.queryByText('nmap')).not.toBeInTheDocument(),
     );
   });
+
+  it('shows Resume title for paused schedule and toggles it to enabled', async () => {
+    mockSchedulesReturn([makeSchedule({ enabled: false })]);
+    await renderPanel([makeProject()]);
+    await waitFor(() => expect(screen.getByTitle('Resume')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Resume'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith({ enabled: true }));
+  });
 });
 
 describe('SchedulesPanel — new schedule modal', () => {
   beforeEach(() => {
+    authState.user = { id: 'user-1' };
     mockSchedulesReturn([]);
   });
 
@@ -221,6 +279,15 @@ describe('SchedulesPanel — new schedule modal', () => {
     const createBtn = screen.getByRole('button', { name: /create schedule/i });
     fireEvent.click(createBtn);
     await waitFor(() => {
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-1',
+          project_id: 'proj-1',
+          enabled: true,
+        }),
+      );
+    });
+    await waitFor(() => {
       // Modal closes after create
       expect(screen.getAllByText('New schedule').length).toBe(1);
     });
@@ -252,5 +319,16 @@ describe('SchedulesPanel — new schedule modal', () => {
     const projectSelect = screen.getByRole('combobox', { name: /project/i });
     fireEvent.change(projectSelect, { target: { value: 'proj-2' } });
     expect((projectSelect as HTMLSelectElement).value).toBe('proj-2');
+  });
+});
+
+describe('SchedulesPanel — auth edge path', () => {
+  it('keeps loading state when user is absent and load returns early', async () => {
+    authState.user = null;
+    const callsBefore = mockSelect.mock.calls.length;
+    render(<SchedulesPanel projects={[makeProject()]} />);
+
+    await waitFor(() => expect(screen.getByText('Loading...')).toBeInTheDocument());
+    expect(mockSelect.mock.calls.length).toBe(callsBefore);
   });
 });
