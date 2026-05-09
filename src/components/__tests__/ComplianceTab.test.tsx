@@ -129,6 +129,32 @@ describe('ComplianceTab', () => {
     });
   });
 
+  it('falls back to default error when service response has no error text', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: false,
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load dashboard')).toBeInTheDocument();
+    });
+  });
+
+  it('falls back to default error when success=true but dashboard payload is missing', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: null,
+      error: undefined,
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load dashboard')).toBeInTheDocument();
+    });
+  });
+
   it('renders dashboard details and framework trends', async () => {
     mockGetDashboard.mockResolvedValue({
       success: true,
@@ -152,6 +178,23 @@ describe('ComplianceTab', () => {
     expect(screen.getByText('+5%')).toBeInTheDocument();
     expect(screen.getByText('-3%')).toBeInTheDocument();
     expect(screen.getByText('Stable')).toBeInTheDocument();
+  });
+
+  it('renders framework status badges for compliant / at-risk / non-compliant', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Compliance Frameworks')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('compliant')).toBeInTheDocument();
+    expect(screen.getByText('at-risk')).toBeInTheDocument();
+    expect(screen.getByText('non-compliant')).toBeInTheDocument();
   });
 
   it('refresh button triggers loadDashboard again', async () => {
@@ -188,5 +231,49 @@ describe('ComplianceTab', () => {
       expect(screen.getByText(String(score))).toBeInTheDocument();
       unmount();
     }
+  });
+
+  it('renders formatted metric values with expected units', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Compliance Dashboard')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('80.6%').length).toBeGreaterThan(0);
+    expect(screen.getByText('50.0%')).toBeInTheDocument();
+    expect(screen.getByText('37h')).toBeInTheDocument();
+    expect(screen.getAllByText('512ms').length).toBeGreaterThan(0);
+  });
+
+  it('renders 0% severity bars when vulnerability distribution total is zero', async () => {
+    const zeroDashboard = buildDashboard(88);
+    zeroDashboard.securityPosture.criticalVulnerabilities = 0;
+    zeroDashboard.securityPosture.highVulnerabilities = 0;
+    zeroDashboard.securityPosture.mediumVulnerabilities = 0;
+    zeroDashboard.securityPosture.lowVulnerabilities = 0;
+    zeroDashboard.securityPosture.totalVulnerabilities = 0;
+    zeroDashboard.securityPosture.vulnerabilitiesClosed = 0;
+
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: zeroDashboard,
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Vulnerability Distribution')).toBeInTheDocument();
+    });
+
+    const zeroWidthBars = Array.from(container.querySelectorAll('div')).filter(
+      (el) => el.classList.contains('h-2') && (el as HTMLDivElement).style.width === '0%',
+    );
+    expect(zeroWidthBars.length).toBeGreaterThanOrEqual(4);
   });
 });
