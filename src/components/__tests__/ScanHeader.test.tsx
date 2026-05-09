@@ -77,6 +77,25 @@ describe('ScanHeader — mode badge', () => {
     render(<ScanHeader {...BASE_PROPS} />);
     expect(screen.getByText('Mode: UNKNOWN')).toBeInTheDocument();
   });
+
+  it('shows historical selected scan text in MOCK mode when agent is reachable', () => {
+    render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" agentReachable />);
+    expect(screen.getByText('Selected Scan: Historical')).toBeInTheDocument();
+    expect(screen.queryByText('DEMO MODE')).not.toBeInTheDocument();
+  });
+});
+
+describe('ScanHeader — selected project context text', () => {
+  it('shows selected project name when selectedProjectId exists in list', () => {
+    render(<ScanHeader {...BASE_PROPS} selectedProjectId="p1" />);
+    expect(screen.getByText('Showing scans for')).toBeInTheDocument();
+    expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
+  });
+
+  it('falls back to default subtitle when selectedProjectId is not found', () => {
+    render(<ScanHeader {...BASE_PROPS} selectedProjectId="missing-project" />);
+    expect(screen.getByText('Manage and monitor security assessments across your infrastructure.')).toBeInTheDocument();
+  });
 });
 
 describe('ScanHeader — interactions', () => {
@@ -100,5 +119,10 @@ describe('ScanHeader — interactions', () => {
     render(<ScanHeader {...BASE_PROPS} selectedProjectId="p1" />);
     const select = screen.getByRole('combobox', { name: /select project/i }) as HTMLSelectElement;
     expect(select.value).toBe('p1');
+  });
+
+  it('renders all-projects option with zero count for empty projects list', () => {
+    render(<ScanHeader {...BASE_PROPS} projects={[]} />);
+    expect(screen.getByText('All projects (0)')).toBeInTheDocument();
   });
 });
