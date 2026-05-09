@@ -84,6 +84,43 @@ describe('ExecutionConsole — async sequence (fake timers)', () => {
     expect(screen.getByText('Remediation Complete')).toBeInTheDocument();
   });
 
+  it('logs target environment using uppercase type value', async () => {
+    render(
+      <ExecutionConsole
+        code="echo done"
+        type="azure"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText(/Targeting asset environment: AZURE/i)).toBeInTheDocument();
+  });
+
+  it('renders command logs only for non-empty code lines', async () => {
+    render(
+      <ExecutionConsole
+        code={'cmd-one\n\n   \ncmd-two'}
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText('> cmd-one')).toBeInTheDocument();
+    expect(screen.getByText('> cmd-two')).toBeInTheDocument();
+    const commandLines = screen.getAllByText(/^> /i);
+    expect(commandLines).toHaveLength(2);
+  });
+
   it('shows status "Success" in footer after completion', async () => {
     render(
       <ExecutionConsole
@@ -99,6 +136,23 @@ describe('ExecutionConsole — async sequence (fake timers)', () => {
     });
 
     expect(screen.getByText(/Status: Success/i)).toBeInTheDocument();
+  });
+
+  it('hides Abort button once finishing state is reached', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="gcp"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.queryByText('Abort')).not.toBeInTheDocument();
   });
 
   it('displays error count when errors exist in log', async () => {
