@@ -138,6 +138,23 @@ describe('ExecutionConsole — async sequence (fake timers)', () => {
     expect(screen.getByText(/Status: Success/i)).toBeInTheDocument();
   });
 
+  it('shows header line counter after logs are appended', async () => {
+    render(
+      <ExecutionConsole
+        code="echo done"
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText(/\[\d+ lines\]/i)).toBeInTheDocument();
+  });
+
   it('hides Abort button once finishing state is reached', async () => {
     render(
       <ExecutionConsole
@@ -153,6 +170,23 @@ describe('ExecutionConsole — async sequence (fake timers)', () => {
     });
 
     expect(screen.queryByText('Abort')).not.toBeInTheDocument();
+  });
+
+  it('hides "AI execution in progress..." once finishing state is reached', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="gcp"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.queryByText('AI execution in progress...')).not.toBeInTheDocument();
   });
 
   it('displays error count when errors exist in log', async () => {
@@ -207,5 +241,34 @@ describe('ExecutionConsole — async sequence (fake timers)', () => {
 
     // After timeout, "Copied" should be gone and "Copy log" should return
     expect(screen.getByText('Copy log')).toBeInTheDocument();
+  });
+
+  it('copies timestamped log payload that includes command lines', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    render(
+      <ExecutionConsole
+        code={`echo one
+echo two`}
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    fireEvent.click(screen.getByTitle('Copy log'));
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Initializing Sentinel AI Remediation Engine...'));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('> echo one'));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('> echo two'));
   });
 });
