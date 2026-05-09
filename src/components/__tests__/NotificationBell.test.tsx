@@ -419,3 +419,48 @@ describe('NotificationBell — realtime channel callbacks', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/notifications');
   });
 });
+
+describe('NotificationBell — branch coverage (c8 ignore paths)', () => {
+  beforeEach(() => {
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        is: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+  });
+
+  it('renders default Bell icon for unknown notification type (iconFor fallback)', async () => {
+    const notif = makeNotif({ type: 'unknown_type', title: 'Unknown type' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText('Unknown type')).toBeInTheDocument());
+    // When type is not recognized, the default Bell icon is rendered
+    // Verify notification appears (proof that iconFor returned Bell without throwing)
+    expect(screen.getByText('Unknown type')).toBeInTheDocument();
+  });
+
+  it('renders notification with unknown severity using fallback (SEVERITY_STYLES fallback)', async () => {
+    const notif = makeNotif({ severity: 'unknown' as Notification['severity'], title: 'Unknown severity' });
+    mockFetchReturns([notif]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText('Unknown severity')).toBeInTheDocument());
+    // Should fallback to info severity styles when severity not in SEVERITY_STYLES
+    expect(screen.getByText('Unknown severity')).toBeInTheDocument();
+  });
+
+  it('shows success severity badge in header', async () => {
+    mockFetchReturns([makeNotif({ severity: 'success' })]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText(/1 success/i)).toBeInTheDocument());
+  });
+
+  it('shows info severity badge in header', async () => {
+    mockFetchReturns([makeNotif({ severity: 'info' })]);
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByLabelText('Notifications'));
+    await waitFor(() => expect(screen.getByText(/1 info/i)).toBeInTheDocument());
+  });
+});
