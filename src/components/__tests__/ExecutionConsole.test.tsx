@@ -271,4 +271,45 @@ echo two`}
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('> echo one'));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('> echo two'));
   });
+
+  it('shows footer engine version "Sentinel AI v2.4 (Engine: Hyperion)"', () => {
+    render(<ExecutionConsole {...DEFAULT_PROPS} />);
+    expect(screen.getByText('Sentinel AI v2.4 (Engine: Hyperion)')).toBeInTheDocument();
+  });
+
+  it('shows patch description text after sequence completes', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(
+      screen.getByText('The vulnerability has been successfully patched and verified.'),
+    ).toBeInTheDocument();
+  });
+
+  it('logs "Targeting asset environment: WINDOWS" for type="windows"', async () => {
+    render(
+      <ExecutionConsole
+        code="run-fix.ps1"
+        type="windows"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText(/Targeting asset environment: WINDOWS/i)).toBeInTheDocument();
+  });
 });
