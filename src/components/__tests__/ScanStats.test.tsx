@@ -41,4 +41,38 @@ describe('ScanStats', () => {
     const zeros = screen.getAllByText('0');
     expect(zeros.length).toBe(5);
   });
+
+  it('renders progress bar color branches for critical/high/medium/low cards', () => {
+    const { container } = render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    expect(container.querySelector('.bg-red-500')).toBeInTheDocument();
+    expect(container.querySelector('.bg-orange-500')).toBeInTheDocument();
+    expect(container.querySelector('.bg-yellow-400')).toBeInTheDocument();
+    expect(container.querySelector('.bg-blue-500')).toBeInTheDocument();
+  });
+
+  it('shows rounded percentages for non-total cards', () => {
+    const stats = { critical: 1, high: 1, medium: 1, low: 0, info: 0 };
+    render(<ScanStats stats={stats} totalVulnerabilities={3} />);
+
+    expect(screen.getAllByText('33% of total').length).toBe(3);
+    expect(screen.getByText('0% of total')).toBeInTheDocument();
+  });
+
+  it('does not render percentage rows for Total card', () => {
+    render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    expect(screen.getAllByText(/% of total/i).length).toBe(4);
+  });
+
+  it('sets progress width to 0% when total is zero', () => {
+    const zeroStats = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    const { container } = render(<ScanStats stats={zeroStats} totalVulnerabilities={0} />);
+
+    const bars = container.querySelectorAll('div.h-full.rounded-full');
+    expect(bars.length).toBe(4);
+    bars.forEach((bar) => {
+      expect((bar as HTMLDivElement).style.width).toBe('0%');
+    });
+  });
 });
