@@ -70,4 +70,54 @@ describe('ToastContainer', () => {
     render(<ToastContainer />);
     expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(2);
   });
+
+  it('applies style mappings for all toast types', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'S message' },
+      { id: 'e', type: 'error', message: 'E message' },
+      { id: 'i', type: 'info', message: 'I message' },
+      { id: 'w', type: 'warning', message: 'W message' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+
+    expect(container.querySelector('.bg-emerald-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-emerald-400')).toBeInTheDocument();
+
+    expect(container.querySelector('.bg-red-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-red-400')).toBeInTheDocument();
+
+    expect(container.querySelector('.bg-sky-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-sky-400')).toBeInTheDocument();
+
+    expect(container.querySelector('.bg-amber-500')).toBeInTheDocument();
+    expect(container.querySelector('.text-amber-400')).toBeInTheDocument();
+  });
+
+  it('dismisses the correct toast when multiple toasts exist', () => {
+    mockToastsList = [
+      { id: 'toast-1', type: 'success', message: 'First' },
+      { id: 'toast-2', type: 'error', message: 'Second' },
+    ];
+    render(<ToastContainer />);
+
+    const dismissButtons = screen.getAllByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismissButtons[1]);
+
+    expect(mockRemoveToast).toHaveBeenCalledWith('toast-2');
+  });
+
+  it('renders one progress row per toast', () => {
+    mockToastsList = [
+      { id: 'a', type: 'success', message: 'A' },
+      { id: 'b', type: 'error', message: 'B' },
+      { id: 'c', type: 'info', message: 'C' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+    const progressRows = Array.from(container.querySelectorAll('div')).filter(
+      (el) => el.classList.contains('h-0.5') && el.classList.contains('bg-slate-800'),
+    );
+    expect(progressRows).toHaveLength(3);
+  });
 });
