@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ErrorBoundary from '../ErrorBoundary';
+import { useState } from 'react';
 
 // Suppress console.error noise from intentional throws
 beforeEach(() => {
@@ -74,6 +75,43 @@ describe('ErrorBoundary — error caught', () => {
     );
     expect(console.error).toHaveBeenCalled();
   });
+
+  it('logs with base [ErrorBoundary] prefix when context is not provided', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorBoundary]'),
+      expect.any(Error),
+      expect.any(String),
+    );
+  });
+
+  it('recovers and renders children after clicking Try again when child no longer throws', () => {
+    function RecoverableBoundaryHarness() {
+      const [shouldThrow, setShouldThrow] = useState(true);
+
+      return (
+        <>
+          <button onClick={() => setShouldThrow(false)}>Recover child</button>
+          <ErrorBoundary>
+            <Bomb shouldThrow={shouldThrow} />
+          </ErrorBoundary>
+        </>
+      );
+    }
+
+    render(<RecoverableBoundaryHarness />);
+    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /recover child/i }));
+    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(screen.getByText('Safe content')).toBeInTheDocument();
+  });
 });
 
 describe('ErrorBoundary — custom fallback', () => {
@@ -97,5 +135,29 @@ describe('ErrorBoundary — custom fallback', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it('passes Error instance and reset callback to fallback renderer', () => {
+    const fallbackSpy = vi.fn((err: Error, _reset: () => void) => <div>Custom fallback: {err.message}</div>);
+
+    render(
+      <ErrorBoundary fallback={fallbackSpy}>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    expect(fallbackSpy).toHaveBeenCalled();
+    const [errorArg, resetArg] = fallbackSpy.mock.calls[0];
+    expect(errorArg).toBeInstanceOf(Error);
+    expect(errorArg.message).toBe('Boom! Test explosion');
+    expect(typeof resetArg).toBe('function');
+    expect(screen.getByText('Custom fallback: Boom! Test explosion')).toBeInTheDocument();
+  });
+});
+
+describe('ErrorBoundary — static API', () => {
+  it('getDerivedStateFromError returns state with provided error', () => {
+    const err = new Error('Static branch test');
+    expect(ErrorBoundary.getDerivedStateFromError(err)).toEqual({ error: err });
   });
 });
