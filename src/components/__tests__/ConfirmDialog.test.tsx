@@ -143,6 +143,50 @@ describe('ConfirmDialog — interactions', () => {
   });
 });
 
+describe('ConfirmDialog — accessibility and icons', () => {
+  it('closes dialog via X icon button (aria-label="Cancel")', () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('Cancel'));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('dialog has aria-modal="true" attribute', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('renders AlertTriangle icon in dialog header', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    const icon = document.querySelector('svg.lucide-alert-triangle');
+    expect(icon).not.toBeNull();
+  });
+});
+
 describe('ConfirmDialog — focus trap (Tab key)', () => {
   it('Tab key from last button wraps to first (cancel)', () => {
     const onConfirm = vi.fn();
