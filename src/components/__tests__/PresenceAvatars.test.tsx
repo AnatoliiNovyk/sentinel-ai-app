@@ -112,4 +112,50 @@ describe('PresenceAvatars — branch coverage (c8 ignore paths)', () => {
     expect(screen.getByText('1 viewing')).toBeInTheDocument();
     expect(mockGetMembersViewing).toHaveBeenCalledWith('report', 'rpt-42');
   });
+
+  it('renders ping animation dot indicator', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' },
+    ]);
+    const { container } = render(
+      <PresenceAvatars contextType="project" contextId="proj-1" />
+    );
+    // Check for animate-ping span (animated dot)
+    const pingSpan = container.querySelector('span.animate-ping');
+    expect(pingSpan).toBeInTheDocument();
+    expect(pingSpan?.classList.contains('bg-emerald-400')).toBe(true);
+  });
+
+  it('applies correct avatar color classes for multiple members', () => {
+    // Create 4 members to verify color cycling
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' },
+      { id: 'p-2', user_id: 'bob456', context_type: 'project', context_id: 'proj-1' },
+      { id: 'p-3', user_id: 'carol789', context_type: 'project', context_id: 'proj-1' },
+      { id: 'p-4', user_id: 'diana012', context_type: 'project', context_id: 'proj-1' },
+    ]);
+    const { container } = render(
+      <PresenceAvatars contextType="project" contextId="proj-1" />
+    );
+    // Get all avatar div elements
+    const avatars = container.querySelectorAll('.rounded-full.flex.items-center');
+    // Each avatar should have a color class
+    expect(avatars.length).toBe(4);
+    const colorClasses = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500'];
+    avatars.forEach((avatar, idx) => {
+      expect(avatar.classList.contains(colorClasses[idx % colorClasses.length])).toBe(true);
+    });
+  });
+
+  it('renders initials for members with different user_id patterns', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'x_user_001', context_type: 'project', context_id: 'proj-1' },
+      { id: 'p-2', user_id: '9trailing', context_type: 'project', context_id: 'proj-1' },
+    ]);
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    // First avatar should show 'X' (first letter of 'x_user_001')
+    expect(screen.getByText('X')).toBeInTheDocument();
+    // Second avatar should show '9' (first letter of '9trailing')
+    expect(screen.getByText('9')).toBeInTheDocument();
+  });
 });
