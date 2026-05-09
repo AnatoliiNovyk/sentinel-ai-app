@@ -251,6 +251,62 @@ describe('ComplianceTab', () => {
     expect(screen.getAllByText('512ms').length).toBeGreaterThan(0);
   });
 
+  it('renders recommendation text in card', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Recommendation')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText('Focus on SOC2 controls to improve score.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders component sub-scores (Remediation, Security, Alerting)', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Overall Compliance Score')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Remediation').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Security').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Alerting').length).toBeGreaterThan(0);
+    // sub-score values from buildDashboard: 72, 68, 80
+    expect(screen.getByText('72')).toBeInTheDocument();
+    expect(screen.getByText('68')).toBeInTheDocument();
+    expect(screen.getByText('80')).toBeInTheDocument();
+  });
+
+  it('renders controls count (compliant/total) in frameworks table', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Compliance Frameworks')).toBeInTheDocument();
+    });
+
+    // SOC2: 17/20, GDPR: 10/18, HIPAA: 5/16
+    expect(screen.getByText('17/20')).toBeInTheDocument();
+    expect(screen.getByText('10/18')).toBeInTheDocument();
+    expect(screen.getByText('5/16')).toBeInTheDocument();
+  });
+
   it('renders 0% severity bars when vulnerability distribution total is zero', async () => {
     const zeroDashboard = buildDashboard(88);
     zeroDashboard.securityPosture.criticalVulnerabilities = 0;
