@@ -433,4 +433,55 @@ describe('CommentThread — timeAgo display', () => {
     fireEvent.click(screen.getByTitle('Open comments'));
     await waitFor(() => expect(screen.getByText(/5m ago/i)).toBeInTheDocument());
   });
+
+  it('shows hours ago for comment from 3 hours ago', async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60000).toISOString();
+    const comment = makeComment({ created_at: threeHoursAgo });
+    mockGetComments.mockResolvedValue([comment]);
+    render(<CommentThread {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTitle('Open comments'));
+    await waitFor(() => expect(screen.getByText(/3h ago/i)).toBeInTheDocument());
+  });
+
+  it('shows locale date string for comment older than 24 hours', async () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60000).toISOString();
+    const comment = makeComment({ created_at: twoDaysAgo });
+    mockGetComments.mockResolvedValue([comment]);
+    render(<CommentThread {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTitle('Open comments'));
+    const expectedDate = new Date(twoDaysAgo).toLocaleDateString();
+    await waitFor(() => expect(screen.getByText(expectedDate)).toBeInTheDocument());
+  });
+});
+
+describe('CommentThread — edit guard', () => {
+  const comment = {
+    id: 'c-edit-guard',
+    vulnerability_id: 'vuln-1',
+    user_id: 'user-1',
+    content: 'Editable comment',
+    created_at: '2026-04-01T10:00:00Z',
+    updated_at: '2026-04-01T10:00:00Z',
+    replies: [],
+  };
+
+  beforeEach(() => {
+    mockGetComments.mockResolvedValue([comment]);
+    mockSubscribeToComments.mockReturnValue(vi.fn());
+    mockUpdateComment.mockResolvedValue(undefined);
+  });
+
+  it('does not call updateComment when edit text is blank', async () => {
+    render(<CommentThread {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTitle('Open comments'));
+    await waitFor(() => screen.getByTitle('Edit comment'));
+    fireEvent.click(screen.getByTitle('Edit comment'));
+    await waitFor(() => screen.getByRole('textbox', { name: /Edit comment/i }));
+    // Clear the textarea
+    fireEvent.change(screen.getByRole('textbox', { name: /Edit comment/i }), { target: { value: '' } });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Save comment'));
+    });
+    expect(mockUpdateComment).not.toHaveBeenCalled();
+  });
 });
