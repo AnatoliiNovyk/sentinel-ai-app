@@ -1,0 +1,19 @@
+Як було:
+- У [src/components/__tests__/ApiRateLimitsPanel.test.tsx](src/components/__tests__/ApiRateLimitsPanel.test.tsx) було 18 тестів і не вистачало перевірок граничних/захисних сценаріїв.
+- Не було окремої перевірки кількості skeleton-рядків у loading-стані.
+- Не було явної перевірки, що при рівно 75% не з'являється warning-повідомлення.
+- Не було тесту на graceful-поведінку при null-конфігу лімітів.
+
+Що зроблено:
+- Додано 3 нові тести у [src/components/__tests__/ApiRateLimitsPanel.test.tsx](src/components/__tests__/ApiRateLimitsPanel.test.tsx):
+  1) перевірка, що під час loading рендериться 4 skeleton-рядки;
+  2) перевірка boundary-умови: при рівно 75% warning-текст не показується;
+  3) перевірка, що при null-конфігу панель рендериться без metric-карток.
+- Стабілізовано наявний тест прогрес-бара через `classList.contains` замість крихкого CSS-селектора.
+- Прогнано focused vitest для файлу: 21/21 passed.
+- Прогнано canonical quality gate (`npm run quality:check`): успішно, `Test Files 114 passed (114)`, `Tests 2941 passed (2941)`.
+
+Що покращило/виправило/додало:
+- Покращено branch coverage для loading/boundary/fallback сценаріїв у панелі API-лімітів.
+- Зменшено флейкі-поведінку тесту прогрес-бара.
+- Підвищено загальну стабільність регресійної перевірки компонента при edge-case вхідних даних.

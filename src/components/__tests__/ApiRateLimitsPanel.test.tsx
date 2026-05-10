@@ -42,6 +42,16 @@ describe('ApiRateLimitsPanel — loading state', () => {
     });
     expect(screen.getByText(/Loading rate limit information/i)).toBeInTheDocument();
   });
+
+  it('renders 4 loading skeleton rows while request is pending', async () => {
+    const { container } = render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Loading rate limit information/i)).toBeInTheDocument(),
+    );
+
+    expect(container.querySelectorAll('.animate-pulse .h-20').length).toBe(4);
+  });
 });
 
 describe('ApiRateLimitsPanel — loaded state', () => {
@@ -123,6 +133,23 @@ describe('ApiRateLimitsPanel — warning state', () => {
     await waitFor(() =>
       expect(screen.getByText(/Nearing limit\. Consider upgrading your plan\./i)).toBeInTheDocument(),
     );
+  });
+
+  it('does not show nearing-limit warning when usage is exactly 75%', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(7.5) // scans_per_month: 7.5/10 = exactly 75%
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByText('75%')).toBeInTheDocument(),
+    );
+
+    expect(screen.queryByText(/Nearing limit\. Consider upgrading your plan\./i)).not.toBeInTheDocument();
   });
 
   it('applies amber warning styling and message when usage is above 75% but below limit', async () => {
@@ -252,6 +279,24 @@ describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {
       expect(screen.getByRole('heading', { name: /API Rate Limits/i })).toBeInTheDocument();
     });
 
-    expect(document.querySelector('.bg-gradient-to-r.from-blue-500.to-blue-600')).toBeInTheDocument();
+    const gradientBar = Array.from(document.querySelectorAll('div')).find((el) =>
+      el.classList.contains('bg-gradient-to-r')
+      && el.classList.contains('from-blue-500')
+      && el.classList.contains('to-blue-600'),
+    );
+    expect(gradientBar).toBeInTheDocument();
+  });
+
+  it('renders without metric cards when config is null', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(null);
+
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /API Rate Limits/i })).toBeInTheDocument(),
+    );
+
+    expect(screen.queryByText('Scans/Month')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reports/Day')).not.toBeInTheDocument();
   });
 });
