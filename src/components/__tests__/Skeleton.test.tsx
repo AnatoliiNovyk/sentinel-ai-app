@@ -9,6 +9,11 @@ describe('SkeletonBlock', () => {
     expect(container.firstChild).toHaveClass('animate-pulse');
   });
 
+  it('uses default skeleton surface classes', () => {
+    const { container } = render(<SkeletonBlock />);
+    expect(container.firstChild).toHaveClass('bg-slate-800', 'rounded');
+  });
+
   it('applies additional className prop', () => {
     const { container } = render(<SkeletonBlock className="h-4 w-24" />);
     expect(container.firstChild).toHaveClass('h-4', 'w-24');
@@ -36,6 +41,12 @@ describe('SkeletonCardGrid', () => {
   it('has aria-busy="true"', () => {
     render(<SkeletonCardGrid />);
     expect(screen.getByRole('generic', { busy: true })).toBeInTheDocument();
+  });
+
+  it('has loading aria-label by default', () => {
+    const { container } = render(<SkeletonCardGrid />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid).toHaveAttribute('aria-label', 'Loading…');
   });
 
   it('renders 3-column layout by default (cols=3)', () => {
@@ -66,6 +77,12 @@ describe('SkeletonCardGrid', () => {
     const { container } = render(<SkeletonCardGrid height="h-48" />);
     const cards = container.querySelectorAll('[class*="h-48"]');
     expect(cards.length).toBeGreaterThan(0);
+  });
+
+  it('uses default card height class when height prop is omitted', () => {
+    const { container } = render(<SkeletonCardGrid />);
+    const cards = container.querySelectorAll('[class*="h-36"]');
+    expect(cards.length).toBe(6);
   });
 
   it('renders zero cards when count is 0', () => {

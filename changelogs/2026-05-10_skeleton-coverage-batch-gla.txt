@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/Skeleton.test.tsx було 19 тестів.
+- Не вистачало окремих перевірок на дефолтні класи базового блока, aria-label для card grid та дефолтну висоту карток.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/Skeleton.test.tsx:
+  1) uses default skeleton surface classes;
+  2) has loading aria-label by default (SkeletonCardGrid);
+  3) uses default card height class when height prop is omitted.
+- Прогнано focused vitest: Skeleton 22/22.
+- Прогнано canonical quality gate: npm run quality:check.
+
+Що покращило/виправило/додало:
+- Розширено покриття базових UI/ARIA дефолтів у Skeleton-компонентах.
+- Знижено ризик регресій у стандартному рендерінгу loading-placeholder станів.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Tests 2953 passed (2953), built in 1.87s, QUALITY_GLA_EXIT:0.
