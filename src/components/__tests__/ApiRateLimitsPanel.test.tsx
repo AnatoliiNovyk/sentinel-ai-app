@@ -125,6 +125,24 @@ describe('ApiRateLimitsPanel — warning state', () => {
     );
   });
 
+  it('applies amber warning styling and message when usage is above 75% but below limit', async () => {
+    mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
+    mockGetCurrentUsage
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    const { container } = render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Nearing limit\. Consider upgrading your plan\./i)).toBeInTheDocument(),
+    );
+
+    expect(container.querySelector('.border-amber-500\\/30.bg-amber-500\\/5')).toBeInTheDocument();
+    expect(container.querySelector('.text-amber-400')).toBeInTheDocument();
+  });
+
   it('caps displayed percentage at 100% when usage exceeds limit', async () => {
     mockGetRateLimitConfig.mockResolvedValue(FREE_LIMITS);
     mockGetCurrentUsage
@@ -170,6 +188,17 @@ describe('ApiRateLimitsPanel — warning state', () => {
     );
     expect(screen.getAllByText('0').length).toBeGreaterThan(0);
   });
+
+  it('renders the reset schedule info box content', async () => {
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Your limits reset on different schedules:/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Scans: Monthly (1st of month)')).toBeInTheDocument();
+    expect(screen.getByText('API: Per-second (rolling window)')).toBeInTheDocument();
+  });
 });
 
 describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {
@@ -214,5 +243,15 @@ describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {
     await waitFor(() =>
       expect(screen.queryByRole('link', { name: /View Plans/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('uses the default gradient progress bar for non-warning metrics', async () => {
+    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /API Rate Limits/i })).toBeInTheDocument();
+    });
+
+    expect(document.querySelector('.bg-gradient-to-r.from-blue-500.to-blue-600')).toBeInTheDocument();
   });
 });

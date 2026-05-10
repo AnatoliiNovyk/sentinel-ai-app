@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/ApiRateLimitsPanel.test.tsx містив 15 тестів.
+- Не були покриті: amber warning styling для 75%+ usage, info box із reset schedule, default gradient progress bar для non-warning metrics.
+
+Що зроблено
+- Додано 3 нові тести в ApiRateLimitsPanel.test.tsx.
+- Перевірено amber warning styling і message для usage above 75% but below limit.
+- Перевірено reset schedule info box content.
+- Перевірено default gradient progress bar branch для non-warning metrics.
+
+Що покращило/виправило/додало
+- Тестів стало 18 замість 15.
+- Покрито додаткові гілки warning/default rendering в ApiRateLimitsPanel.
+- quality:check пройшов: 2902/2902.
