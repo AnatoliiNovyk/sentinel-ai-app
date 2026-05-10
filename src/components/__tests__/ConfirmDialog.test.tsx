@@ -290,4 +290,75 @@ describe('ConfirmDialog — additional coverage', () => {
     const confirmBtn = screen.getByRole('button', { name: /delete/i });
     expect(confirmBtn).toHaveClass('bg-red-600');
   });
+
+  it('auto-focuses Cancel button shortly after opening', () => {
+    vi.useFakeTimers();
+
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    vi.advanceTimersByTime(15);
+    expect(screen.getByText('Cancel')).toHaveFocus();
+
+    vi.useRealTimers();
+  });
+
+  it('does not react to Escape/Enter when mounted with open=false', () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+
+    render(
+      <ConfirmDialog
+        open={false}
+        title="Confirm"
+        message="Really?"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('removes keydown listeners after dialog is closed via rerender', () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+
+    const { rerender } = render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    rerender(
+      <ConfirmDialog
+        open={false}
+        title="Confirm"
+        message="Really?"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
