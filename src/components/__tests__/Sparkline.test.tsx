@@ -98,4 +98,25 @@ describe('Sparkline', () => {
     const lineD = paths[1].getAttribute('d') ?? '';
     expect(lineD.startsWith('M 4 ')).toBe(true);
   });
+
+  it('uses color as gradient stop-color when fillColor is not provided', () => {
+    const { container } = render(<Sparkline data={DATA} color="#22c55e" />);
+    const stops = container.querySelectorAll('stop');
+    expect(stops).toHaveLength(2);
+    expect(stops[0].getAttribute('stop-color')).toBe('#22c55e');
+    expect(stops[1].getAttribute('stop-color')).toBe('#22c55e');
+  });
+
+  it('applies custom strokeWidth to the line path', () => {
+    const { container } = render(<Sparkline data={DATA} strokeWidth={3} />);
+    const paths = container.querySelectorAll('path');
+    const linePath = paths[1];
+    expect(linePath).toHaveAttribute('stroke-width', '3');
+  });
+
+  it('uses custom width and height in viewBox', () => {
+    const { container } = render(<Sparkline data={DATA} width={160} height={52} />);
+    const svg = container.querySelector('svg');
+    expect(svg).toHaveAttribute('viewBox', '0 0 160 52');
+  });
 });
