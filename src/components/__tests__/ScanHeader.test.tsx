@@ -125,4 +125,26 @@ describe('ScanHeader — interactions', () => {
     render(<ScanHeader {...BASE_PROPS} projects={[]} />);
     expect(screen.getByText('All projects (0)')).toBeInTheDocument();
   });
+
+  it('calls onSelectProject with empty string when default "All projects" option is selected', () => {
+    const onSelectProject = vi.fn();
+    render(<ScanHeader {...BASE_PROPS} selectedProjectId="p1" onSelectProject={onSelectProject} />);
+    fireEvent.change(screen.getByRole('combobox', { name: /select project/i }), {
+      target: { value: '' },
+    });
+    expect(onSelectProject).toHaveBeenCalledWith('');
+  });
+});
+
+describe('ScanHeader — additional coverage', () => {
+  it('renders exact placeholder text "All projects (2)" with two projects', () => {
+    render(<ScanHeader {...BASE_PROPS} />);
+    expect(screen.getByText('All projects (2)')).toBeInTheDocument();
+  });
+
+  it('shows "Selected Scan: Historical" in MOCK mode when agentReachable is null (default)', () => {
+    render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" agentReachable={null} />);
+    expect(screen.getByText('Selected Scan: Historical')).toBeInTheDocument();
+    expect(screen.queryByText('DEMO MODE')).not.toBeInTheDocument();
+  });
 });
