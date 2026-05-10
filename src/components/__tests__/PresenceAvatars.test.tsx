@@ -158,4 +158,46 @@ describe('PresenceAvatars — branch coverage (c8 ignore paths)', () => {
     // Second avatar should show '9' (first letter of '9trailing')
     expect(screen.getByText('9')).toBeInTheDocument();
   });
+
+  it('applies wrapped color class to the 9th avatar (index 8)', () => {
+    const members = Array.from({ length: 9 }, (_, i) => ({
+      id: `p-${i}`,
+      user_id: `user${i.toString().padStart(4, '0')}`,
+      context_type: 'project' as const,
+      context_id: 'proj-1',
+    }));
+    mockGetMembersViewing.mockReturnValue(members);
+
+    const { container } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    const avatars = container.querySelectorAll('.w-6.h-6.rounded-full');
+
+    expect(avatars).toHaveLength(9);
+    expect(avatars[8].classList.contains('bg-red-500')).toBe(true);
+  });
+
+  it('uses full short user_id in title when length is less than 8', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'bob', context_type: 'project', context_id: 'proj-1' },
+    ]);
+
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByTitle('User bob')).toBeInTheDocument();
+  });
+
+  it('recomputes members when contextId changes', () => {
+    mockGetMembersViewing.mockImplementation((type, id) => {
+      if (type === 'project' && id === 'proj-1') {
+        return [{ id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' }];
+      }
+      return [{ id: 'p-2', user_id: 'bob456', context_type: 'project', context_id: 'proj-2' }];
+    });
+
+    const { rerender } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByText('A')).toBeInTheDocument();
+
+    rerender(<PresenceAvatars contextType="project" contextId="proj-2" />);
+    expect(screen.getByText('B')).toBeInTheDocument();
+    expect(mockGetMembersViewing).toHaveBeenCalledWith('project', 'proj-1');
+    expect(mockGetMembersViewing).toHaveBeenCalledWith('project', 'proj-2');
+  });
 });
