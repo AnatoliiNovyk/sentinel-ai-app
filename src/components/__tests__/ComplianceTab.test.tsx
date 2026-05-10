@@ -387,4 +387,49 @@ describe('ComplianceTab', () => {
     expect(screen.getByText('Failed Actions')).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();
   });
+
+  it('calls getDashboard with userId before projectId', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="proj-999" userId="usr-abc" />);
+
+    await waitFor(() => {
+      expect(mockGetDashboard).toHaveBeenCalled();
+    });
+
+    expect(mockGetDashboard).toHaveBeenCalledWith('usr-abc', 'proj-999');
+  });
+
+  it('renders green score card background classes for score >= 85', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(90),
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Overall Compliance Score')).toBeInTheDocument();
+    });
+
+    expect(container.querySelector('.bg-green-50.border-green-200')).toBeInTheDocument();
+  });
+
+  it('renders red score card background classes for score below 50', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(45),
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Overall Compliance Score')).toBeInTheDocument();
+    });
+
+    expect(container.querySelector('.bg-red-50.border-red-200')).toBeInTheDocument();
+  });
 });

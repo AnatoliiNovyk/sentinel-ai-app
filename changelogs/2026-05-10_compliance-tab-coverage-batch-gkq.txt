@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/ComplianceTab.test.tsx містив 17 тестів.
+- Не були покриті: порядок аргументів getDashboard(userId, projectId), CSS фоновий клас score card для green branch (>=85), CSS фоновий клас score card для red branch (<50).
+
+Що зроблено
+- Додано 3 нові тести у ComplianceTab.test.tsx.
+- Перевірено виклик getDashboard з коректним порядком аргументів (userId, projectId).
+- Перевірено green background класи score card при score >= 85.
+- Перевірено red background класи score card при score < 50.
+
+Що покращило/виправило/додало
+- Тестів стало 20 замість 17.
+- Покрито додаткові гілки API-виклику та score-card стилізації у ComplianceTab.
+- quality:check пройшов: 2923/2923.
