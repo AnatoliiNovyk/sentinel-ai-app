@@ -1,0 +1,15 @@
+Як було
+- src/components/__tests__/ErrorBoundary.test.tsx містив 18 тестів.
+- Не були явно перевірені: точний default heading без context, поведінка лог-префікса при context="", відсутність дефолтного Try again при custom fallback.
+
+Що зроблено
+- Додано 3 нові тести у ErrorBoundary.test.tsx.
+- Перевірено точний текст default heading: "Something went wrong".
+- Перевірено, що для context="" використовується базовий лог-префікс [ErrorBoundary] без суфікса "/ ...".
+- Перевірено, що при custom fallback не рендериться дефолтна кнопка Try again.
+
+Що покращило/виправило/додало
+- Тестів стало 21 замість 18.
+- Покрито додаткові гілки fallback-рендерингу та логування.
+- Focused vitest пройдено: 21/21.
+- quality:check пройдено: Test Files 114 passed (114), Tests 2935 passed (2935), build completed.

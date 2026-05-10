@@ -163,6 +163,15 @@ describe('ErrorBoundary — static API', () => {
 });
 
 describe('ErrorBoundary — additional coverage', () => {
+  it('shows exact default heading when context is not provided', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+  });
+
   it('logs with context prefix [ErrorBoundary / Dashboard] when context is provided', () => {
     render(
       <ErrorBoundary context="Dashboard">
@@ -171,6 +180,25 @@ describe('ErrorBoundary — additional coverage', () => {
     );
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('[ErrorBoundary / Dashboard]'),
+      expect.any(Error),
+      expect.any(String),
+    );
+  });
+
+  it('uses base log prefix when context is an empty string', () => {
+    render(
+      <ErrorBoundary context="">
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorBoundary]'),
+      expect.any(Error),
+      expect.any(String),
+    );
+    expect(console.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorBoundary / ]'),
       expect.any(Error),
       expect.any(String),
     );
@@ -199,6 +227,17 @@ describe('ErrorBoundary — additional coverage', () => {
 });
 
 describe('ErrorBoundary — icons and styling', () => {
+  it('does not render default Try again button when custom fallback is provided', () => {
+    render(
+      <ErrorBoundary fallback={(err) => <div>Custom only: {err.message}</div>}>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Custom only: Boom! Test explosion')).toBeInTheDocument();
+  });
+
   it('renders AlertTriangle icon in fallback UI', () => {
     const { container } = render(
       <ErrorBoundary>
