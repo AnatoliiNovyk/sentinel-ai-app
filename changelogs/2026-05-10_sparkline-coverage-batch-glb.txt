@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/Sparkline.test.tsx було 19 тестів.
+- Не вистачало окремих перевірок для дефолтного viewBox, дефолтного stroke width і зв'язку fill area-path з фактичним id градієнта.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/Sparkline.test.tsx:
+  1) uses default viewBox dimensions when width and height are omitted;
+  2) uses default stroke width of 1.5 for line path;
+  3) links area path fill url to the rendered linearGradient id.
+- Прогнано focused vitest: Sparkline 22/22.
+- Прогнано canonical quality gate: npm run quality:check.
+
+Що покращило/виправило/додало:
+- Розширено покриття дефолтних візуальних контрактів Sparkline.
+- Додано перевірку цілісності зв'язку gradient id і area fill, що знижує ризик регресії в SVG-рендерінгу.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 96.61s, built in 1.82s, QUALITY_GLB_EXIT:0.

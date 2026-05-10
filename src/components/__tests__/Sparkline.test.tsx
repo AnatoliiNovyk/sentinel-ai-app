@@ -145,4 +145,28 @@ describe('Sparkline', () => {
     expect(halo).toHaveAttribute('fill-opacity', '0.2');
     expect(halo).toHaveAttribute('fill', '#ef4444');
   });
+
+  it('uses default viewBox dimensions when width and height are omitted', () => {
+    const { container } = render(<Sparkline data={DATA} />);
+    const svg = container.querySelector('svg');
+
+    expect(svg).toHaveAttribute('viewBox', '0 0 120 40');
+  });
+
+  it('uses default stroke width of 1.5 for line path', () => {
+    const { container } = render(<Sparkline data={DATA} />);
+    const paths = container.querySelectorAll('path');
+    const linePath = paths[1];
+
+    expect(linePath).toHaveAttribute('stroke-width', '1.5');
+  });
+
+  it('links area path fill url to the rendered linearGradient id', () => {
+    const { container } = render(<Sparkline data={DATA} color="#06b6d4" />);
+    const gradient = container.querySelector('linearGradient');
+    const areaPath = container.querySelectorAll('path')[0];
+
+    expect(gradient).toBeInTheDocument();
+    expect(areaPath).toHaveAttribute('fill', `url(#${gradient?.getAttribute('id')})`);
+  });
 });
