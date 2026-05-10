@@ -119,4 +119,30 @@ describe('Sparkline', () => {
     const svg = container.querySelector('svg');
     expect(svg).toHaveAttribute('viewBox', '0 0 160 52');
   });
+
+  it('applies overflow-visible class to svg container', () => {
+    const { container } = render(<Sparkline data={DATA} />);
+    const svg = container.querySelector('svg');
+    expect(svg).toHaveClass('overflow-visible');
+  });
+
+  it('renders area path fill using generated spark gradient id', () => {
+    const { container } = render(<Sparkline data={DATA} color="#3b82f6" />);
+    const paths = container.querySelectorAll('path');
+    const areaPath = paths[0];
+    const fill = areaPath.getAttribute('fill') ?? '';
+
+    expect(fill.startsWith('url(#spark-')).toBe(true);
+    expect(fill.endsWith(')')).toBe(true);
+  });
+
+  it('renders halo circle with radius 5 and opacity 0.2', () => {
+    const { container } = render(<Sparkline data={DATA} color="#ef4444" />);
+    const circles = container.querySelectorAll('circle');
+    const halo = circles[1];
+
+    expect(halo).toHaveAttribute('r', '5');
+    expect(halo).toHaveAttribute('fill-opacity', '0.2');
+    expect(halo).toHaveAttribute('fill', '#ef4444');
+  });
 });

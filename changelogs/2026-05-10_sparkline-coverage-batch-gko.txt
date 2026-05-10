@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/Sparkline.test.tsx містив 16 тестів.
+- Не були покриті: клас overflow-visible на SVG, формат fill URL для area path, атрибути halo circle (r=5, fill-opacity=0.2).
+
+Що зроблено
+- Додано 3 нові тести у Sparkline.test.tsx.
+- Перевірено overflow-visible клас у SVG контейнера.
+- Перевірено що area path використовує generated gradient URL виду url(#spark-...).
+- Перевірено halo circle: r=5, fill-opacity=0.2 та відповідний fill color.
+
+Що покращило/виправило/додало
+- Тестів стало 19 замість 16.
+- Покрито додаткові гілки рендеру SVG/градієнта/halo в Sparkline.
+- quality:check пройшов: 2917/2917.
