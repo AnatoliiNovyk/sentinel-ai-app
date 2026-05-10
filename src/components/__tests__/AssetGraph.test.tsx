@@ -241,4 +241,37 @@ describe('AssetGraph — with vulns', () => {
 
     expect(screen.getByText('API')).toBeInTheDocument();
   });
+
+  it('renders Database icon for redis-prefixed asset label', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('redis-cache.internal', 'medium')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-database')).toBeInTheDocument();
+  });
+
+  it('renders Globe icon for lb-prefixed asset label', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('lb-frontend.internal', 'low')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-globe')).toBeInTheDocument();
+  });
+
+  it('renders Box icon for storage-prefixed asset label', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('storage-main.internal', 'high')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-box')).toBeInTheDocument();
+  });
 });

@@ -272,19 +272,19 @@ describe('ApiRateLimitsPanel — usage calls and plan CTA', () => {
     );
   });
 
-  it('uses the default gradient progress bar for non-warning metrics', async () => {
-    render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
+  it('applies default card styling when all metrics are within safe limits', async () => {
+    const { container } = render(<ApiRateLimitsPanel userId="user-1" planId="free" />);
 
+    // Wait for loaded state — metric labels only appear after loading completes
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /API Rate Limits/i })).toBeInTheDocument();
+      expect(screen.getByText('Scans/Month')).toBeInTheDocument();
     });
 
-    const gradientBar = Array.from(document.querySelectorAll('div')).find((el) =>
-      el.classList.contains('bg-gradient-to-r')
-      && el.classList.contains('from-blue-500')
-      && el.classList.contains('to-blue-600'),
+    // All 4 metrics at 0% → non-warning, non-exceeded → border-slate-700 card style
+    const defaultCards = Array.from(container.querySelectorAll('div')).filter((el) =>
+      el.classList.contains('border-slate-700'),
     );
-    expect(gradientBar).toBeInTheDocument();
+    expect(defaultCards.length).toBe(4);
   });
 
   it('renders without metric cards when config is null', async () => {
