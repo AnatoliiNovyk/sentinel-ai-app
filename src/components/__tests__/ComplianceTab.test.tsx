@@ -332,4 +332,59 @@ describe('ComplianceTab', () => {
     );
     expect(zeroWidthBars.length).toBeGreaterThanOrEqual(4);
   });
+
+  it('renders alert rules metrics: rulesCreated, alertsGenerated, falsePositivesRate', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Alert Rules')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Rules Created')).toBeInTheDocument();
+    expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Alerts Generated')).toBeInTheDocument();
+    expect(screen.getAllByText('18').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('False Positives')).toBeInTheDocument();
+    expect(screen.getByText('11%')).toBeInTheDocument();
+  });
+
+  it('renders progress bar with orange class for score 50-69', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(55),
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('55')).toBeInTheDocument();
+    });
+
+    const progressBar = container.querySelector('.h-2.rounded-full.bg-orange-600');
+    expect(progressBar).toBeInTheDocument();
+    expect((progressBar as HTMLElement).style.width).toBe('55%');
+  });
+
+  it('renders remediation summary section with successful and failed actions stats', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remediation Summary')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Successful Actions')).toBeInTheDocument();
+    expect(screen.getByText('25')).toBeInTheDocument();
+    expect(screen.getByText('Failed Actions')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+  });
 });
