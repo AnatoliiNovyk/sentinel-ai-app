@@ -135,4 +135,29 @@ describe('ScanStats', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
   });
+
+  it('rounds uneven percentage values to the nearest whole number', () => {
+    const stats = { critical: 2, high: 1, medium: 0, low: 0, info: 0 };
+    render(<ScanStats stats={stats} totalVulnerabilities={3} />);
+
+    expect(screen.getByText('67% of total')).toBeInTheDocument();
+    expect(screen.getByText('33% of total')).toBeInTheDocument();
+  });
+
+  it('renders the Total card as the fifth summary card', () => {
+    const { container } = render(<ScanStats stats={defaultStats} totalVulnerabilities={29} />);
+
+    expect(screen.getByText('Total')).toBeInTheDocument();
+    expect(screen.getByText('29')).toBeInTheDocument();
+    expect(container.querySelectorAll('div.h-full.rounded-full')).toHaveLength(4);
+  });
+
+  it('keeps the info severity count folded into the total card only', () => {
+    const stats = { critical: 0, high: 0, medium: 0, low: 0, info: 4 };
+    render(<ScanStats stats={stats} totalVulnerabilities={4} />);
+
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.queryByText('Info')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/% of total/i)).toHaveLength(4);
+  });
 });

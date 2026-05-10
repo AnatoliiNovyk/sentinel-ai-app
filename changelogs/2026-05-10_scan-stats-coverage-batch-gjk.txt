@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/ScanStats.test.tsx містив 16 тестів.
+- Не були покриті: rounding для нерівних percentage values, окрема перевірка total card як summary card, та ситуація з info count, який має лишатися частиною Total card.
+
+Що зроблено
+- Додано 3 нові тести в ScanStats.test.tsx.
+- Перевірено rounding для uneven percentage values.
+- Перевірено Total card як п'яту summary card.
+- Перевірено, що info severity folded into total card only.
+
+Що покращило/виправило/додало
+- Тестів стало 19 замість 16.
+- Покрито додаткові гілки рендеру та rounding в ScanStats.
+- quality:check пройшов: 2905/2905.
