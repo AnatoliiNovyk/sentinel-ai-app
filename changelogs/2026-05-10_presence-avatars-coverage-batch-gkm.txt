@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/PresenceAvatars.test.tsx містив 15 тестів.
+- Не були покриті: static online-dot span, класи ring/hover на avatar chip, memoized поведінка при rerender з тими самими props.
+
+Що зроблено
+- Додано 3 нові тести в PresenceAvatars.test.tsx.
+- Перевірено static online status dot з class bg-emerald-500.
+- Перевірено наявність ring-2/ring-slate-900/hover:scale-110 класів на avatar chip.
+- Перевірено, що getMembersViewing не викликається повторно при rerender з тими самими props.
+
+Що покращило/виправило/додало
+- Тестів стало 18 замість 15.
+- Покрито додаткові гілки стилізації та useMemo-поведінки в PresenceAvatars.
+- quality:check пройшов: 2911/2911.

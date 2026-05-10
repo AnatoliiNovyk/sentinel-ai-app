@@ -200,4 +200,39 @@ describe('PresenceAvatars — branch coverage (c8 ignore paths)', () => {
     expect(mockGetMembersViewing).toHaveBeenCalledWith('project', 'proj-1');
     expect(mockGetMembersViewing).toHaveBeenCalledWith('project', 'proj-2');
   });
+
+  it('renders static online status dot with bg-emerald-500 class', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' },
+    ]);
+
+    const { container } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(container.querySelector('span.bg-emerald-500')).toBeInTheDocument();
+  });
+
+  it('applies ring and hover scale classes to avatar chips', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' },
+    ]);
+
+    const { container } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    const avatar = container.querySelector('.w-6.h-6.rounded-full');
+
+    expect(avatar).toBeInTheDocument();
+    expect(avatar?.classList.contains('ring-2')).toBe(true);
+    expect(avatar?.classList.contains('ring-slate-900')).toBe(true);
+    expect(avatar?.classList.contains('hover:scale-110')).toBe(true);
+  });
+
+  it('does not recompute members on rerender with same props', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'proj-1' },
+    ]);
+
+    const { rerender } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(mockGetMembersViewing).toHaveBeenCalledTimes(1);
+
+    rerender(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(mockGetMembersViewing).toHaveBeenCalledTimes(1);
+  });
 });
