@@ -227,4 +227,62 @@ describe('ToastContainer', () => {
     const borderedCards = container.querySelectorAll('.border-slate-700');
     expect(borderedCards.length).toBeGreaterThanOrEqual(4);
   });
+
+  it('renders type-specific icon color classes inside each toast card', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'Success' },
+      { id: 'e', type: 'error', message: 'Error' },
+      { id: 'i', type: 'info', message: 'Info' },
+      { id: 'w', type: 'warning', message: 'Warning' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+
+    const successCard = screen.getByText('Success').closest('div.relative');
+    const errorCard = screen.getByText('Error').closest('div.relative');
+    const infoCard = screen.getByText('Info').closest('div.relative');
+    const warningCard = screen.getByText('Warning').closest('div.relative');
+
+    expect(successCard?.querySelector('svg.text-emerald-400')).toBeInTheDocument();
+    expect(errorCard?.querySelector('svg.text-red-400')).toBeInTheDocument();
+    expect(infoCard?.querySelector('svg.text-sky-400')).toBeInTheDocument();
+    expect(warningCard?.querySelector('svg.text-amber-400')).toBeInTheDocument();
+
+    expect(container.querySelectorAll('button[aria-label="Dismiss"] svg').length).toBe(4);
+  });
+
+  it('dismisses first toast id when first Dismiss button is clicked', () => {
+    mockToastsList = [
+      { id: 'toast-1', type: 'success', message: 'First' },
+      { id: 'toast-2', type: 'warning', message: 'Second' },
+    ];
+
+    render(<ToastContainer />);
+    const dismissButtons = screen.getAllByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismissButtons[0]);
+
+    expect(mockRemoveToast).toHaveBeenCalledWith('toast-1');
+  });
+
+  it('renders progress track and colored progress fill for toast type', () => {
+    mockToastsList = [{ id: 'toast-1', type: 'warning', message: 'Watch out' }];
+
+    const { container } = render(<ToastContainer />);
+    const progressTrack = Array.from(container.querySelectorAll('div')).find(
+      (el) =>
+        el.classList.contains('h-0.5') &&
+        el.classList.contains('bg-slate-800') &&
+        el.classList.contains('overflow-hidden') &&
+        el.classList.contains('rounded-b-lg'),
+    );
+    const progressFill = Array.from(container.querySelectorAll('div')).find(
+      (el) =>
+        el.classList.contains('h-full') &&
+        el.classList.contains('bg-amber-500') &&
+        el.classList.contains('opacity-60'),
+    );
+
+    expect(progressTrack).toBeInTheDocument();
+    expect(progressFill).toBeInTheDocument();
+  });
 });

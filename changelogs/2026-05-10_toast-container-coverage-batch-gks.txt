@@ -1,0 +1,15 @@
+Як було
+- src/components/__tests__/ToastContainer.test.tsx містив 18 тестів.
+- Не були явно перевірені: зв'язка кольору іконки з типом toast у межах конкретної картки, dismiss першого елемента у списку з кількох toast, структура прогрес-бару (трек + fill) для warning toast.
+
+Що зроблено
+- Додано 3 нові тести у ToastContainer.test.tsx.
+- Перевірено type-specific icon color класи всередині відповідних toast-карток (success/error/info/warning).
+- Перевірено dismiss першого toast через першу кнопку Dismiss.
+- Перевірено наявність progress track та warning progress fill (bg-amber-500 + opacity-60).
+
+Що покращило/виправило/додало
+- Тестів стало 21 замість 18.
+- Покрито додаткові UI-гілки списку toast і візуальної індикації прогресу.
+- Focused vitest пройдено: 21/21.
+- quality:check пройдено: 2929/2929.
