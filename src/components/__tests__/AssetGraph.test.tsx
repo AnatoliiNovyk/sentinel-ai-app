@@ -57,6 +57,14 @@ describe('AssetGraph — with vulns', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
+  it('renders project tooltip text for the center node', () => {
+    render(
+      <AssetGraph projectName="my.project.env" vulns={[makeVuln('api.example.com')]} />,
+    );
+
+    expect(screen.getByText('Project: my.project.env')).toBeInTheDocument();
+  });
+
   it('shows "Asset Topology" heading', () => {
     render(
       <AssetGraph projectName="TestProject" vulns={[makeVuln('api.example.com')]} />,
@@ -210,5 +218,27 @@ describe('AssetGraph — with vulns', () => {
 
     expect(container.querySelector('.lucide-cloud')).toBeInTheDocument();
     expect(container.querySelector('.lucide-file-code')).toBeInTheDocument();
+  });
+
+  it('renders fallback box icon for unknown asset labels', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('mystery-host.internal', 'info')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-box')).toBeInTheDocument();
+  });
+
+  it('uses first segment when rendering asset labels with dots', () => {
+    render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('api.prod.example.com', 'high')]}
+      />,
+    );
+
+    expect(screen.getByText('API')).toBeInTheDocument();
   });
 });

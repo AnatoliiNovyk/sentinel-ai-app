@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/AssetGraph.test.tsx містив 15 тестів.
+- Не були покриті: tooltip проектного вузла, fallback Box-іконка для невідомих asset labels, та сценарій з dotted asset labels.
+
+Що зроблено
+- Додано 3 нові тести в AssetGraph.test.tsx.
+- Перевірено project tooltip для center node.
+- Перевірено fallback Box icon для невідомого asset label.
+- Перевірено рендер asset labels з першою частиною до крапки.
+
+Що покращило/виправило/додало
+- Тестів стало 18 замість 15.
+- Покрито додаткові гілки рендеру AssetGraph та AssetIcon.
+- quality:check пройшов: 2899/2899.
