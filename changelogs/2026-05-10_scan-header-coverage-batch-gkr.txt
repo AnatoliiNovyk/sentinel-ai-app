@@ -1,0 +1,15 @@
+Як було
+- src/components/__tests__/ScanHeader.test.tsx містив 18 тестів.
+- Не були покриті: title-атрибут селекта проєктів, title-атрибут кнопки New Scan, рендер іконки HelpCircle у UNKNOWN mode.
+
+Що зроблено
+- Додано 3 нові тести у ScanHeader.test.tsx.
+- Перевірено наявність title="Select project" у селекта проєктів.
+- Перевірено наявність title="Start a new scan" у кнопки New Scan.
+- Перевірено рендер HelpCircle-іконки у бейджі для UNKNOWN mode.
+
+Що покращило/виправило/додало
+- Тестів стало 21 замість 18.
+- Покрито додаткові UI-гілки доступності (title) та візуальної індикації стану UNKNOWN.
+- Focused vitest пройдено: 21/21.
+- quality:check пройдено: 2926/2926.

@@ -147,4 +147,19 @@ describe('ScanHeader — additional coverage', () => {
     expect(screen.getByText('Selected Scan: Historical')).toBeInTheDocument();
     expect(screen.queryByText('DEMO MODE')).not.toBeInTheDocument();
   });
+
+  it('project select includes title attribute "Select project"', () => {
+    render(<ScanHeader {...BASE_PROPS} />);
+    expect(screen.getByTitle('Select project')).toBeInTheDocument();
+  });
+
+  it('new scan button includes title attribute "Start a new scan"', () => {
+    render(<ScanHeader {...BASE_PROPS} />);
+    expect(screen.getByTitle('Start a new scan')).toBeInTheDocument();
+  });
+
+  it('renders HelpCircle icon in UNKNOWN mode badge', () => {
+    const { container } = render(<ScanHeader {...BASE_PROPS} currentMode="UNKNOWN" />);
+    expect(container.querySelector('.lucide-help-circle')).toBeInTheDocument();
+  });
 });
