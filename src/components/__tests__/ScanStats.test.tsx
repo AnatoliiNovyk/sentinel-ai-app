@@ -160,4 +160,28 @@ describe('ScanStats', () => {
     expect(screen.queryByText('Info')).not.toBeInTheDocument();
     expect(screen.getAllByText(/% of total/i)).toHaveLength(4);
   });
+
+  it('uses totalVulnerabilities prop for Total card even when stats sum is different', () => {
+    const stats = { critical: 1, high: 1, medium: 1, low: 1, info: 10 };
+    render(<ScanStats stats={stats} totalVulnerabilities={3} />);
+
+    expect(screen.getByText('Total')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('renders percentages above 100 when a count is greater than total', () => {
+    const stats = { critical: 5, high: 0, medium: 0, low: 0, info: 0 };
+    const { container } = render(<ScanStats stats={stats} totalVulnerabilities={4} />);
+
+    expect(screen.getByText('125% of total')).toBeInTheDocument();
+    const bars = container.querySelectorAll('div.h-full.rounded-full');
+    expect(bars[0]).toHaveStyle('width: 125%');
+  });
+
+  it('shows 0% on all four severity cards when only info contributes to total', () => {
+    const stats = { critical: 0, high: 0, medium: 0, low: 0, info: 4 };
+    render(<ScanStats stats={stats} totalVulnerabilities={4} />);
+
+    expect(screen.getAllByText('0% of total')).toHaveLength(4);
+  });
 });

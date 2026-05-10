@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/ScanStats.test.tsx було 19 тестів.
+- Не вистачало edge-case перевірок для сценаріїв, де total не збігається із сумою stats, а також для >100% та нульових відсотків у видимих severity-картках.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ScanStats.test.tsx:
+  1) uses totalVulnerabilities prop for Total card even when stats sum is different;
+  2) renders percentages above 100 when a count is greater than total;
+  3) shows 0% on all four severity cards when only info contributes to total.
+- Прогнано focused vitest: ScanStats 22/22.
+- Прогнано canonical quality gate: npm run quality:check.
+
+Що покращило/виправило/додало:
+- Підсилено перевірку edge-case логіки відображення відсотків у ScanStats.
+- Знижено ризик тихих регресій у Total/percentage розрахунках.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), built in 1.85s, QUALITY_GKZ_EXIT:0.
