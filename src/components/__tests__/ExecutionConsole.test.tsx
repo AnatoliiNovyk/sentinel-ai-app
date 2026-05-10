@@ -312,4 +312,55 @@ echo two`}
 
     expect(screen.getByText(/Targeting asset environment: WINDOWS/i)).toBeInTheDocument();
   });
+
+  it('logs "Preparing execution environment..." after sequence', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText('Preparing execution environment...')).toBeInTheDocument();
+  });
+
+  it('logs "Running pre-flight security checks..." after sequence', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText('Running pre-flight security checks...')).toBeInTheDocument();
+  });
+
+  it('logs "Resource state updated successfully." after sequence', async () => {
+    render(
+      <ExecutionConsole
+        code="fix.sh"
+        type="linux"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByText('Resource state updated successfully.')).toBeInTheDocument();
+  });
 });
