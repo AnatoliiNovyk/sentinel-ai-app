@@ -235,4 +235,47 @@ describe('PresenceAvatars — branch coverage (c8 ignore paths)', () => {
     rerender(<PresenceAvatars contextType="project" contextId="proj-1" />);
     expect(mockGetMembersViewing).toHaveBeenCalledTimes(1);
   });
+
+  it('recomputes members when contextType changes', () => {
+    mockGetMembersViewing.mockImplementation((type, id) => {
+      if (type === 'project' && id === 'ctx-1') {
+        return [{ id: 'p-1', user_id: 'alice123', context_type: 'project', context_id: 'ctx-1' }];
+      }
+      return [{ id: 'p-2', user_id: 'report999', context_type: 'report', context_id: 'ctx-1' }];
+    });
+
+    const { rerender } = render(<PresenceAvatars contextType="project" contextId="ctx-1" />);
+    expect(screen.getByText('A')).toBeInTheDocument();
+
+    rerender(<PresenceAvatars contextType="report" contextId="ctx-1" />);
+    expect(screen.getByText('R')).toBeInTheDocument();
+    expect(mockGetMembersViewing).toHaveBeenCalledWith('project', 'ctx-1');
+    expect(mockGetMembersViewing).toHaveBeenCalledWith('report', 'ctx-1');
+  });
+
+  it('applies wrapped blue color class to the 10th avatar (index 9)', () => {
+    const members = Array.from({ length: 10 }, (_, i) => ({
+      id: `p-${i}`,
+      user_id: `user${i.toString().padStart(4, '0')}`,
+      context_type: 'project' as const,
+      context_id: 'proj-1',
+    }));
+    mockGetMembersViewing.mockReturnValue(members);
+
+    const { container } = render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    const avatars = container.querySelectorAll('.w-6.h-6.rounded-full');
+
+    expect(avatars).toHaveLength(10);
+    expect(avatars[9].classList.contains('bg-blue-500')).toBe(true);
+  });
+
+  it('keeps full 8-character user_id in avatar title', () => {
+    mockGetMembersViewing.mockReturnValue([
+      { id: 'p-1', user_id: 'abcdefgh', context_type: 'project', context_id: 'proj-1' },
+    ]);
+
+    render(<PresenceAvatars contextType="project" contextId="proj-1" />);
+    expect(screen.getByTitle('User abcdefgh')).toBeInTheDocument();
+  });
+
 });

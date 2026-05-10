@@ -1,0 +1,15 @@
+Як було
+- src/components/__tests__/PresenceAvatars.test.tsx містив 18 тестів.
+- Не були явно перевірені: перерахунок при зміні contextType, modulo-обгортка кольорів для 10-го аватара, edge-case title для user_id рівно 8 символів.
+
+Що зроблено
+- Додано 3 нові тести у PresenceAvatars.test.tsx.
+- Перевірено перерахунок members при зміні contextType (project -> report) для того самого contextId.
+- Перевірено, що 10-й аватар (index 9) отримує обгорнутий клас кольору bg-blue-500.
+- Перевірено, що title зберігає всі 8 символів user_id без обрізання.
+
+Що покращило/виправило/додало
+- Тестів стало 21 замість 18.
+- Покрито додаткові гілки useMemo-залежностей і modulo-стилізації аватарів.
+- Focused vitest пройдено: 21/21.
+- quality:check пройдено: Test Files 114 passed (114), Tests 2938 passed (2938), build completed.
