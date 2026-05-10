@@ -169,4 +169,29 @@ describe('ToastContainer', () => {
     expect(liveRegion?.classList.contains('right-6')).toBe(true);
     expect(liveRegion?.classList.contains('z-[60]')).toBe(true);
   });
+
+  it('each toast card has bg-slate-900 background class', () => {
+    mockToastsList = [
+      { id: 'a', type: 'success', message: 'Alpha' },
+      { id: 'b', type: 'error', message: 'Beta' },
+    ];
+    const { container } = render(<ToastContainer />);
+    const cards = container.querySelectorAll('.bg-slate-900');
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('outer aria-live container has pointer-events-none class', () => {
+    mockToastsList = [{ id: 'toast-1', type: 'warning', message: 'Watch out' }];
+    const { container } = render(<ToastContainer />);
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    expect(liveRegion?.classList.contains('pointer-events-none')).toBe(true);
+  });
+
+  it('calls removeToast exactly once when Dismiss is clicked', () => {
+    mockToastsList = [{ id: 'toast-x', type: 'success', message: 'Done' }];
+    render(<ToastContainer />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(mockRemoveToast).toHaveBeenCalledTimes(1);
+    expect(mockRemoveToast).toHaveBeenCalledWith('toast-x');
+  });
 });
