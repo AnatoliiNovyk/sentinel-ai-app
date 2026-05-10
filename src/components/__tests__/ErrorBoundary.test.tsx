@@ -162,6 +162,42 @@ describe('ErrorBoundary — static API', () => {
   });
 });
 
+describe('ErrorBoundary — additional coverage', () => {
+  it('logs with context prefix [ErrorBoundary / Dashboard] when context is provided', () => {
+    render(
+      <ErrorBoundary context="Dashboard">
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorBoundary / Dashboard]'),
+      expect.any(Error),
+      expect.any(String),
+    );
+  });
+
+  it('error message paragraph has text-slate-500 class', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    const errMsg = screen.getByText('Boom! Test explosion');
+    expect(errMsg).toHaveClass('text-slate-500');
+  });
+
+  it('renders multiple children when no error occurs', () => {
+    render(
+      <ErrorBoundary>
+        <div>Child 1</div>
+        <div>Child 2</div>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText('Child 1')).toBeInTheDocument();
+    expect(screen.getByText('Child 2')).toBeInTheDocument();
+  });
+});
+
 describe('ErrorBoundary — icons and styling', () => {
   it('renders AlertTriangle icon in fallback UI', () => {
     const { container } = render(
