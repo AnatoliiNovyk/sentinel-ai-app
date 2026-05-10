@@ -194,4 +194,37 @@ describe('ToastContainer', () => {
     expect(mockRemoveToast).toHaveBeenCalledTimes(1);
     expect(mockRemoveToast).toHaveBeenCalledWith('toast-x');
   });
+
+  it('aria-live container includes responsive max-width class', () => {
+    mockToastsList = [{ id: 'toast-1', type: 'info', message: 'Test' }];
+    const { container } = render(<ToastContainer />);
+
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    expect(liveRegion?.classList.contains('w-80')).toBe(true);
+    expect(liveRegion?.classList.contains('max-w-[calc(100vw-1.5rem)]')).toBe(true);
+  });
+
+  it('toast cards have pointer-events-auto class', () => {
+    mockToastsList = [
+      { id: 'a', type: 'success', message: 'Alpha' },
+      { id: 'b', type: 'error', message: 'Beta' },
+    ];
+    const { container } = render(<ToastContainer />);
+
+    const cards = container.querySelectorAll('.pointer-events-auto');
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('applies border-slate-700 class to all toast types', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'S' },
+      { id: 'e', type: 'error', message: 'E' },
+      { id: 'i', type: 'info', message: 'I' },
+      { id: 'w', type: 'warning', message: 'W' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+    const borderedCards = container.querySelectorAll('.border-slate-700');
+    expect(borderedCards.length).toBeGreaterThanOrEqual(4);
+  });
 });

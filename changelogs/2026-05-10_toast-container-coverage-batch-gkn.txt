@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/ToastContainer.test.tsx містив 15 тестів.
+- Не були покриті: max-width клас у aria-live контейнера, pointer-events-auto на toast cards, спільний border-slate-700 для всіх toast типів.
+
+Що зроблено
+- Додано 3 нові тести у ToastContainer.test.tsx.
+- Перевірено класи w-80 і max-w-[calc(100vw-1.5rem)] для зовнішнього контейнера.
+- Перевірено, що toast cards мають pointer-events-auto.
+- Перевірено, що для success/error/info/warning рендериться border-slate-700.
+
+Що покращило/виправило/додало
+- Тестів стало 18 замість 15.
+- Покрито додаткові гілки контейнерної стилізації та карток у ToastContainer.
+- quality:check пройшов: 2914/2914.
