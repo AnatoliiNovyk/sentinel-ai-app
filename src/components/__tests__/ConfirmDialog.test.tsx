@@ -246,3 +246,48 @@ describe('ConfirmDialog — focus trap (Tab key)', () => {
     fireEvent.keyDown(dialog, { key: 'a' });
   });
 });
+
+describe('ConfirmDialog — additional coverage', () => {
+  it('dialog has aria-labelledby="confirm-dialog-title" attribute', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'confirm-dialog-title');
+  });
+
+  it('clicking inside dialog does not call onCancel (stopPropagation)', () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />
+    );
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('confirm button has bg-red-600 class', () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        confirmLabel="Delete"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    const confirmBtn = screen.getByRole('button', { name: /delete/i });
+    expect(confirmBtn).toHaveClass('bg-red-600');
+  });
+});
