@@ -31,6 +31,13 @@ describe('CommandPalette — rendering', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('sets dialog aria attributes for accessibility', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-label', 'Command palette');
+  });
+
   it('renders search input placeholder', () => {
     render(<CommandPalette open={true} onClose={vi.fn()} />);
     expect(screen.getByPlaceholderText(/search pages/i)).toBeInTheDocument();
@@ -87,6 +94,22 @@ describe('CommandPalette — filtering', () => {
       target: { value: 'nmap' },
     });
     expect(screen.getByText('1 result')).toBeInTheDocument();
+  });
+
+  it('shows plural footer count when multiple results match', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: 'a' },
+    });
+    expect(screen.getByText(/\d+ results/)).toBeInTheDocument();
+  });
+
+  it('shows exact no-results message with the current query', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: 'xyzxyzxyz' },
+    });
+    expect(screen.getByText('No results for "xyzxyzxyz"')).toBeInTheDocument();
   });
 });
 

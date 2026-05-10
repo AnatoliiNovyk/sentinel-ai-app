@@ -1,0 +1,14 @@
+Як було
+- src/components/__tests__/CommandPalette.test.tsx містив 31 тест.
+- Не були покриті: ARIA-атрибути діалогу, plural-лічильник результатів у футері, точний no-results текст із query.
+
+Що зроблено
+- Додано 3 нові тести у CommandPalette.test.tsx.
+- Перевірено aria-modal=true і aria-label="Command palette" для dialog.
+- Перевірено plural footer count (формат "N results") при множинних збігах.
+- Перевірено точний текст no-results: No results for "<query>".
+
+Що покращило/виправило/додало
+- Тестів стало 34 замість 31.
+- Покрито додаткові гілки доступності та UX-повідомлень у CommandPalette.
+- quality:check пройшов: 2920/2920.
