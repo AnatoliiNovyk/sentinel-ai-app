@@ -1,0 +1,17 @@
+Як було:
+- У src/components/__tests__/ToastContainer.test.tsx було 21 тест із гарним покриттям рендеру/dismiss, але без цільових перевірок життєвого циклу ProgressBar через requestAnimationFrame.
+- Не вистачало окремої перевірки cleanup-логіки на unmount та явної перевірки dismiss-іконки в кожній картці.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ToastContainer.test.tsx:
+  1) renders one dismiss X icon per toast card;
+  2) progress fill animates to 0% width with 4000ms linear transition;
+  3) cancels scheduled animation frame on unmount.
+- Прогнано focused vitest: ToastContainer 24/24.
+- Прогнано canonical quality gate: npm run quality:check (лог C:\Temp\quality_glh.txt).
+
+Що покращило/виправило/додало:
+- Посилено контроль UI-інваріантів для dismiss-кнопок у multi-toast сценарії.
+- Додано перевірку ключової поведінки прогрес-бару (transition + кінцева ширина 0%).
+- Підтверджено cleanup ефекту через cancelAnimationFrame при unmount, що знижує ризик витоків/артефактів.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 95.53s, built in 1.76s.

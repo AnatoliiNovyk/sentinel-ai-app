@@ -285,4 +285,58 @@ describe('ToastContainer', () => {
     expect(progressTrack).toBeInTheDocument();
     expect(progressFill).toBeInTheDocument();
   });
+
+  it('renders one dismiss X icon per toast card', () => {
+    mockToastsList = [
+      { id: 's', type: 'success', message: 'Success' },
+      { id: 'e', type: 'error', message: 'Error' },
+      { id: 'i', type: 'info', message: 'Info' },
+      { id: 'w', type: 'warning', message: 'Warning' },
+    ];
+
+    const { container } = render(<ToastContainer />);
+
+    const dismissIcons = container.querySelectorAll('button[aria-label="Dismiss"] svg.lucide-x');
+    expect(dismissIcons).toHaveLength(4);
+  });
+
+  it('progress fill animates to 0% width with 4000ms linear transition', () => {
+    const rafSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((cb: FrameRequestCallback) => {
+        cb(0);
+        return 101;
+      });
+
+    mockToastsList = [{ id: 'toast-1', type: 'success', message: 'Animated' }];
+    const { container } = render(<ToastContainer />);
+
+    const progressFill = container.querySelector('div.h-full.bg-emerald-500.opacity-60') as HTMLDivElement;
+    expect(progressFill).toBeInTheDocument();
+    expect(progressFill.style.transition).toBe('width 4000ms linear');
+    expect(progressFill.style.width).toBe('0%');
+    expect(rafSpy).toHaveBeenCalled();
+
+    rafSpy.mockRestore();
+  });
+
+  it('cancels scheduled animation frame on unmount', () => {
+    const rafSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation(() => 321);
+    const cancelSpy = vi
+      .spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation(() => {});
+
+    mockToastsList = [{ id: 'toast-1', type: 'info', message: 'Cleanup' }];
+    const { unmount } = render(<ToastContainer />);
+
+    unmount();
+
+    expect(rafSpy).toHaveBeenCalled();
+    expect(cancelSpy).toHaveBeenCalledWith(321);
+
+    rafSpy.mockRestore();
+    cancelSpy.mockRestore();
+  });
 });
