@@ -78,10 +78,22 @@ describe('ScanHeader — mode badge', () => {
     expect(screen.getByText('Mode: UNKNOWN')).toBeInTheDocument();
   });
 
+  it('renders status icon in REAL mode badge', () => {
+    render(<ScanHeader {...BASE_PROPS} currentMode="REAL" />);
+    const badge = screen.getByText('Mode: REAL').closest('div');
+    expect(badge?.querySelector('svg')).toBeInTheDocument();
+  });
+
   it('shows historical selected scan text in MOCK mode when agent is reachable', () => {
     render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" agentReachable />);
     expect(screen.getByText('Selected Scan: Historical')).toBeInTheDocument();
     expect(screen.queryByText('DEMO MODE')).not.toBeInTheDocument();
+  });
+
+  it('renders warning icon in DEMO MODE badge when agent is unreachable', () => {
+    render(<ScanHeader {...BASE_PROPS} currentMode="MOCK" agentReachable={false} />);
+    const badge = screen.getByText('DEMO MODE').closest('div');
+    expect(badge?.querySelector('svg')).toBeInTheDocument();
   });
 });
 
@@ -95,6 +107,12 @@ describe('ScanHeader — selected project context text', () => {
   it('falls back to default subtitle when selectedProjectId is not found', () => {
     render(<ScanHeader {...BASE_PROPS} selectedProjectId="missing-project" />);
     expect(screen.getByText('Manage and monitor security assessments across your infrastructure.')).toBeInTheDocument();
+  });
+
+  it('renders project context icon when selected project is found', () => {
+    render(<ScanHeader {...BASE_PROPS} selectedProjectId="p1" />);
+    const subtitle = screen.getByText('Showing scans for').closest('span');
+    expect(subtitle?.querySelector('svg')).toBeInTheDocument();
   });
 });
 

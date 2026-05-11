@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/ScanHeader.test.tsx було 21 тест із перевіркою основного рендеру, взаємодій та частини mode-бейджів.
+- Не було окремих перевірок на наявність іконок у REAL/DEMO бейджах та іконки контексту при вибраному проєкті.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ScanHeader.test.tsx:
+  1) renders status icon in REAL mode badge;
+  2) renders warning icon in DEMO MODE badge when agent is unreachable;
+  3) renders project context icon when selected project is found.
+- Прогнано focused vitest: ScanHeader 24/24.
+- Прогнано canonical quality gate: npm run quality:check (лог C:\Temp\quality_gli.txt).
+
+Що покращило/виправило/додало:
+- Розширено покриття візуальних гілок mode-бейджа для REAL і DEMO станів.
+- Підсилено перевірку UI-контексту вибраного проєкту (іконка + subtitle гілка).
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 100.59s, built in 1.65s.
