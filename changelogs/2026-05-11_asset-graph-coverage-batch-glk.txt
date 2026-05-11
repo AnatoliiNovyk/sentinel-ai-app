@@ -1,0 +1,24 @@
+Batch: GLK
+File: src/components/__tests__/AssetGraph.test.tsx
+Date: 2026-05-11
+
+=== Як було ===
+21 тест. AssetGraph покривав: empty state, SVG render, center tooltip, heading,
+project/asset label uppercase, dedup, legend, lines, stat cards, icon branches
+(db, s3, ec2, api/gw/lb, cloud, git, mystery/fallback), critical glow,
+finding count tooltip, redis, lb, storage icon branches.
+
+=== Що зроблено ===
+Додано 3 нові тести (count: 21 → 24):
+1. "renders Server icon for instance-prefixed asset label"
+   — перевіряє гілку `includes('instance')` → <Server /> у AssetIcon
+2. "renders Shield icon for the center (project) node"
+   — перевіряє що центральний вузол (project type) рендерить .lucide-shield
+3. "renders full uppercase label when asset name has no dots"
+   — asset 'myhostname' (без крапок) → label text = 'MYHOSTNAME'
+
+=== Що покращило/виправило/додало ===
+- Закрита непокрита гілка instance/node у AssetIcon
+- Перевірено Shield іконку center-node (раніше тільки asset-icons тестувались)
+- Перевірено edge-case label без крапок → повна назва uppercase
+- quality:check: Test Files 114 passed (114), build 1.67s — без регресій

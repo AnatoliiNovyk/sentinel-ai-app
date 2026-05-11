@@ -274,4 +274,38 @@ describe('AssetGraph — with vulns', () => {
 
     expect(container.querySelector('.lucide-box')).toBeInTheDocument();
   });
+
+  it('renders Server icon for instance-prefixed asset label', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('instance-web-01.internal', 'medium')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument();
+  });
+
+  it('renders Shield icon for the center (project) node', () => {
+    const { container } = render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('api.example.com', 'high')]}
+      />,
+    );
+
+    expect(container.querySelector('.lucide-shield')).toBeInTheDocument();
+  });
+
+  it('renders full uppercase label when asset name has no dots', () => {
+    render(
+      <AssetGraph
+        projectName="TestProject"
+        vulns={[makeVuln('myhostname', 'low')]}
+      />,
+    );
+
+    // asset.split('.')[0].toUpperCase() for 'myhostname' → 'MYHOSTNAME'
+    expect(screen.getByText('MYHOSTNAME')).toBeInTheDocument();
+  });
 });
