@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/ComplianceTab.test.tsx було 20 тестів.
+- Не вистачало окремих перевірок для жовтого score-card діапазону, red progress-bar гілки (<50) та рендеру Most Used Action у Remediation Summary.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ComplianceTab.test.tsx:
+  1) renders yellow score card background classes for score between 70 and 84;
+  2) renders progress bar with red class for score below 50;
+  3) renders most used action type value in remediation summary.
+- Прогнано focused vitest: ComplianceTab 23/23.
+- Прогнано canonical quality gate: npm run quality:check.
+
+Що покращило/виправило/додало:
+- Розширено покриття гілок стилізації score card/progress bar для діапазонів оцінок.
+- Підсилено перевірку рендеру Remediation Summary (Most Used Action).
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 97.31s, built in 2.03s.

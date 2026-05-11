@@ -432,4 +432,52 @@ describe('ComplianceTab', () => {
 
     expect(container.querySelector('.bg-red-50.border-red-200')).toBeInTheDocument();
   });
+
+  it('renders yellow score card background classes for score between 70 and 84', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(74),
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Overall Compliance Score')).toBeInTheDocument();
+    });
+
+    expect(container.querySelector('.bg-yellow-50.border-yellow-200')).toBeInTheDocument();
+  });
+
+  it('renders progress bar with red class for score below 50', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(45),
+    });
+
+    const { container } = render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('45')).toBeInTheDocument();
+    });
+
+    const progressBar = container.querySelector('.h-2.rounded-full.bg-red-600');
+    expect(progressBar).toBeInTheDocument();
+    expect((progressBar as HTMLElement).style.width).toBe('45%');
+  });
+
+  it('renders most used action type value in remediation summary', async () => {
+    mockGetDashboard.mockResolvedValue({
+      success: true,
+      dashboard: buildDashboard(88),
+    });
+
+    render(<ComplianceTab projectId="project-1" userId="user-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remediation Summary')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Most Used Action:')).toBeInTheDocument();
+    expect(screen.getByText('disable_asset')).toBeInTheDocument();
+  });
 });
