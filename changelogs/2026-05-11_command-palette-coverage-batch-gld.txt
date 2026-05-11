@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/CommandPalette.test.tsx було 34 тести.
+- Не вистачало окремих перевірок для keyword-фільтрації (generic keyword), trim-поведінки query та stopPropagation кліку всередині діалогу.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/CommandPalette.test.tsx:
+  1) can filter by generic keyword (home -> Dashboard);
+  2) trims surrounding spaces in search query before filtering;
+  3) clicking inside dialog content does not call onClose.
+- Прогнано focused vitest: CommandPalette 37/37.
+- Прогнано canonical quality gate: npm run quality:check.
+
+Що покращило/виправило/додало:
+- Розширено покриття keyword/search UX та поведінки подій у модалі.
+- Підтверджено, що внутрішній клік не тригерить backdrop-close (важливо для UX).
+- Повний quality gate зелений: Test Files 114 passed (114), Duration 105.91s.

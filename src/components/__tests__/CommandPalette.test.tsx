@@ -79,6 +79,15 @@ describe('CommandPalette — filtering', () => {
     expect(screen.getByText('Active Recon')).toBeInTheDocument();
   });
 
+  it('can filter by generic keyword (home → Dashboard)', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: 'home' },
+    });
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('AI Assistant')).not.toBeInTheDocument();
+  });
+
   it('can filter by description text', () => {
     render(<CommandPalette open={true} onClose={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
@@ -110,6 +119,16 @@ describe('CommandPalette — filtering', () => {
       target: { value: 'xyzxyzxyz' },
     });
     expect(screen.getByText('No results for "xyzxyzxyz"')).toBeInTheDocument();
+  });
+
+  it('trims surrounding spaces in search query before filtering', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/search pages/i), {
+      target: { value: '   compliance   ' },
+    });
+
+    expect(screen.getByText('Compliance')).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
   });
 });
 
@@ -180,6 +199,14 @@ describe('CommandPalette — keyboard', () => {
     // Click the outermost backdrop div
     fireEvent.click(container.firstChild as HTMLElement);
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('clicking inside dialog content does not call onClose', () => {
+    const onClose = vi.fn();
+    render(<CommandPalette open={true} onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('ArrowDown moves active index down and Enter navigates to second item', () => {
