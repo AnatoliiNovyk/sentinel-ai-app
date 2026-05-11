@@ -259,6 +259,20 @@ describe('ScanDiff', () => {
       expect(screen.queryByText('Vuln B')).not.toBeInTheDocument();
     });
 
+    it('diff search is case-insensitive and trims surrounding spaces', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'Critical API issue', 'API.EXAMPLE.COM'),
+        makeVuln('v2', 'scan-new', 'Other issue', 'db.example.com'),
+      ];
+
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      const searchInput = screen.getByPlaceholderText(/search title or asset/i);
+      fireEvent.change(searchInput, { target: { value: '   api.example.com   ' } });
+
+      expect(screen.getByText('Critical API issue')).toBeInTheDocument();
+      expect(screen.queryByText('Other issue')).not.toBeInTheDocument();
+    });
+
     it('shows "No entries match" message when filter excludes all', () => {
       const vulns = [
         makeVuln('v1', 'scan-new', 'New finding', 'host1.com'),
@@ -289,6 +303,45 @@ describe('ScanDiff', () => {
 
       fireEvent.click(newStatCard);
       expect(screen.getByText('Fixed finding')).toBeInTheDocument();
+    });
+
+    it('filters to persisted findings when Persisted filter button is selected', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New finding', 'host-new.com'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host-fixed.com'),
+        makeVuln('v3', 'scan-new', 'Persisted finding', 'host-persist.com'),
+        makeVuln('v4', 'scan-old', 'Persisted finding', 'host-persist.com'),
+      ];
+
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      fireEvent.click(screen.getByRole('button', { name: /^persisted$/i }));
+
+      expect(screen.getByText('Persisted finding')).toBeInTheDocument();
+      expect(screen.queryByText('New finding')).not.toBeInTheDocument();
+      expect(screen.queryByText('Fixed finding')).not.toBeInTheDocument();
+    });
+
+    it('exports CSV with header and all diff statuses', () => {
+      const vulns = [
+        makeVuln('v1', 'scan-new', 'New finding', 'host-new.com', 'critical'),
+        makeVuln('v2', 'scan-old', 'Fixed finding', 'host-fixed.com', 'low'),
+        makeVuln('v3', 'scan-new', 'Persisted finding', 'host-persist.com', 'high'),
+        makeVuln('v4', 'scan-old', 'Persisted finding', 'host-persist.com', 'high'),
+      ];
+
+      render(<ScanDiff scans={[SCAN_NEW, SCAN_OLD]} vulns={vulns} />);
+      fireEvent.click(screen.getByRole('button', { name: /export diff as csv/i }));
+
+      expect(mockDownloadFile).toHaveBeenCalledWith(
+        'scan-diff.csv',
+        expect.stringContaining('Status,Severity,Title,Asset'),
+        'text/csv',
+      );
+
+      const csvPayload = mockDownloadFile.mock.calls.at(-1)?.[1] as string;
+      expect(csvPayload).toContain('new,critical,New finding,host-new.com');
+      expect(csvPayload).toContain('persisted,high,Persisted finding,host-persist.com');
+      expect(csvPayload).toContain('fixed,low,Fixed finding,host-fixed.com');
     });
   });
 });

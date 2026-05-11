@@ -1,0 +1,17 @@
+Як було:
+- У src/components/__tests__/ScanDiff.test.tsx було 21 тест з покриттям базових гілок diff-класифікації, тренду, фільтрів та базового CSV-експорту.
+- Не вистачало окремих перевірок для trim+case-insensitive пошуку, persisted-фільтра з наявними persisted записами та розширеної перевірки вмісту CSV-експорту.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ScanDiff.test.tsx:
+  1) diff search is case-insensitive and trims surrounding spaces;
+  2) filters to persisted findings when Persisted filter button is selected;
+  3) exports CSV with header and all diff statuses.
+- Прогнано focused vitest: ScanDiff 24/24.
+- Прогнано canonical quality gate: npm run quality:check (лог C:\Temp\quality_glj.txt).
+
+Що покращило/виправило/додало:
+- Підсилено покриття пошукової гілки для реального вводу користувача (пробіли + різний регістр).
+- Валідується поведінка persisted-фільтра не лише в empty-case, а й при наявних persisted даних.
+- Експорт CSV тепер перевіряється глибше: заголовок і всі ключові статуси (new/persisted/fixed) у payload.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 97.32s, built in 1.91s.
