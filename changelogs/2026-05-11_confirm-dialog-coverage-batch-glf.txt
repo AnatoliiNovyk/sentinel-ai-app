@@ -1,0 +1,16 @@
+Як було:
+- У src/components/__tests__/ConfirmDialog.test.tsx було 19 тестів із частковим покриттям focus-trap поведінки (без перевірки фактичного переходу фокусу).
+- Бракувало окремого сценарію кліку по кастомній confirm-кнопці (confirmLabel).
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ConfirmDialog.test.tsx:
+  1) Tab key from last button wraps to first (cancel) — тепер перевіряється фактичний фокус на кнопці Cancel;
+  2) Shift+Tab key from first button wraps to last (confirm) — тепер перевіряється фактичний фокус на confirm-кнопці;
+  3) clicking custom confirmLabel button calls onConfirm.
+- Прогнано focused vitest: ConfirmDialog 22/22.
+- Прогнано canonical quality gate: npm run quality:check (rerun) у C:\Temp\quality_glf_rerun.txt.
+
+Що покращило/виправило/додало:
+- Посилено перевірку focus-trap логіки через валідацію реального перемикання фокусу, а не лише відсутності помилок при події.
+- Додано явну перевірку інтеракції з кастомним confirmLabel, що закриває важливу гілку поведінки confirm-дії.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 97.04s, built in 1.73s.

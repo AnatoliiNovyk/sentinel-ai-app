@@ -206,8 +206,7 @@ describe('ConfirmDialog — focus trap (Tab key)', () => {
     deleteBtn.focus();
     // Fire Tab from the dialog element while Delete is focused
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: false });
-    // Focus should wrap: the handler calls first.focus() 
-    // (we just verify it doesn't throw and the handler runs)
+    expect(screen.getByText('Cancel')).toHaveFocus();
   });
 
   it('Shift+Tab key from first button wraps to last (confirm)', () => {
@@ -228,7 +227,7 @@ describe('ConfirmDialog — focus trap (Tab key)', () => {
     cancelBtn.focus();
     // Fire Shift+Tab from dialog while Cancel is focused
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
-    // Focus should wrap: handler calls last.focus()
+    expect(screen.getByRole('button', { name: /delete/i })).toHaveFocus();
   });
 
   it('Tab on non-Tab key does nothing', () => {
@@ -248,6 +247,24 @@ describe('ConfirmDialog — focus trap (Tab key)', () => {
 });
 
 describe('ConfirmDialog — additional coverage', () => {
+  it('clicking custom confirmLabel button calls onConfirm', () => {
+    const onConfirm = vi.fn();
+
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Confirm"
+        message="Really?"
+        confirmLabel="Remove"
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
   it('dialog has aria-labelledby="confirm-dialog-title" attribute', () => {
     render(
       <ConfirmDialog
