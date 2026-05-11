@@ -89,6 +89,20 @@ describe('ErrorBoundary — error caught', () => {
     );
   });
 
+  it('includes component stack info containing Bomb in console log', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorBoundary]'),
+      expect.any(Error),
+      expect.stringContaining('Bomb'),
+    );
+  });
+
   it('recovers and renders children after clicking Try again when child no longer throws', () => {
     function RecoverableBoundaryHarness() {
       const [shouldThrow, setShouldThrow] = useState(true);
@@ -111,6 +125,18 @@ describe('ErrorBoundary — error caught', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(screen.getByText('Safe content')).toBeInTheDocument();
+  });
+
+  it('keeps fallback visible after Try again if child still throws', () => {
+    render(
+      <ErrorBoundary>
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.getByText('Boom! Test explosion')).toBeInTheDocument();
   });
 });
 
@@ -152,6 +178,29 @@ describe('ErrorBoundary — custom fallback', () => {
     expect(errorArg.message).toBe('Boom! Test explosion');
     expect(typeof resetArg).toBe('function');
     expect(screen.getByText('Custom fallback: Boom! Test explosion')).toBeInTheDocument();
+  });
+
+  it('custom fallback reset can recover once child stops throwing', () => {
+    function CustomRecoverHarness() {
+      const [shouldThrow, setShouldThrow] = useState(true);
+
+      return (
+        <>
+          <button onClick={() => setShouldThrow(false)}>Recover custom child</button>
+          <ErrorBoundary fallback={(_err, reset) => <button onClick={reset}>Reset custom</button>}>
+            <Bomb shouldThrow={shouldThrow} />
+          </ErrorBoundary>
+        </>
+      );
+    }
+
+    render(<CustomRecoverHarness />);
+
+    expect(screen.getByRole('button', { name: 'Reset custom' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /recover custom child/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset custom' }));
+
+    expect(screen.getByText('Safe content')).toBeInTheDocument();
   });
 });
 

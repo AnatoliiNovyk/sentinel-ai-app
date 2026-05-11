@@ -1,0 +1,17 @@
+Як було:
+- У src/components/__tests__/ErrorBoundary.test.tsx було 21 тест із базовим покриттям обробки помилок і fallback-сценаріїв.
+- Не вистачало окремих перевірок для componentStack у логуванні, повторного падіння після reset та повного recovery через custom fallback reset.
+
+Що зроблено:
+- Додано 3 нові тести у src/components/__tests__/ErrorBoundary.test.tsx:
+  1) includes component stack info containing Bomb in console log;
+  2) keeps fallback visible after Try again if child still throws;
+  3) custom fallback reset can recover once child stops throwing.
+- Прогнано focused vitest: ErrorBoundary 24/24.
+- Прогнано canonical quality gate: npm run quality:check (лог C:\Temp\quality_glg.txt).
+
+Що покращило/виправило/додало:
+- Посилено перевірку діагностичного логування через валідацію componentStack з назвою компонента.
+- Підтверджено коректну поведінку reset-кнопки в гілці, де помилка повторюється (без хибного recovery).
+- Додано інтеграційний сценарій recovery для custom fallback через reset callback.
+- Підтверджено стабільність повним quality прогоном: Test Files 114 passed (114), Duration 98.31s, built in 2.09s.
